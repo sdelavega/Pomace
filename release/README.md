@@ -16,7 +16,7 @@ xcrun notarytool store-credentials "Pomace Notary" \
 With the existing Developer ID certificate installed locally, create a release artifact:
 
 ```bash
-./release/release.sh 1.0.0
+./release/release.sh 1.0.1
 ```
 
 The script signs with the existing `POMACE_SIGN_ID` default from `build-app.sh`, enables a
