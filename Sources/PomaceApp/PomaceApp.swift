@@ -27,6 +27,12 @@ struct PomaceApp: App {
                         model.restoreSelection()
                     }
                 }
+                .toolbar {
+                    ToolbarItem(placement: .automatic) {
+                        Button("Add Folder", systemImage: "folder.badge.plus") { addFolder() }
+                            .help("Add a folder or application bundle")
+                    }
+                }
         }
         .windowToolbarStyle(.unified)
         .commands {
@@ -66,9 +72,11 @@ struct PomaceApp: App {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
+        panel.treatsFilePackagesAsDirectories = true
+        panel.showsHiddenFiles = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Scan"
-        panel.message = "Choose a folder to scan. Pomace only reads it — nothing is modified."
+        panel.message = "Choose a folder or application bundle to scan. Pomace only reads it — nothing is modified."
         if panel.runModal() == .OK, let url = panel.url {
             model.add(path: url.path)
         }

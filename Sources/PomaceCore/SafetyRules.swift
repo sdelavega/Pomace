@@ -16,6 +16,8 @@ public enum SafetyReason: Sendable, Equatable {
     case networkVolume
     case zeroLength
     case notRegularFile
+    case appStoreApplication
+    case adobeApplication
 
     // Advisory — allowed, but the user is told first.
     case applicationBundle
@@ -56,6 +58,10 @@ public enum SafetyReason: Sendable, Equatable {
             "Empty file — nothing to compress"
         case .notRegularFile:
             "Not a regular file"
+        case .appStoreApplication:
+            "Mac App Store application — leave the store-managed bundle unchanged"
+        case .adobeApplication:
+            "Adobe application — excluded because its installation components perform integrity checks"
         case .applicationBundle:
             "Application bundle — generally safe, and signatures still validate, "
             + "but worth verifying the app afterwards"
@@ -164,8 +170,17 @@ public struct SafetyRules: Sendable {
             reasons.append(.existingResourceFork)
         }
 
-        // Advisory
-        if path.contains(".app/") { reasons.append(.applicationBundle) }
+        // App bundles are a deliberate opt-in: direct-distribution apps are allowed with an
+        // advisory, but store-managed and Adobe bundles are never passed to the compressor.
+        if let appRoot = applicationBundleRoot(for: path) {
+            if isAppStoreApplication(appRoot) {
+                reasons.append(.appStoreApplication)
+            } else if isAdobeApplication(appRoot) {
+                reasons.append(.adobeApplication)
+            } else {
+                reasons.append(.applicationBundle)
+            }
+        }
         if f.linkCount > 1 { reasons.append(.hardLinked(linkCount: Int(f.linkCount))) }
         if f.logicalSize >= Self.largeFileThreshold { reasons.append(.veryLargeFile(bytes: f.logicalSize)) }
         if let kind = Self.incompressible[ext] { reasons.append(.likelyIncompressible(kind)) }
@@ -190,6 +205,30 @@ public struct SafetyRules: Sendable {
     /// compressed payload would otherwise live. Verified in M0: afsctool refuses these.
     func hasResourceFork(_ path: String) -> Bool {
         getxattr(path, "com.apple.ResourceFork", nil, 0, 0, XATTR_SHOWCOMPRESSION) > 0
+    }
+
+    /// Returns the outermost application package containing a path. Components are used rather
+    /// than a substring so a file named `notes.app.txt` is not misclassified as an app.
+    func applicationBundleRoot(for path: String) -> String? {
+        let components = (path as NSString).pathComponents
+        guard let index = components.firstIndex(where: { $0.lowercased().hasSuffix(".app") }) else {
+            return nil
+        }
+        return NSString.path(withComponents: Array(components[...index]))
+    }
+
+    /// A receipt is the stable on-disk marker for a macOS App Store installation. Pomace has
+    /// no reason to rewrite files whose lifecycle belongs to the store.
+    func isAppStoreApplication(_ root: String) -> Bool {
+        FileManager.default.fileExists(atPath: root + "/Contents/_MASReceipt/receipt")
+    }
+
+    /// This is intentionally narrow. Adobe documents integrity verification for its Genuine
+    /// Service, but there is no evidence-based basis for treating every signed app the same.
+    func isAdobeApplication(_ root: String) -> Bool {
+        let name = ((root as NSString).lastPathComponent as NSString)
+            .deletingPathExtension.lowercased()
+        return name.contains("adobe") || name == "creative cloud"
     }
 }
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import PomaceCore
 
 struct ContentView: View {
@@ -75,44 +76,66 @@ private struct OnboardingView: View {
 
 private struct Sidebar: View {
     @Bindable var model: ScanModel
+    @State private var isDropTarget = false
 
     var body: some View {
         List(selection: Binding(
             get: { model.selectedPath },
             set: { if let p = $0 { model.select(p) } }
         )) {
-            Section("Folders") {
-                ForEach(model.watchedPaths, id: \.self) { path in
-                    Label {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text((path as NSString).lastPathComponent)
-                            Text((path as NSString).deletingLastPathComponent)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.head)
-                        }
-                    } icon: {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: path))
-                            .resizable().frame(width: 16, height: 16)
-                    }
-                    .tag(path)
-                    .contextMenu {
-                        Button("Reveal in Finder") {
-                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
-                        }
-                        Button("Remove", role: .destructive) { model.remove(path: path) }
-                    }
+            let scheduled = model.watchedPaths.filter(model.isScheduled)
+            let unscheduled = model.watchedPaths.filter { !model.isScheduled($0) }
+
+            if !scheduled.isEmpty {
+                Section("Scheduled") {
+                    ForEach(scheduled, id: \.self) { folderRow($0) }
+                }
+            }
+            if !unscheduled.isEmpty {
+                Section("Not Scheduled") {
+                    ForEach(unscheduled, id: \.self) { folderRow($0) }
                 }
             }
         }
         .listStyle(.sidebar)
+        .onDrop(of: [.fileURL], isTargeted: $isDropTarget, perform: model.addDroppedFolders)
         .overlay {
             if model.watchedPaths.isEmpty {
                 ContentUnavailableView("No Folders",
                     systemImage: "folder.badge.plus",
-                    description: Text("Add a folder to see what compression would reclaim."))
+                    description: Text("Add or drop a folder to see what compression would reclaim."))
             }
+        }
+        .overlay {
+            if isDropTarget {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(.tint, style: StrokeStyle(lineWidth: 2, dash: [5]))
+                    .padding(6)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func folderRow(_ path: String) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                Text((path as NSString).lastPathComponent)
+                Text(model.scheduleSummary(for: path))
+                    .font(.caption)
+                    .foregroundStyle(model.isScheduled(path) ? .secondary : .tertiary)
+                    .lineLimit(1)
+            }
+        } icon: {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+                .resizable().frame(width: 16, height: 16)
+        }
+        .tag(path)
+        .contextMenu {
+            Button("Reveal in Finder") {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
+            }
+            Button("Remove", role: .destructive) { model.remove(path: path) }
         }
     }
 }

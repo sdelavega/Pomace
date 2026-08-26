@@ -190,6 +190,7 @@ struct SafetyRulesTests {
             .existingResourceFork, .liveDatabase("SQLite database"), .virtualMachineImage,
             .cloudSyncedDirectory("Dropbox"), .timeMachineVolume,
             .unsupportedFilesystem("exfat"), .networkVolume, .zeroLength, .notRegularFile,
+            .appStoreApplication, .adobeApplication,
             .applicationBundle, .hardLinked(linkCount: 2),
             .veryLargeFile(bytes: 5_000_000_000), .likelyIncompressible("JPEG"),
         ]
@@ -201,6 +202,29 @@ struct SafetyRulesTests {
                     "not sentence-cased: \(reason.explanation)")
             #expect(!reason.explanation.hasSuffix("."), "UI strings carry no trailing period")
         }
+    }
+
+    @Test("Adobe application bundles are hard exclusions")
+    func adobeApps() {
+        let r = rules.evaluate(facts(path: "/Applications/Adobe Photoshop.app/Contents/MacOS/Photoshop"))
+        #expect(r.contains(.adobeApplication))
+        #expect(rules.isExcluded(facts(path: "/Applications/Adobe Photoshop.app/Contents/MacOS/Photoshop")))
+    }
+
+    @Test("Mac App Store application bundles are hard exclusions")
+    func appStoreApps() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("PomaceSafety-\(UUID().uuidString).app")
+        let receipt = root.appendingPathComponent("Contents/_MASReceipt/receipt")
+        try FileManager.default.createDirectory(at: receipt.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: receipt.path, contents: Data())
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let target = root.appendingPathComponent("Contents/MacOS/App").path
+        let r = rules.evaluate(facts(path: target))
+        #expect(r.contains(.appStoreApplication))
+        #expect(rules.isExcluded(facts(path: target)))
     }
 }
 
@@ -550,5 +574,26 @@ struct SnapshotHistoryTests {
         #expect(history.count == 2)
         #expect(history.last?.compressionCoverage == 0.7)
         #expect(history.last?.reclaimedBytes == 4_900)
+    }
+}
+
+@Suite("watched directory defaults")
+struct WatchedDirectoryDefaultsTests {
+
+    @Test("adding a folder does not schedule background work")
+    func newFolderIsManual() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("pomace-schedule-\(UUID().uuidString).sqlite")
+        defer {
+            for suffix in ["", "-shm", "-wal"] {
+                try? FileManager.default.removeItem(atPath: url.path + suffix)
+            }
+        }
+        let store = try Store(url: url)
+        try store.addWatchedDirectory(path: "/tmp/pomace-manual-fixture")
+
+        let entry = try #require(store.watched().first)
+        #expect(entry.schedule.cadence == .manual)
+        #expect(entry.schedule.enabled)
     }
 }

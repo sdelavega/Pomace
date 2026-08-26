@@ -123,7 +123,13 @@ public final class Store: @unchecked Sendable {
     @discardableResult
     public func addWatchedDirectory(path: String) throws -> Int64 {
         try queue.sync {
-            try run("INSERT OR IGNORE INTO watched_directory (path, added_at) VALUES (?, ?);",
+            // Adding a folder is consent to scan, not consent to recurring background work.
+            // Scheduling becomes explicit in the inspector after the user has seen the scan.
+            try run("""
+                    INSERT OR IGNORE INTO watched_directory
+                    (path, added_at, cadence, schedule_enabled)
+                    VALUES (?, ?, 'manual', 1);
+                    """,
                     [.text(path), .real(Date().timeIntervalSince1970)])
             return try scalarLocked("SELECT id FROM watched_directory WHERE path = ?;", [.text(path)])
         }

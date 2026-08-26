@@ -115,7 +115,7 @@ struct InspectorView: View {
                 .font(.caption).foregroundStyle(.tertiary)
 
             HStack {
-                Toggle("Scheduled sweeps", isOn: Binding(
+                Toggle("Background sweep service", isOn: Binding(
                     get: { model.serviceStatus.isActive },
                     set: { model.setScheduledSweepsEnabled($0) }
                 ))

@@ -48,6 +48,8 @@ These are hard exclusions — **not** user-overridable in v1.
 | Sparse files and sparse bundles | **Compression materializes them.** Measured: 10 MB sparse file went from 0 bytes on disk to 32,768. Always a net loss, and our savings math inverts. | **[verified 2026-08-26]** |
 | Cloud-sync directories — iCloud Drive, Dropbox, Google Drive, OneDrive | Modifying every file can trigger a full re-upload of the directory; may also conflict with dataless/evicted placeholder files | [expected] |
 | Time Machine backup volumes and local snapshots | Backup integrity; the volume format is not ours to touch | [expected] |
+| Mac App Store application bundles | A store receipt identifies the bundle as store-managed; Pomace leaves its lifecycle untouched | [expected] |
+| Adobe application bundles | Adobe documents integrity verification for its Genuine Service components; Pomace excludes Adobe bundles as a precaution | [expected] |
 | Hard-linked files | Applesauce atomically replaces files and therefore refuses to break their link identity. Pomace excludes them before mutation and explains why. | **[verified 2026-08-26]** — see [ADR-0015](DECISIONS.md#adr-0015-applesauce-replaces-afsctool) |
 | Files with an existing non-decmpfs resource fork | Preserve user data in the resource fork until its interaction with the compressor is explicitly verified | [expected] |
 | Anything currently open for writing by another process | Race between a compressor replacement and the writer | [expected] |
@@ -58,7 +60,7 @@ These are hard exclusions — **not** user-overridable in v1.
 
 Presented with a clear explanation and an explicit opt-in.
 
-- **Application bundles (`.app`).** Transparent compression is generally
+- **Direct-distribution application bundles (`.app`).** Transparent compression is generally
   fine — code signature validation reads file *contents*, which are unchanged. **[expected]**
   But signature edge cases exist, so the warning stands, and Pomace should offer to
   re-verify with `codesign --verify --deep` after compressing a bundle.

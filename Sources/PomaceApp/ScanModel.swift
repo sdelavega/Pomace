@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 import PomaceCore
 
 @MainActor
@@ -23,6 +24,7 @@ final class ScanModel {
     var state: State = .idle
     var runState: RunState = .none
     var watchedPaths: [String] = []
+    private var schedulesByPath: [String: SweepSchedule] = [:]
     var selectedPath: String?
     var showExcluded = false
     var sortOrder: SortOrder = .potentialSaving
@@ -55,7 +57,9 @@ final class ScanModel {
     init() {
         // A broken store must not stop the app from scanning — it only costs us history.
         store = try? Store()
-        watchedPaths = (try? store?.watchedDirectories()) .flatMap { $0 } ?? []
+        let watched = (try? store?.watched()) .flatMap { $0 } ?? []
+        watchedPaths = watched.map(\.path)
+        schedulesByPath = Dictionary(uniqueKeysWithValues: watched.map { ($0.path, $0.schedule) })
         installation = CompressorTool.discover()
         serviceStatus = SweepService.status
         showingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
@@ -85,6 +89,7 @@ final class ScanModel {
     func loadSchedule(for path: String) {
         let entry = (try? store?.watched())?.flatMap { $0 }?.first { $0.path == path }
         schedule = entry?.schedule ?? SweepSchedule()
+        schedulesByPath[path] = schedule
         if let m = entry?.mode { mode = m }
         sweepHistory = (try? store?.sweepHistory(path: path)).flatMap { $0 } ?? []
         snapshotHistory = (try? store?.snapshotHistory(path: path)).flatMap { $0 } ?? []
@@ -93,6 +98,7 @@ final class ScanModel {
     func saveSchedule() {
         guard let path = selectedPath else { return }
         try? store?.updateSchedule(path: path, schedule: schedule, mode: mode)
+        schedulesByPath[path] = schedule
         if schedule.enabled, schedule.cadence != .manual, !serviceStatus.isActive {
             setScheduledSweepsEnabled(true)
         }
@@ -253,6 +259,7 @@ final class ScanModel {
         if !watchedPaths.contains(path) {
             _ = try? store?.addWatchedDirectory(path: path)
             watchedPaths.append(path)
+            schedulesByPath[path] = SweepSchedule(cadence: .manual)
         }
         selectedPath = path
         loadSchedule(for: path)
@@ -262,6 +269,7 @@ final class ScanModel {
     func remove(path: String) {
         try? store?.removeWatchedDirectory(path: path)
         watchedPaths.removeAll { $0 == path }
+        schedulesByPath[path] = nil
         if selectedPath == path { selectedPath = watchedPaths.first; state = .idle }
     }
 
@@ -271,6 +279,34 @@ final class ScanModel {
         state = .idle
         loadSchedule(for: path)
         scan(path)
+    }
+
+    func schedule(for path: String) -> SweepSchedule {
+        schedulesByPath[path] ?? SweepSchedule(cadence: .manual)
+    }
+
+    func isScheduled(_ path: String) -> Bool {
+        let schedule = schedule(for: path)
+        return schedule.enabled && schedule.cadence != .manual
+    }
+
+    func scheduleSummary(for path: String) -> String {
+        schedule(for: path).summary
+    }
+
+    @discardableResult
+    func addDroppedFolders(_ providers: [NSItemProvider]) -> Bool {
+        let usable = providers.filter { $0.canLoadObject(ofClass: URL.self) }
+        for provider in usable {
+            _ = provider.loadObject(ofClass: URL.self) { [weak self] url, _ in
+                guard let url, url.isFileURL else { return }
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+                      isDirectory.boolValue else { return }
+                Task { @MainActor [weak self] in self?.add(path: url.path) }
+            }
+        }
+        return !usable.isEmpty
     }
 
     /// Restores the previously selected folder on launch, scanning it so the detail pane is
