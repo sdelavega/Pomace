@@ -55,6 +55,7 @@ Pomace covers three things the CLI doesn't:
 | [Defaults](docs/DEFAULTS.md) | Auto-tuning policy, benchmark data, and how options are disclosed |
 | [Safety](docs/SAFETY.md) | What must never be compressed, and why. **Read before writing mutation code.** |
 | [M0 Findings](docs/M0-FINDINGS.md) | Spike results — what held, what broke, what's still open |
+| [M2 Findings](docs/M2-FINDINGS.md) | **A data-loss bug in afsctool**, how it was found, and how Pomace guards it |
 | [Roadmap](docs/ROADMAP.md) | Phased milestones from spike to release |
 
 ## Licensing note

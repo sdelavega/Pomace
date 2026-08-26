@@ -259,6 +259,120 @@ case "scan":
         }
     }
 
+case "engine-verify":
+    guard let dir = positional.first else { print("need dir"); exit(2) }
+    let mode = CompressionMode(rawValue: flag("--mode") ?? "Automatic") ?? .automatic
+    guard let install = AfsctoolLocator.discover() else {
+        print("afsctool not found"); exit(1)
+    }
+    print("afsctool: \(install.path) (\(install.source.description))")
+    print("  version: \(install.capabilities.version?.description ?? "?")")
+    print("  compressors: \(install.capabilities.compressors.sorted().joined(separator: ", "))")
+    print("  usable: \(install.capabilities.isUsable)")
+    if !install.capabilities.missingCapabilities.isEmpty {
+        print("  missing: \(install.capabilities.missingCapabilities.joined(separator: ", "))")
+    }
+
+    let plan = CompressionPolicy.plan(mode: mode, foreground: true)
+    print("\nplan (\(mode.rawValue)):")
+    for j in plan.justifications {
+        print("  \(j.label.padding(toLength: 14, withPad: " ", startingAt: 0)) \(j.value.padding(toLength: 18, withPad: " ", startingAt: 0)) \(j.reason)\(j.isFixed ? "  [fixed]" : "")")
+    }
+    print("  argv: \(plan.arguments.joined(separator: " "))")
+    for w in plan.warnings { print("  ! \(w)") }
+
+    var failures: [String] = []
+    func check(_ ok: Bool, _ label: String) {
+        print("  [\(ok ? "PASS" : "FAIL")] \(label)")
+        if !ok { failures.append(label) }
+    }
+
+    var engineRefused: String?
+    let before = snapshot(dir)
+    print("\nbaseline: \(before.count) regular files")
+    check(before.count > 0, "baseline inspected a non-empty file set")
+
+    var allPaths: [String] = []
+    _ = DirectoryWalker.walkFTS(dir) { if $0.isRegularFile { allPaths.append($0.path) } }
+
+    // The log must live OUTSIDE the tree under test — writing it inside makes it a file
+    // whose contents legitimately change mid-run, which reads as an integrity failure.
+    let logURL = URL(fileURLWithPath: dir)
+        .deletingLastPathComponent()
+        .appendingPathComponent("pomace-mutations.log")
+    let log = MutationLog(url: logURL)
+    print("mutation log: \(logURL.path)")
+
+    print("\ncompressing via CompressionEngine…")
+    var compressOutcome: CompressionOutcome?
+    for await ev in CompressionEngine.run(operation: .compress, paths: allPaths, root: dir,
+                                          installation: install, plan: plan, logger: log) {
+        switch ev {
+        case .started(let p): print("  start: \(p.filesTotal) eligible")
+        case .progress(let p):
+            FileHandle.standardError.write(Data("\r  \(p.filesProcessed)/\(p.filesTotal)".utf8))
+        case .finished(let o): compressOutcome = o
+        case .failed(let m):
+            print("  engine refused: \(m)")
+            engineRefused = m
+        }
+    }
+    print("")
+    // A run that never happened must not report success. The M0 spike already made this
+    // mistake once by iterating an empty set.
+    check(engineRefused == nil, "engine ran (did not refuse: \(engineRefused ?? "-"))")
+    check(compressOutcome != nil, "engine produced an outcome")
+    if let o = compressOutcome {
+        print(String(format: "  attempted=%d succeeded=%d failed=%d reclaimed=%@ in %.2fs",
+                     o.filesAttempted, o.filesSucceeded, o.failures.count,
+                     ByteFormat.short(o.bytesReclaimed), o.duration))
+        for f in o.failures.prefix(5) {
+            print("    FAIL \((f.path as NSString).lastPathComponent): \(f.message)")
+            print("         -> \(f.remedy)")
+        }
+        check(o.filesSucceeded > 0, "engine compressed at least one file")
+        check(o.bytesReclaimed > 0, "engine reclaimed space")
+    }
+
+    let afterC = snapshot(dir)
+    var mismatch = 0, nlinkBad = 0
+    for (path, b) in before {
+        guard let a = afterC[path] else { continue }
+        if a.sha != b.sha {
+            mismatch += 1
+            if mismatch <= 5 { print("    CONTENT CHANGED: \(path)") }
+        }
+        if a.nlink != b.nlink { nlinkBad += 1 }
+    }
+    check(mismatch == 0, "SHA-256 identical after compression (\(mismatch) mismatches)")
+    check(nlinkBad == 0, "hard-link counts preserved (\(nlinkBad) mismatches)")
+
+    print("\ndecompressing via CompressionEngine…")
+    for await ev in CompressionEngine.run(operation: .decompress, paths: allPaths, root: dir,
+                                          installation: install, plan: plan, logger: log) {
+        if case .finished(let o) = ev {
+            print(String(format: "  attempted=%d succeeded=%d in %.2fs",
+                         o.filesAttempted, o.filesSucceeded, o.duration))
+        }
+        if case .failed(let m) = ev { print("  engine refused: \(m)") }
+    }
+    let afterD = snapshot(dir)
+    var mismatch2 = 0, stillCompressed = 0
+    for (path, b) in before {
+        guard let a = afterD[path] else { continue }
+        if a.sha != b.sha {
+            mismatch2 += 1
+            if mismatch2 <= 5 { print("    CONTENT CHANGED: \(path)") }
+        }
+        if a.compressed { stillCompressed += 1 }
+    }
+    check(mismatch2 == 0, "SHA-256 identical after round trip (\(mismatch2) mismatches)")
+    check(stillCompressed == 0, "UF_COMPRESSED cleared (\(stillCompressed) still set)")
+
+    print("\n\(failures.isEmpty ? "ALL CHECKS PASSED" : "FAILURES: \(failures.count)")")
+    for f in failures { print("  - \(f)") }
+    exit(failures.isEmpty ? 0 : 1)
+
 default:
     print("unknown command: \(cmd)"); exit(2)
 }

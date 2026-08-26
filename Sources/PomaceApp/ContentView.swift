@@ -13,6 +13,31 @@ struct ContentView: View {
             Detail(model: model)
         }
         .navigationTitle("Pomace")
+        .confirmationDialog(
+            "Decompress \(Fmt.count(model.compressedCount, "file"))?",
+            isPresented: $model.confirmingDecompress,
+            titleVisibility: .visible
+        ) {
+            Button("Decompress \(Fmt.count(model.compressedCount, "file"))", role: .destructive) {
+                model.confirmDecompress()
+            }
+            Button("Cancel", role: .cancel) { model.confirmingDecompress = false }
+        } message: {
+            // Naming the count is the point: afsctool's -d strips the entire resource fork,
+            // so this must never be reachable by a single unconsidered click (SAFETY.md §4).
+            Text("""
+                 This returns those files to their full size on disk. \
+                 Their contents are unchanged, and you can compress them again at any time.
+                 """)
+        }
+        .sheet(isPresented: $model.showingSettings) {
+            AdvancedSettingsView(model: model)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { model.showingSettings = false }
+                    }
+                }
+        }
     }
 }
 
@@ -86,10 +111,20 @@ private struct Detail: View {
                 ScanningView(progress: progress) { model.cancelScan() }
 
             case .done(let result):
-                ResultView(model: model, result: result)
+                if model.afsctoolReady {
+                    ResultView(model: model, result: result)
+                } else {
+                    InstallAfsctoolView(model: model)
+                }
             }
         }
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button("Settings", systemImage: "slider.horizontal.3") {
+                    model.showingSettings = true
+                }
+                .help("See what Pomace chose, and why")
+            }
             ToolbarItem(placement: .primaryAction) {
                 if model.isScanning {
                     Button("Stop", systemImage: "stop.fill") { model.cancelScan() }

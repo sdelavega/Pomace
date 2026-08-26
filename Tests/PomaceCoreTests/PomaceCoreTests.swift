@@ -154,14 +154,17 @@ struct SystemProfileTests {
         #expect(m5.threadCount(foreground: true) == 10)
     }
 
-    @Test("battery and thermal pressure halve the count")
+    @Test("battery and thermal pressure reduce the count, down to the safe floor")
     func constrained() {
-        #expect(m5.threadCount(foreground: false, constrained: true) == 2)
+        // Was 2 until the afsctool hard-link corruption was measured; 2 is now unsafe.
+        #expect(m5.threadCount(foreground: false, constrained: true)
+                    == SystemProfile.minimumSafeThreads)
     }
 
-    @Test("slow media clamps to 2 regardless of cores")
+    @Test("slow media reduces threads but not below the safe floor")
     func slowMedia() {
-        #expect(m5.threadCount(foreground: true, slowMedia: true) == 2)
+        #expect(m5.threadCount(foreground: true, slowMedia: true)
+                    == SystemProfile.minimumSafeThreads)
     }
 
     @Test("never returns zero threads on a single-core machine")
@@ -332,5 +335,222 @@ struct ScanEntryIdentityTests {
         #expect(a.inode == b.inode)
         #expect(a.id != b.id)
         #expect(Set([a.id, b.id]).count == 2)
+    }
+}
+
+@Suite("compression policy")
+struct CompressionPolicyTests {
+
+    let m5 = SystemProfile(performanceCores: 4, efficiencyCores: 6,
+                           physicalCores: 10, isAppleSilicon: true)
+
+    @Test("never emits -n or -L, in any mode", arguments: CompressionMode.allCases)
+    func forbiddenFlagsNeverEmitted(mode: CompressionMode) {
+        // -n disables afsctool's verification; -L is "not recommended" by its own help.
+        // These are safety properties, not preferences (SAFETY.md §4).
+        let plan = CompressionPolicy.plan(mode: mode, profile: m5)
+        for flag in CompressionPolicy.forbiddenFlags {
+            #expect(!plan.arguments.contains(flag), "\(mode) emitted \(flag)")
+        }
+    }
+
+    @Test("forbidden flags survive a hostile override")
+    func overrideCannotForceForbiddenFlags() {
+        var evil = CompressionSettings()
+        evil.compressor = "LZFSE"
+        evil.sortBySize = false          // user tries to disable a fixed safety property
+        evil.detectHardLinks = false
+        let plan = CompressionPolicy.plan(profile: m5, overrides: evil)
+        #expect(plan.settings.sortBySize)
+        #expect(plan.settings.detectHardLinks)
+        #expect(plan.arguments.contains("-S"))
+        #expect(plan.arguments.contains("-f"))
+    }
+
+    @Test("automatic mode defaults to LZFSE")
+    func automaticDefault() {
+        let plan = CompressionPolicy.plan(mode: .automatic, profile: m5)
+        #expect(plan.settings.compressor == "LZFSE")
+        #expect(plan.settings.zlibLevel == nil)
+        #expect(plan.arguments.contains("LZFSE"))
+    }
+
+    @Test("a measured winner beats the default")
+    func measuredCompressorWins() {
+        let plan = CompressionPolicy.plan(mode: .automatic, profile: m5, measuredCompressor: "ZLIB")
+        #expect(plan.settings.compressor == "ZLIB")
+        #expect(plan.justifications.first { $0.id == "compressor" }?.reason
+                    .contains("measured") == true)
+    }
+
+    @Test("level is emitted only for ZLIB")
+    func levelOnlyForZLIB() {
+        let zlib = CompressionPolicy.plan(mode: .maximumSavings, profile: m5)
+        #expect(zlib.settings.compressor == "ZLIB")
+        #expect(zlib.arguments.contains("-9"))
+
+        let lzfse = CompressionPolicy.plan(mode: .automatic, profile: m5)
+        #expect(!lzfse.arguments.contains { $0.hasPrefix("-") && Int($0.dropFirst()) != nil })
+    }
+
+    @Test("maximum savings warns about its cost")
+    func maximumSavingsWarns() {
+        let plan = CompressionPolicy.plan(mode: .maximumSavings, profile: m5)
+        #expect(!plan.warnings.isEmpty)
+        // The user opting into maximum savings must be told what it costs, in time.
+        let text = plan.warnings.joined().lowercased()
+        #expect(text.contains("long") || text.contains("slow"),
+                "cost warning does not mention time: \(text)")
+    }
+
+    @Test("threads follow the machine and the conditions")
+    func threadPolicy() {
+        let bg = CompressionPolicy.plan(profile: m5, foreground: false)
+        #expect(bg.arguments.contains("-J4"))
+
+        let fg = CompressionPolicy.plan(profile: m5, foreground: true)
+        #expect(fg.arguments.contains("-J10"))
+
+        let hot = CompressionPolicy.plan(profile: m5,
+                                         conditions: RuntimeConditions(thermalPressure: true),
+                                         foreground: true)
+        #expect(hot.arguments.contains("-J5"))
+
+        // Exclusive IO on external media, but clamped UP to the safe floor: -j2 is a
+        // thread count at which afsctool corrupts hard-linked files.
+        let usb = CompressionPolicy.plan(profile: m5,
+                                         conditions: RuntimeConditions(slowMedia: true))
+        #expect(usb.arguments.contains("-j3"))
+    }
+
+    @Test("falls back when afsctool lacks the chosen compressor")
+    func capabilityFallback() {
+        let caps = AfsctoolCapabilities(version: nil, compressors: ["ZLIB"],
+                                        supportsThreads: true, supportsSort: true,
+                                        supportsMinSavings: true, supportsHardLinkDetection: true,
+                                        supportsBackup: true, rawUsage: "")
+        let plan = CompressionPolicy.plan(mode: .automatic, profile: m5, capabilities: caps)
+        #expect(plan.settings.compressor == "ZLIB")
+        #expect(!plan.warnings.isEmpty)
+    }
+
+    @Test("every justification explains itself")
+    func justificationsPresentable() {
+        let plan = CompressionPolicy.plan(profile: m5)
+        #expect(plan.justifications.count >= 6)
+        for j in plan.justifications {
+            #expect(!j.value.isEmpty)
+            #expect(!j.reason.isEmpty, "\(j.label) has no reason")
+        }
+        // The three fixed safety rows must be present and marked unchangeable.
+        let fixed = plan.justifications.filter(\.isFixed).map(\.id)
+        #expect(Set(fixed) == ["sort", "hardlinks", "verify"])
+    }
+
+    @Test("decompress arguments are minimal and safe")
+    func decompressArgs() {
+        let args = CompressionPolicy.decompressArguments()
+        #expect(args.contains("-d"))
+        for flag in CompressionPolicy.forbiddenFlags { #expect(!args.contains(flag)) }
+    }
+}
+
+@Suite("afsctool version parsing")
+struct AfsctoolVersionTests {
+
+    @Test("parses the banner")
+    func banner() throws {
+        let v = try #require(AfsctoolVersion(banner: "afsctool 1.7.2.\nReport if file is…"))
+        #expect(v.description == "1.7.2")
+    }
+
+    @Test("tolerates a two-component version")
+    func twoComponent() throws {
+        let v = try #require(AfsctoolVersion(banner: "afsctool 2.0"))
+        #expect(v.description == "2.0.0")
+    }
+
+    @Test("returns nil on unparseable output")
+    func garbage() {
+        #expect(AfsctoolVersion(banner: "command not found") == nil)
+        #expect(AfsctoolVersion(banner: "") == nil)
+    }
+
+    @Test("orders versions correctly")
+    func ordering() {
+        #expect(AfsctoolVersion(major: 1, minor: 7, patch: 2)
+                < AfsctoolVersion(major: 1, minor: 7, patch: 3))
+        #expect(AfsctoolVersion(major: 1, minor: 9, patch: 0)
+                < AfsctoolVersion(major: 2, minor: 0, patch: 0))
+    }
+}
+
+@Suite("failure messages")
+struct FailureMessageTests {
+
+    @Test("permission errors suggest a real next step")
+    func permission() {
+        let f = CompressionEngine.describeFailure(path: "/x/y.txt",
+                                                  output: "y.txt: Permission denied")
+        #expect(f.remedy.contains("permission") || f.remedy.contains("Full Disk Access"))
+        #expect(!f.remedy.isEmpty)
+    }
+
+    @Test("disk-full errors say to free space")
+    func diskFull() {
+        let f = CompressionEngine.describeFailure(path: "/x/y.txt", output: "No space left on device")
+        #expect(f.remedy.lowercased().contains("free up"))
+    }
+
+    @Test("an unrecognised error still reassures that the file is intact")
+    func unknown() {
+        let f = CompressionEngine.describeFailure(path: "/x/y.txt", output: "something odd happened")
+        #expect(f.remedy.contains("not modified"))
+    }
+}
+
+@Suite("hard-link data-loss guards")
+struct HardLinkSafetyTests {
+
+    let m5 = SystemProfile(performanceCores: 4, efficiencyCores: 6,
+                           physicalCores: 10, isAppleSilicon: true)
+
+    @Test("thread count never drops below the safe floor", arguments: [
+        (true, false, false), (false, false, false), (false, true, false),
+        (true, true, false), (false, false, true), (true, true, true),
+    ])
+    func neverBelowSafeFloor(foreground: Bool, constrained: Bool, slowMedia: Bool) {
+        // afsctool destroys 100% of hard-linked files at -J1 and ~8% at -J2.
+        let n = m5.threadCount(foreground: foreground, constrained: constrained, slowMedia: slowMedia)
+        #expect(n >= SystemProfile.minimumSafeThreads,
+                "got -J\(n) for fg=\(foreground) constrained=\(constrained) slow=\(slowMedia)")
+    }
+
+    @Test("the floor never exceeds the machine's real core count")
+    func floorRespectsSmallMachines() {
+        let dual = SystemProfile(performanceCores: 2, efficiencyCores: 0,
+                                 physicalCores: 2, isAppleSilicon: false)
+        #expect(dual.threadCount(foreground: true) <= 2)
+    }
+
+    @Test("no policy path emits a dangerous thread count", arguments: CompressionMode.allCases)
+    func policyNeverEmitsUnsafeThreads(mode: CompressionMode) {
+        for conditions in [
+            RuntimeConditions(),
+            RuntimeConditions(onBattery: true),
+            RuntimeConditions(lowPowerMode: true, thermalPressure: true),
+            RuntimeConditions(slowMedia: true),
+            RuntimeConditions(onBattery: true, lowPowerMode: true,
+                              thermalPressure: true, slowMedia: true),
+        ] {
+            for foreground in [true, false] {
+                let plan = CompressionPolicy.plan(mode: mode, profile: m5,
+                                                  conditions: conditions, foreground: foreground)
+                let threadArg = plan.arguments.first { $0.hasPrefix("-J") || $0.hasPrefix("-j") }
+                let n = Int(threadArg?.dropFirst(2) ?? "0") ?? 0
+                #expect(n >= SystemProfile.minimumSafeThreads,
+                        "\(mode) emitted \(threadArg ?? "none")")
+            }
+        }
     }
 }

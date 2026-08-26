@@ -79,8 +79,8 @@ will trust it.
 | `-T` compressor | Sample the directory, measure, pick the winner. LZFSE when inconclusive. | [ADR-0010](DECISIONS.md#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default) |
 | `-<level>` | 9 **only** if ZLIB was chosen; irrelevant otherwise | ZLIB-only flag; near-inert (§1.1) |
 | `-J` / `-j` threads | `hw.perflevel0.physicalcpu` for background sweeps; all physical cores for foreground runs the user is watching | Knee at P-core count (§1.2) |
-| | Halve on battery, in Low Power Mode, or `thermalState > .fair` | Citizenship |
-| | Clamp to 2 on external or rotational media | I/O bound; more threads thrash |
+| | Halve on battery, in Low Power Mode, or `thermalState > .fair`, floored at 3 | Citizenship, bounded by the hard-link safety floor |
+| | Clamp to 3 on external or rotational media | I/O bound; **never below 3** — afsctool corrupts hard links at 1–2 threads ([M2-FINDINGS](M2-FINDINGS.md)) |
 | | `-J` on internal SSD, `-j` on external | 26% faster on NVMe (§1.3) |
 | `-S` sort | **Always on** | Safety, not tuning — see below |
 | `-R` reverse workers | Half of thread count when file count is large | Load balance on skewed size distributions — **unmeasured**, see §6 |

@@ -13,11 +13,24 @@ final class ScanModel {
         case failed(String)
     }
 
+    enum RunState {
+        case none
+        case running(CompressionOperation, CompressionProgress)
+        case finished(CompressionOutcome)
+        case refused(String)
+    }
+
     var state: State = .idle
+    var runState: RunState = .none
     var watchedPaths: [String] = []
     var selectedPath: String?
     var showExcluded = false
     var sortOrder: SortOrder = .potentialSaving
+    var mode: CompressionMode = .automatic
+    var overrides: CompressionSettings?
+    var installation: AfsctoolInstallation?
+    var confirmingDecompress = false
+    var showingSettings = false
 
     enum SortOrder: String, CaseIterable, Identifiable {
         case potentialSaving = "Largest first"
@@ -27,13 +40,102 @@ final class ScanModel {
     }
 
     private var scanTask: Task<Void, Never>?
+    private var runTask: Task<Void, Never>?
     private let store: Store?
+    private let log = MutationLog()
 
     init() {
         // A broken store must not stop the app from scanning — it only costs us history.
         store = try? Store()
         watchedPaths = (try? store?.watchedDirectories()) .flatMap { $0 } ?? []
+        installation = AfsctoolLocator.discover()
     }
+
+    // MARK: - afsctool
+
+    var afsctoolReady: Bool { installation?.capabilities.isUsable ?? false }
+
+    var afsctoolSummary: String {
+        guard let i = installation else { return "afsctool isn't installed" }
+        let v = i.capabilities.version.map { "afsctool \($0)" } ?? "afsctool"
+        return "\(v) — from \(i.source.description)"
+    }
+
+    func refreshInstallation() { installation = AfsctoolLocator.discover() }
+
+    // MARK: - Compression
+
+    var isRunning: Bool { if case .running = runState { true } else { false } }
+
+    var plan: CompressionPlan {
+        CompressionPolicy.plan(
+            mode: mode,
+            conditions: RuntimeConditions.current(volumePath: selectedPath),
+            foreground: true,
+            overrides: overrides,
+            capabilities: installation?.capabilities)
+    }
+
+    /// Every path the user's current view would act on. Built from the scan, then
+    /// re-evaluated inside the engine at mutation time.
+    private func targetPaths(for op: CompressionOperation) -> [String] {
+        guard let r = result else { return [] }
+        switch op {
+        case .compress:   return r.entries.filter { !$0.isExcluded && !$0.isCompressed }.map(\.path)
+        case .decompress: return r.entries.filter(\.isCompressed).map(\.path)
+        }
+    }
+
+    var compressibleCount: Int { result?.progress.eligibleFiles ?? 0 }
+    var compressedCount: Int { result?.progress.compressedFiles ?? 0 }
+
+    func startCompress() { start(.compress) }
+
+    func requestDecompress() { confirmingDecompress = true }
+
+    func confirmDecompress() {
+        confirmingDecompress = false
+        start(.decompress)
+    }
+
+    private func start(_ op: CompressionOperation) {
+        guard let root = selectedPath, let install = installation else { return }
+        let paths = targetPaths(for: op)
+        guard !paths.isEmpty else {
+            runState = .refused(op == .compress
+                ? "Nothing here needs compressing."
+                : "Nothing here is compressed.")
+            return
+        }
+        let plan = self.plan
+        runState = .running(op, CompressionProgress())
+        runTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in CompressionEngine.run(operation: op, paths: paths, root: root,
+                                                     installation: install, plan: plan,
+                                                     logger: self.log) {
+                if Task.isCancelled { return }
+                switch event {
+                case .started(let p), .progress(let p):
+                    self.runState = .running(op, p)
+                case .finished(let outcome):
+                    self.runState = .finished(outcome)
+                    // Post-run truth: re-scan natively rather than trusting afsctool's
+                    // summary, so before and after come from the same code path.
+                    self.scan(root)
+                case .failed(let message):
+                    self.runState = .refused(message)
+                }
+            }
+        }
+    }
+
+    func cancelRun() {
+        runTask?.cancel()
+        runTask = nil
+    }
+
+    func dismissRunResult() { runState = .none }
 
     var isScanning: Bool { if case .scanning = state { true } else { false } }
 

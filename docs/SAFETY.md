@@ -48,6 +48,7 @@ These are hard exclusions — **not** user-overridable in v1.
 | Sparse files and sparse bundles | **Compression materializes them.** Measured: 10 MB sparse file went from 0 bytes on disk to 32,768. Always a net loss, and our savings math inverts. | **[verified 2026-08-26]** |
 | Cloud-sync directories — iCloud Drive, Dropbox, Google Drive, OneDrive | Modifying every file can trigger a full re-upload of the directory; may also conflict with dataless/evicted placeholder files | [expected] |
 | Time Machine backup volumes and local snapshots | Backup integrity; the volume format is not ours to touch | [expected] |
+| **Two paths sharing one inode, in a single afsctool run** | **Destroys file contents.** afsctool truncates hard-linked files to zero bytes — 100% of them at `-J1`, ~8% at `-J2`. `-f` does not prevent it. Pomace submits one path per inode. | **[verified 2026-08-26]** — see [M2-FINDINGS](M2-FINDINGS.md) |
 | Files with an existing non-decmpfs resource fork | afsctool's compression path uses the resource fork; a pre-existing one is a conflict | [expected] |
 | Anything currently open for writing by another process | Race between afsctool and the writer | [expected] |
 
@@ -106,7 +107,11 @@ These are requirements on Pomace's own implementation:
     That is the sparse-file signature, and the arithmetic is inverted there.
 13. **A test run that inspects zero files must fail, not pass.** The first integrity run
     reported `ALL CHECKS PASSED` over an empty set. Assert a minimum baseline count.
-14. **Render negative savings honestly.** A pre-existing resource fork produces −13.8%;
+14. **Never submit two paths that share an inode to one afsctool run**, and never emit a
+    thread count below `SystemProfile.minimumSafeThreads`. Both guard the same data-loss
+    bug ([M2-FINDINGS](M2-FINDINGS.md)); the inode rule is the fix and the floor is a
+    backstop.
+15. **Render negative savings honestly.** A pre-existing resource fork produces −13.8%;
     the UI must not display that as a gain or break its layout.
 
 ---

@@ -52,20 +52,24 @@ it safe to run on real directories while the engine is still young.
 
 ## M2 — Compress and decompress
 
-- [ ] afsctool discovery, version detection, capability check
-- [ ] Install flow — Homebrew path and direct-download path, with the license disclosure
-- [ ] Auto-tuning policy engine ([DEFAULTS.md §2](DEFAULTS.md#2-policy)) with per-flag
+- [x] afsctool discovery, version detection, capability check
+- [x] Install flow — Homebrew path with the license disclosure (direct download deferred)
+- [x] Auto-tuning policy engine ([DEFAULTS.md §2](DEFAULTS.md#2-policy)) with per-flag
       justification strings
-- [ ] Per-directory compressor measurement ([ADR-0010](DECISIONS.md#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default))
-- [ ] Settings → Advanced pane: computed values, reasons, overrides, revert
-- [ ] Live progress, non-blocking, cancellable at file boundaries
-- [ ] Decompress, equally prominent in the UI
-- [ ] Post-run native re-scan; real figures replace estimates
-- [ ] Destructive-action confirmations per [SAFETY.md §4](SAFETY.md#4-operational-rules)
-- [ ] Error surfaces that name the file and say what to do next
+- [ ] Per-directory compressor measurement ([ADR-0010](DECISIONS.md#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default)) — **deferred to M2.1**, the policy engine accepts a measured winner but nothing measures yet
+- [x] Settings → Advanced pane: computed values, reasons, revert (override controls deferred)
+- [x] Live progress, non-blocking, cancellable at batch boundaries
+- [x] Decompress, beside Compress, gated by a confirmation naming the file count
+- [x] Post-run native re-scan — this is what surfaced the afsctool data-loss bug
+- [x] Destructive-action confirmations per [SAFETY.md §4](SAFETY.md#4-operational-rules)
+- [x] Error surfaces that name the file and say what to do next
 
-**This is the first build that can destroy data.** Do not run it on anything unbacked until
-the M0 checklist is green.
+**This is the first build that can destroy data.** It found a real one: see
+[M2-FINDINGS](M2-FINDINGS.md) for the afsctool hard-link bug and the two guards against it.
+
+Deferred out of M2: per-directory compressor measurement ([ADR-0010](DECISIONS.md#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default)),
+override controls in the Advanced pane (it displays and reverts, but doesn't yet edit), the
+direct-download install path, and `-b` backup on first run.
 
 ---
 

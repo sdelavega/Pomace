@@ -8,7 +8,13 @@ struct ResultView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SummaryHeader(result: result)
+            VStack(alignment: .leading, spacing: 14) {
+                SummaryHeader(result: result)
+                    .padding(.bottom, -6)
+                ActionBar(model: model).padding(.horizontal, 20)
+                RunBanner(model: model).padding(.horizontal, 20)
+            }
+            .padding(.bottom, 14)
             Divider()
             FileTable(model: model, result: result)
             Divider()
@@ -48,7 +54,8 @@ private struct SummaryHeader: View {
                      "of " + ByteFormat.short(result.progress.logicalBytes) + " logical")
             }
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
     }
 
     /// Deliberately does NOT promise a figure. Estimating real savings needs sampling, which
