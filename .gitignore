@@ -33,6 +33,7 @@ ExportOptions.plist
 
 # Local scratch
 scratch/
+dist/
 *.sparseimage
 *.dmg
 
