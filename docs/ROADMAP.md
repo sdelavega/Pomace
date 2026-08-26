@@ -91,7 +91,7 @@ The differentiating feature.
 ## M4 — Polish
 
 - [x] History timeline making drift visible over months
-- [ ] Menu bar item (optional, off by default)
+- [x] Menu bar item (optional, off by default)
 - [ ] Full keyboard navigation; VoiceOver pass
 - [ ] Light/dark, Dynamic Type, Reduce Motion
 - [x] App icon

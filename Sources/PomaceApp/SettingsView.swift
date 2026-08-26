@@ -8,6 +8,7 @@ import PomaceCore
 /// effect. Rows marked fixed are safety properties and cannot be changed at any tier.
 struct AdvancedSettingsView: View {
     @Bindable var model: ScanModel
+    @AppStorage("menuBarEnabled") private var menuBarEnabled = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -54,6 +55,8 @@ struct AdvancedSettingsView: View {
                 }
             }
             Spacer()
+            Toggle("Show menu bar item", isOn: $menuBarEnabled)
+                .controlSize(.small)
             if model.overrides != nil {
                 Button("Reset to Automatic") { model.overrides = nil }
                     .controlSize(.small)

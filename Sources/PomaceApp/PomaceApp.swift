@@ -4,6 +4,7 @@ import PomaceCore
 
 struct PomaceApp: App {
     @State private var model = ScanModel()
+    @AppStorage("menuBarEnabled") private var menuBarEnabled = false
 
     /// `--scan <path>` opens straight onto a folder without the panel. Used by the test
     /// harness, and the same argument-dispatch shape the headless `--sweep` mode needs in M3.
@@ -37,6 +38,25 @@ struct PomaceApp: App {
                     .disabled(model.selectedPath == nil)
             }
         }
+
+        MenuBarExtra(isInserted: $menuBarEnabled) {
+            Button("Open Pomace", action: bringToFront)
+            Divider()
+            if let path = model.selectedPath {
+                Text((path as NSString).lastPathComponent)
+            } else {
+                Text("No folder selected")
+            }
+            Button("Rescan") { model.rescan() }
+                .disabled(model.selectedPath == nil)
+            Button("Sweep Now") { model.sweepNow() }
+                .disabled(model.selectedPath == nil || !model.toolReady || model.isSweeping)
+            Divider()
+            Button("Quit Pomace") { NSApp.terminate(nil) }
+        } label: {
+            Label("Pomace", systemImage: "internaldrive")
+        }
+        .menuBarExtraStyle(.menu)
     }
 
     private func addFolder() {
@@ -52,5 +72,10 @@ struct PomaceApp: App {
         if panel.runModal() == .OK, let url = panel.url {
             model.add(path: url.path)
         }
+    }
+
+    private func bringToFront() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first?.makeKeyAndOrderFront(nil)
     }
 }
