@@ -72,7 +72,7 @@ func probeAccess(_ label: String) {
     log("\(label): uid=\(geteuid()) pid=\(getpid()) ppid=\(ppid) | " + results.joined(separator: " "))
 }
 
-let plistName = "org.pomace.PomaceTCCProbe.plist"
+let plistName = "com.sdelavega.PomaceTCCProbe.plist"
 let mode = CommandLine.arguments.dropFirst().first ?? "--gui"
 
 switch mode {

@@ -14,7 +14,7 @@ Pomace.app
 │   ├── --sweep <id>   → headless mode: .prohibited activation, run one sweep, exit
 │   └── --sweep-all    → headless mode: run all due sweeps, exit
 ├── Contents/Library/LaunchAgents/
-│   └── org.pomace.Pomace.Sweep.plist   ← registered via SMAppService
+│   └── com.sdelavega.Pomace.Sweep.plist   ← registered via SMAppService
 └── Contents/Resources/
 ```
 
@@ -159,7 +159,7 @@ produced the "before" numbers, so before/after are directly comparable.
 
 ### 5.1 Registration
 
-`SMAppService.agent(plistName: "org.pomace.Pomace.Sweep.plist")`, with the plist inside
+`SMAppService.agent(plistName: "com.sdelavega.Pomace.Sweep.plist")`, with the plist inside
 `Contents/Library/LaunchAgents/`. Registering shows the user a Login Items entry they can
 disable — correct and expected; the UI should reflect `service.status` rather than assuming
 registration succeeded.

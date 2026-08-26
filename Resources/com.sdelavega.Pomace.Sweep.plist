@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>org.pomace.Pomace.Sweep</string>
+  <key>Label</key><string>com.sdelavega.Pomace.Sweep</string>
 
   <!-- Relative to the app bundle, so Pomace works wherever it is installed. -->
   <key>BundleProgram</key><string>Contents/MacOS/Pomace</string>

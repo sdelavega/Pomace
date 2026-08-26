@@ -27,7 +27,7 @@ if [ -n "$VERSION" ]; then
 fi
 # The scheduled-sweep agent ships inside the bundle so it is covered by the signature and
 # removed cleanly when the app is deleted (ADR-0005).
-cp "$HERE/Resources/org.pomace.Pomace.Sweep.plist" "$APP/Contents/Library/LaunchAgents/"
+cp "$HERE/Resources/com.sdelavega.Pomace.Sweep.plist" "$APP/Contents/Library/LaunchAgents/"
 
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
   codesign --force --options runtime --timestamp \

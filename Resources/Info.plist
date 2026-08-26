@@ -3,7 +3,7 @@
 <plist version="1.0"><dict>
   <key>CFBundleExecutable</key><string>Pomace</string>
   <key>CFBundleIconFile</key><string>Pomace</string>
-  <key>CFBundleIdentifier</key><string>org.pomace.Pomace</string>
+  <key>CFBundleIdentifier</key><string>com.sdelavega.Pomace</string>
   <key>CFBundleName</key><string>Pomace</string>
   <key>CFBundleDisplayName</key><string>Pomace</string>
   <key>CFBundlePackageType</key><string>APPL</string>

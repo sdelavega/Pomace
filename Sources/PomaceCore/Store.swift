@@ -23,7 +23,7 @@ public final class Store: @unchecked Sendable {
     }
 
     private var db: OpaquePointer?
-    private let queue = DispatchQueue(label: "org.pomace.Pomace.Store")
+    private let queue = DispatchQueue(label: "com.sdelavega.Pomace.Store")
 
     public static var defaultURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

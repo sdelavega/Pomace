@@ -8,7 +8,7 @@ import ServiceManagement
 /// reflect a schedule change would invalidate the code signature. See ADR-0014.
 public enum SweepService {
 
-    public static let plistName = "org.pomace.Pomace.Sweep.plist"
+    public static let plistName = "com.sdelavega.Pomace.Sweep.plist"
 
     /// How often the agent wakes. Each wake is a process spawn, a SQLite read, and an exit
     /// unless something is due — cheap enough to do hourly, frequent enough that a daily
