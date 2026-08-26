@@ -94,7 +94,7 @@ The differentiating feature.
 - [ ] Menu bar item (optional, off by default)
 - [ ] Full keyboard navigation; VoiceOver pass
 - [ ] Light/dark, Dynamic Type, Reduce Motion
-- [ ] App icon
+- [x] App icon
 - [x] Onboarding that explains transparent compression honestly, including the write-decompresses
       caveat, in about four sentences
 - [ ] Localization scaffolding (strings catalog), English only at first

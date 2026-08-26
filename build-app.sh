@@ -20,6 +20,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents"
 cp "$BIN" "$APP/Contents/MacOS/Pomace"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
+cp "$HERE/Resources/Pomace.icns" "$APP/Contents/Resources/Pomace.icns"
 # The scheduled-sweep agent ships inside the bundle so it is covered by the signature and
 # removed cleanly when the app is deleted (ADR-0005).
 cp "$HERE/Resources/org.pomace.Pomace.Sweep.plist" "$APP/Contents/Library/LaunchAgents/"
