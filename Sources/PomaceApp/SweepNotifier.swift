@@ -1,5 +1,5 @@
 import Foundation
-import UserNotifications
+@preconcurrency import UserNotifications
 import PomaceCore
 
 /// Notifications for sweeps that went wrong. Never for ones that went right.

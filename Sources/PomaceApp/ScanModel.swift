@@ -251,7 +251,7 @@ final class ScanModel {
         // version returned early here, so relaunching onto a remembered folder left the
         // sidebar row selected while the detail pane said "Nothing Selected".
         if !watchedPaths.contains(path) {
-            try? store?.addWatchedDirectory(path: path)
+            _ = try? store?.addWatchedDirectory(path: path)
             watchedPaths.append(path)
         }
         selectedPath = path
@@ -307,7 +307,7 @@ final class ScanModel {
                     self.state = .scanning(p)
                 case .finished(let r):
                     self.state = .done(r)
-                    try? self.store?.record(r)
+                    _ = try? self.store?.record(r)
                 }
             }
         }

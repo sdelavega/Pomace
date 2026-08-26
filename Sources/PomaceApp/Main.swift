@@ -51,7 +51,9 @@ enum Main {
     private static func runHeadlessSweep(force: Bool) {
         // Belt and braces: nothing here should touch AppKit, but if some framework pulls it
         // in, refuse an activation policy that would put us in the Dock.
-        NSApplication.shared.setActivationPolicy(.prohibited)
+        _ = MainActor.assumeIsolated {
+            NSApplication.shared.setActivationPolicy(.prohibited)
+        }
 
         let log = MutationLog()
         guard let store = try? Store() else {
