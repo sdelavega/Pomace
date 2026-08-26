@@ -12,5 +12,5 @@
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Pomace contributors</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Stephen de la Vega</string>
 </dict></plist>
