@@ -104,7 +104,7 @@ private struct OutcomeBanner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Image(systemName: icon).foregroundStyle(tint)
+                Image(systemName: icon).foregroundStyle(tint).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline).font(.callout.weight(.medium))
                     Text(detail).font(.caption).foregroundStyle(.secondary)

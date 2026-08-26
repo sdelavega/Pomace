@@ -93,10 +93,14 @@ struct InspectorView: View {
                 Image(systemName: model.serviceStatus.isActive
                       ? "checkmark.circle.fill" : "exclamationmark.circle")
                     .foregroundStyle(model.serviceStatus.isActive ? .green : .secondary)
+                    .accessibilityHidden(true)
                 Text(model.serviceStatus.explanation)
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Scheduled sweeps")
+            .accessibilityValue(model.serviceStatus.explanation)
 
             if case .requiresApproval = model.serviceStatus {
                 Button("Open Login Items…") { model.openLoginItems() }

@@ -24,7 +24,8 @@ struct AdvancedSettingsView: View {
             Divider()
             footer
         }
-        .frame(width: 560, height: 460)
+        .frame(minWidth: 460, idealWidth: 560, maxWidth: 680,
+               minHeight: 360, idealHeight: 460, maxHeight: 640)
     }
 
     private var header: some View {

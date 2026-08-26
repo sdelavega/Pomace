@@ -125,12 +125,14 @@ private struct Detail: View {
                 Button("Settings", systemImage: "slider.horizontal.3") {
                     model.showingSettings = true
                 }
+                .keyboardShortcut(",", modifiers: .command)
                 .help("See what Pomace chose, and why")
             }
             ToolbarItem(placement: .automatic) {
                 Button("Schedule", systemImage: "calendar.badge.clock") {
                     model.showingInspector.toggle()
                 }
+                .keyboardShortcut("s", modifiers: [.command, .option])
                 .help("Schedule and sweep history")
                 .disabled(model.selectedPath == nil)
             }
@@ -149,15 +151,17 @@ private struct Detail: View {
 private struct ScanningView: View {
     let progress: ScanProgress
     let onCancel: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 14) {
             ProgressView()
                 .controlSize(.large)
-            Text("\(Fmt.count(progress.filesSeen, "file")) examined")
-                .font(.title3)
-                .monospacedDigit()
-                .contentTransition(.numericText())
+            if reduceMotion {
+                progressText
+            } else {
+                progressText.contentTransition(.numericText())
+            }
             if let path = progress.currentPath {
                 Text(path)
                     .font(.caption)
@@ -170,6 +174,14 @@ private struct ScanningView: View {
                 .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.default, value: progress.filesSeen)
+        .animation(reduceMotion ? nil : .default, value: progress.filesSeen)
+    }
+
+    private var progressText: some View {
+        Text("\(Fmt.count(progress.filesSeen, "file")) examined")
+            .font(.title3)
+            .monospacedDigit()
+            .accessibilityLabel("Scan progress")
+            .accessibilityValue("\(Fmt.count(progress.filesSeen, "file")) examined")
     }
 }

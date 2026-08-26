@@ -95,7 +95,9 @@ private struct CoverageBar: View {
             .clipShape(RoundedRectangle(cornerRadius: 3))
         }
         .frame(height: 6)
-        .accessibilityLabel("\(Int(result.compressionCoverage * 100)) percent already compressed")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Compression coverage")
+        .accessibilityValue("\(Fmt.percent(result.compressionCoverage)) compressed, \(Fmt.count(result.progress.eligibleFiles, "file")) eligible, \(Fmt.count(result.progress.excludedFiles, "file")) excluded for safety")
     }
 
     @ViewBuilder
