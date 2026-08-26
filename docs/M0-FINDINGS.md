@@ -183,7 +183,7 @@ file count before it is willing to report success, and CI must fail on a zero-fi
 
 The highest-risk assumption in the design: does a launchd-spawned instance of the same
 signed binary carry the GUI app's TCC identity? Tested with a Developer ID-signed probe
-(`TeamIdentifier=REDACTED`) installed to `/Applications` and registered via
+(using a Developer ID signing identity) installed to `/Applications` and registered via
 `SMAppService.agent(plistName:)`. Registration returned `.enabled` immediately — no
 `.requiresApproval` step.
 
