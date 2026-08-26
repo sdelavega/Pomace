@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    name: Test and package
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Run unit tests
+        run: swift test
+
+      - name: Assemble app bundle
+        run: ./build-app.sh debug
+
+      - name: Verify bundle signature
+        run: codesign --verify --strict build/Pomace.app
