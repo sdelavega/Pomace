@@ -10,6 +10,10 @@ public struct FileFacts: Sendable {
     public let decmpfsXattrSize: Int
     public let linkCount: UInt16
     public let isRegularFile: Bool
+    /// Carried from the walk's stat so callers never need a second lstat to identify
+    /// the inode — that redundant syscall dominated the first scan implementation.
+    public let inode: UInt64
+    public let allocatedBlocks: Int64
 
     public var savedBytes: Int64 { max(0, logicalSize - physicalSize) }
     public var savedPercent: Double {
@@ -62,7 +66,9 @@ public enum FileInspector {
             rawType: header?.rawType,
             decmpfsXattrSize: xattrSize,
             linkCount: st.st_nlink,
-            isRegularFile: isReg
+            isRegularFile: isReg,
+            inode: UInt64(st.st_ino),
+            allocatedBlocks: Int64(st.st_blocks) * 512
         )
     }
 

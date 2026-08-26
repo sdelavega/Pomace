@@ -39,14 +39,14 @@ rests on and none of it is confirmed yet.
 First build that's worth looking at. Read-only — it cannot modify anything yet, which makes
 it safe to run on real directories while the engine is still young.
 
-- [ ] Xcode project, SPM structure, signing, entitlements
-- [ ] `PomaceCore` scan engine: concurrent walk, cancellation, batched progress
-- [ ] SQLite store, schema v1, WAL mode
-- [ ] SwiftUI three-pane shell — sidebar / content / optional inspector
-- [ ] Directory picker with TCC prompt handled in context
-- [ ] File outline view with size, physical size, state, estimated savings
-- [ ] Safety-rule evaluation, with exclusions shown and their reasons legible
-- [ ] Aggregate summary header
+- [x] SPM structure, scripted bundle, signing, entitlements ([ADR-0013](DECISIONS.md#adr-0013-no-xcodeproj--the-app-bundle-is-assembled-by-script))
+- [x] `PomaceCore` scan engine: walk, cancellation, progress coalesced to 100ms
+- [x] SQLite store, schema v1, WAL mode
+- [x] SwiftUI shell — sidebar / content (inspector deferred to M2, when there are settings to put in it)
+- [x] Directory picker — NSOpenPanel is itself the consent gesture
+- [x] File table with size, physical size, and compression state
+- [x] Safety-rule evaluation, with exclusions and their reasons shown inline
+- [x] Aggregate summary header with coverage bar
 
 ---
 

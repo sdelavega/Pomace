@@ -219,6 +219,46 @@ case "verify":
     for f in failures { print("  - \(f)") }
     exit(failures.isEmpty ? 0 : 1)
 
+case "scan":
+    guard let dir = positional.first else { print("need dir"); exit(2) }
+    // NOTE: an earlier version wrapped this in `Task { ... }` + `DispatchSemaphore.wait()`.
+    // Top-level code in main.swift runs on the main actor, so the semaphore blocked the very
+    // actor the Task needed to resume on — a deadlock that looked exactly like a slow scan.
+    // main.swift supports top-level `await`; just use it.
+    do {
+        for await event in ScanEngine.scan(root: dir) {
+            switch event {
+            case .progress(let p):
+                FileHandle.standardError.write(Data("\r  \(p.filesSeen) files… ".utf8))
+            case .finished(let r):
+                print("\r" + String(repeating: " ", count: 40))
+                print("root:        \(r.root)  [\(r.volume.filesystem ?? "?")]")
+                print("files:       \(r.progress.filesSeen)  dirs: \(r.progress.directoriesSeen)")
+                print("logical:     \(ByteFormat.short(r.progress.logicalBytes))")
+                print("physical:    \(ByteFormat.short(r.progress.physicalBytes))")
+                print("reclaimed:   \(ByteFormat.short(r.reclaimedBytes))")
+                print(String(format: "coverage:    %.1f%% of files already compressed", r.compressionCoverage * 100))
+                print("excluded:    \(r.progress.excludedFiles)")
+                print("eligible:    \(r.progress.eligibleFiles) files, \(ByteFormat.short(r.progress.eligibleLogicalBytes))")
+                if r.entriesTruncated {
+                    print("             (per-file detail capped at \(ScanEngine.maxRetainedEntries); totals cover the whole tree)")
+                }
+                print("hard-link dupes: \(r.hardLinkDuplicates)   unreadable: \(r.unreadableEntries)")
+                print(String(format: "duration:    %.2fs", r.duration))
+                let excluded = r.entries.filter { $0.isExcluded }.prefix(8)
+                if !excluded.isEmpty {
+                    print("\nsample exclusions:")
+                    for e in excluded {
+                        print("  \(e.name)")
+                        for reason in e.reasons where reason.isHardExclusion {
+                            print("     \(reason.explanation)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 default:
     print("unknown command: \(cmd)"); exit(2)
 }

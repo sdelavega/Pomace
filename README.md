@@ -40,7 +40,7 @@ Pomace covers three things the CLI doesn't:
 
 ## Requirements
 
-- macOS 13 Ventura or later (`SMAppService`); developed against macOS 27
+- macOS 14 Sonoma or later ([ADR-0012](docs/DECISIONS.md#adr-0012-macos-14-deployment-floor)); developed against macOS 27
 - Apple silicon or Intel
 - APFS or HFS+ volume
 - `afsctool` — installed by Pomace on first run if absent

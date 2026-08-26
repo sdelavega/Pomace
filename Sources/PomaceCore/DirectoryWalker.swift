@@ -3,6 +3,11 @@ import Foundation
 public struct WalkResult: Sendable {
     public var files = 0, directories = 0, symlinks = 0, errors = 0
     public var logicalTotal: Int64 = 0, physicalTotal: Int64 = 0, compressedFiles = 0
+    /// Totals restricted to files that are ACTUALLY compressed. Reclaimed space must be
+    /// derived from these, never from the whole-tree totals: a sparse file has physical far
+    /// below logical while being entirely uncompressed, so the tree-wide difference reports
+    /// savings that do not exist. See SAFETY.md rule 12.
+    public var compressedLogical: Int64 = 0, compressedPhysical: Int64 = 0
     public var byType: [UInt32: Int] = [:]
     /// Extra paths pointing at an inode already counted. Their bytes are deliberately
     /// excluded from the totals — see the note in `walkFTS`.
@@ -51,6 +56,8 @@ public enum DirectoryWalker {
                     r.physicalTotal += f.physicalSize
                     if f.isCompressed {
                         r.compressedFiles += 1
+                        r.compressedLogical += f.logicalSize
+                        r.compressedPhysical += f.physicalSize
                         if let t = f.rawType { r.byType[t, default: 0] += 1 }
                     }
                 }

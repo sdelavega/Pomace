@@ -146,8 +146,8 @@ compresses.
 
 ## 7. Constraints
 
-- macOS 13+ for `SMAppService`. Targeting 14+ would simplify some SwiftUI work; decide at
-  implementation time.
+- **macOS 14+** (settled in M1 — see [ADR-0012](DECISIONS.md#adr-0012-macos-14-deployment-floor)).
+  `SMAppService` needs only 13, but `@Observable` needs 14 and is worth it.
 - Non-sandboxed, Developer ID signed, notarized.
 - TCC still applies: Desktop, Documents, Downloads, iCloud Drive, network and removable
   volumes each require user consent even for a non-sandboxed app. Full Disk Access is the

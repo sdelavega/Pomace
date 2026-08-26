@@ -38,3 +38,4 @@ scratch/
 
 # Built spike artifacts — regenerate with spikes/tcc/build.sh
 spikes/tcc/*.app/
+build/

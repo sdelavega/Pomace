@@ -171,3 +171,166 @@ struct SystemProfileTests {
         #expect(tiny.threadCount(foreground: false, constrained: true) >= 1)
     }
 }
+
+@Suite("safety rules")
+struct SafetyRulesTests {
+
+    let rules = SafetyRules()
+
+    func facts(path: String = "/Users/x/file.txt", logical: Int64 = 100_000,
+               physical: Int64 = 102_400, compressed: Bool = false,
+               links: UInt16 = 1, regular: Bool = true) -> FileFacts {
+        FileFacts(path: path, logicalSize: logical, physicalSize: physical,
+                  isCompressed: compressed, type: nil, rawType: nil, decmpfsXattrSize: 0,
+                  linkCount: links, isRegularFile: regular, inode: 1,
+                  allocatedBlocks: physical)
+    }
+
+    @Test("sparse files are a hard exclusion")
+    func sparse() {
+        // Measured in M0: compressing a sparse file materializes it and costs disk.
+        let r = rules.evaluate(facts(logical: 10_485_760, physical: 0))
+        #expect(r.contains { if case .sparseFile = $0 { true } else { false } })
+        #expect(rules.isExcluded(facts(logical: 10_485_760, physical: 0)))
+    }
+
+    @Test("a normal file with block rounding is not mistaken for sparse")
+    func notSparse() {
+        // 100_000 logical rounds up to 102_400 allocated — physical exceeds logical.
+        #expect(!rules.isExcluded(facts()))
+    }
+
+    @Test("empty files are excluded, not compressed pointlessly")
+    func empty() {
+        #expect(rules.evaluate(facts(logical: 0, physical: 0)).contains(.zeroLength))
+    }
+
+    @Test("VM images are excluded", arguments: ["disk.vmdk", "box.qcow2", "vm.utm", "img.sparsebundle"])
+    func vmImages(name: String) {
+        #expect(rules.isExcluded(facts(path: "/Users/x/\(name)")))
+    }
+
+    @Test("cloud-synced paths are excluded", arguments: [
+        "/Users/x/Library/Mobile Documents/a.txt",
+        "/Users/x/Dropbox/a.txt",
+        "/Users/x/Library/CloudStorage/OneDrive/a.txt",
+    ])
+    func cloudSync(path: String) {
+        #expect(rules.isExcluded(facts(path: path)))
+    }
+
+    @Test("system paths are excluded but /usr/local is not")
+    func systemPaths() {
+        #expect(rules.isExcluded(facts(path: "/System/Library/a.dylib")))
+        #expect(rules.isExcluded(facts(path: "/usr/lib/a.dylib")))
+        #expect(!rules.isExcluded(facts(path: "/usr/local/lib/a.dylib")))
+    }
+
+    @Test("hard links warn but do not exclude")
+    func hardLinks() {
+        let r = rules.evaluate(facts(links: 3))
+        #expect(r.contains(.hardLinked(linkCount: 3)))
+        #expect(!rules.isExcluded(facts(links: 3)))
+    }
+
+    @Test("already-compressed formats warn but do not exclude")
+    func incompressible() {
+        let r = rules.evaluate(facts(path: "/Users/x/photo.jpg"))
+        #expect(r.contains(.likelyIncompressible("JPEG")))
+        #expect(!rules.isExcluded(facts(path: "/Users/x/photo.jpg")))
+    }
+
+    @Test("network volumes block the whole tree")
+    func networkVolume() {
+        let vol = VolumeContext(filesystem: "smbfs", isNetwork: true)
+        #expect(rules.isExcluded(facts(), volume: vol))
+    }
+
+    @Test("non-APFS filesystems block the whole tree")
+    func wrongFilesystem() {
+        #expect(rules.isExcluded(facts(), volume: VolumeContext(filesystem: "exfat")))
+        #expect(!rules.isExcluded(facts(), volume: VolumeContext(filesystem: "apfs")))
+    }
+
+    @Test("the fast pass makes no extra syscalls for resource forks")
+    func fastPassSkipsForkProbe() {
+        // Probing every file added a getxattr per file and turned a 0.35s walk into minutes.
+        let r = rules.evaluate(facts(), depth: .fast)
+        #expect(!r.contains(.existingResourceFork))
+    }
+
+    @Test("every reason explains itself in prose for the UI")
+    func explanationsArePresentable() {
+        let all: [SafetyReason] = [
+            .systemPath, .sparseFile(allocatedBytes: 0, logicalBytes: 1024),
+            .existingResourceFork, .liveDatabase("SQLite database"), .virtualMachineImage,
+            .cloudSyncedDirectory("Dropbox"), .timeMachineVolume,
+            .unsupportedFilesystem("exfat"), .networkVolume, .zeroLength, .notRegularFile,
+            .applicationBundle, .hardLinked(linkCount: 2),
+            .veryLargeFile(bytes: 5_000_000_000), .likelyIncompressible("JPEG"),
+        ]
+        for reason in all {
+            #expect(!reason.explanation.isEmpty)
+            // Reads as a sentence: starts with a capital or a figure ("4.7 GB — …").
+            let first = reason.explanation.first!
+            #expect(first.isUppercase || first.isNumber,
+                    "not sentence-cased: \(reason.explanation)")
+            #expect(!reason.explanation.hasSuffix("."), "UI strings carry no trailing period")
+        }
+    }
+}
+
+@Suite("scan aggregates")
+struct ScanAggregateTests {
+
+    @Test("reclaimed bytes come only from compressed files")
+    func reclaimedIgnoresSparse() {
+        // A tree of sparse files has physical far below logical while being 0% compressed.
+        // Deriving reclaimed from tree-wide totals reported 10.5 MB of savings that
+        // did not exist.
+        var r = ScanResult()
+        r.progress.logicalBytes = 10_800_000
+        r.progress.physicalBytes = 344_100
+        r.progress.compressedFiles = 0
+        r.progress.compressedLogicalBytes = 0
+        r.progress.compressedPhysicalBytes = 0
+        #expect(r.reclaimedBytes == 0)
+    }
+
+    @Test("reclaimed bytes are correct when compression is present")
+    func reclaimedCountsCompressed() {
+        var r = ScanResult()
+        r.progress.logicalBytes = 2_000_000
+        r.progress.physicalBytes = 500_000
+        r.progress.compressedFiles = 10
+        r.progress.compressedLogicalBytes = 1_000_000
+        r.progress.compressedPhysicalBytes = 250_000
+        #expect(r.reclaimedBytes == 750_000)
+    }
+
+    @Test("coverage is zero on an empty tree rather than dividing by zero")
+    func emptyTree() {
+        #expect(ScanResult().compressionCoverage == 0)
+        #expect(ScanResult().reclaimedBytes == 0)
+    }
+}
+
+@Suite("scan entry identity")
+struct ScanEntryIdentityTests {
+
+    func entry(path: String, inode: UInt64) -> ScanEntry {
+        ScanEntry(inode: inode, path: path, logicalSize: 100, physicalSize: 100,
+                  isCompressed: false, type: nil, reasons: [])
+    }
+
+    @Test("hard-linked files share an inode but must have distinct view identities")
+    func distinctIDs() {
+        // Duplicate Identifiable IDs made SwiftUI's Table draw one row twice: two
+        // hard-linked files both appeared under the first one's name.
+        let a = entry(path: "/tmp/linked-a.txt", inode: 42)
+        let b = entry(path: "/tmp/linked-b.txt", inode: 42)
+        #expect(a.inode == b.inode)
+        #expect(a.id != b.id)
+        #expect(Set([a.id, b.id]).count == 2)
+    }
+}

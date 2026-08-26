@@ -296,3 +296,55 @@ for — it exists so the default doesn't have to compromise.
 **Caveat.** Single machine, single corpus, warm cache, one run per configuration. Directionally
 strong, not authoritative. [DEFAULTS.md §6](DEFAULTS.md#6-what-m0-must-re-measure) lists what
 M0 re-measures.
+
+---
+
+## ADR-0012: macOS 14 deployment floor
+
+**Status:** Accepted · 2026-08-26
+
+**Context.** [The PRD](PRD.md#7-constraints) set a macOS 13 floor because that is where
+`SMAppService` arrives, and noted that "targeting 14+ would simplify some SwiftUI work;
+decide at implementation time." M1 reached that point immediately: `@Observable` and the
+Observation framework are macOS 14+.
+
+**Decision.** Deployment target is macOS 14 (Sonoma).
+
+**Why.** The alternative is `ObservableObject`/`@Published` throughout the UI layer — more
+boilerplate, coarser invalidation, and a pattern being actively retired. `@Observable` tracks
+property access individually, which matters here: the scan view model updates ten times a
+second during a scan, and with `ObservableObject` every one of those invalidates every view
+observing the object. Sonoma shipped in 2023; against a macOS 27 current release the install
+base we give up is negligible.
+
+**Costs.** Ventura users are excluded. `SMAppService` was never the binding constraint, so
+nothing in the scheduling design changes.
+
+---
+
+## ADR-0013: No .xcodeproj — the app bundle is assembled by script
+
+**Status:** Accepted · 2026-08-26
+
+**Context.** A macOS SwiftUI app is normally an Xcode project. Xcode projects are large
+generated XML files that diff badly, carry machine-specific state, and can only really be
+edited through the GUI.
+
+**Decision.** The app is an SPM executable target. `build-app.sh` assembles
+`Pomace.app` — copies the binary, the `Info.plist`, and the entitlements, then signs. No
+`.xcodeproj` in the repository.
+
+**Why.** Everything about the bundle becomes reviewable in a diff: the Info.plist,
+the entitlements, the signing invocation, and eventually the LaunchAgent plist that M3 adds
+under `Contents/Library/LaunchAgents/`. The same script runs identically in CI and locally.
+The pattern is already proven here — the M0 TCC probe was built exactly this way, and its
+launchd agent registered and passed TCC correctly, which is the hard case.
+
+**Costs.** No Xcode previews, no Instruments integration without extra setup, and no
+interface builder — none of which this app uses. If Instruments profiling becomes necessary,
+a project can be generated on demand without changing the source layout.
+
+**Signing note.** `codesign --sign` by *name* is ambiguous when two identical "Developer ID
+Application" certificates exist in different keychains, and it then produces a **broken
+signature while reporting success**. `build-app.sh` signs by SHA-1 hash for this reason;
+override with `POMACE_SIGN_ID`.
