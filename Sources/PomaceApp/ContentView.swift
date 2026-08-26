@@ -40,6 +40,34 @@ struct ContentView: View {
                     }
                 }
         }
+        .sheet(isPresented: $model.showingOnboarding) {
+            OnboardingView(onContinue: model.dismissOnboarding)
+        }
+    }
+}
+
+private struct OnboardingView: View {
+    let onContinue: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Image(systemName: "internaldrive")
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+            Text("Pomace").font(.system(.title, weight: .semibold))
+            Text("Pomace keeps selected folders smaller using macOS transparent compression. Files still open normally, with no archive to manage. Writing a compressed file expands it again, so Pomace can periodically recheck watched folders. Every compression is verified, and you can decompress files whenever you need to.")
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Get Started", action: onContinue)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(28)
+        .frame(minWidth: 420, idealWidth: 460, maxWidth: 520)
     }
 }
 

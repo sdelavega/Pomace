@@ -32,6 +32,7 @@ final class ScanModel {
     var confirmingDecompress = false
     var showingSettings = false
     var showingInspector = false
+    var showingOnboarding = false
     var schedule = SweepSchedule()
     var sweepHistory: [Store.SweepRun] = []
     var snapshotHistory: [Store.SnapshotSummary] = []
@@ -57,6 +58,7 @@ final class ScanModel {
         watchedPaths = (try? store?.watchedDirectories()) .flatMap { $0 } ?? []
         installation = CompressorTool.discover()
         serviceStatus = SweepService.status
+        showingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
     }
 
     // MARK: - Scheduling
@@ -151,6 +153,11 @@ final class ScanModel {
     }
 
     func refreshInstallation() { installation = CompressorTool.discover() }
+
+    func dismissOnboarding() {
+        UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
+        showingOnboarding = false
+    }
 
     // MARK: - Compression
 

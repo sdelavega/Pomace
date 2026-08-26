@@ -95,7 +95,7 @@ The differentiating feature.
 - [ ] Full keyboard navigation; VoiceOver pass
 - [ ] Light/dark, Dynamic Type, Reduce Motion
 - [ ] App icon
-- [ ] Onboarding that explains transparent compression honestly, including the write-decompresses
+- [x] Onboarding that explains transparent compression honestly, including the write-decompresses
       caveat, in about four sentences
 - [ ] Localization scaffolding (strings catalog), English only at first
 
