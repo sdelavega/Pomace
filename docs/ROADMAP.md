@@ -109,7 +109,7 @@ The differentiating feature.
 - [ ] Crash reporting
 - [ ] [ADR-0008](DECISIONS.md#adr-0008-project-license-open) — **license decided**
 - [ ] Public README, screenshots, honest description of what compression will and won't do
-- [ ] CI: unit tests plus the sparse-image integration suite
+- [x] CI: unit tests plus the sparse-image integration suite
 
 ---
 

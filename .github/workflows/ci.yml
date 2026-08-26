@@ -25,3 +25,9 @@ jobs:
 
       - name: Verify bundle signature
         run: codesign --verify --strict build/Pomace.app
+
+      - name: Install Applesauce
+        run: brew install Dr-Emann/homebrew-tap/applesauce
+
+      - name: Run sparse-image integration test
+        run: ./Tests/integration/sparse-image.sh
