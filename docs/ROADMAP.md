@@ -97,7 +97,7 @@ The differentiating feature.
 - [x] App icon
 - [x] Onboarding that explains transparent compression honestly, including the write-decompresses
       caveat, in about four sentences
-- [ ] Localization scaffolding (strings catalog), English only at first
+- [x] Localization scaffolding (strings catalog), English only at first
 
 ---
 

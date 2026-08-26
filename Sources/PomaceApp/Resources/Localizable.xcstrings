@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "onboarding.body" : {
+      "comment" : "First-run explanation of transparent compression and its write behavior.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pomace keeps selected folders smaller using macOS transparent compression. Files still open normally, with no archive to manage. Writing a compressed file expands it again, so Pomace can periodically recheck watched folders. Every compression is verified, and you can decompress files whenever you need to."
+          }
+        }
+      }
+    },
+    "onboarding.get_started" : {
+      "comment" : "Confirms the first-run explanation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get Started"
+          }
+        }
+      }
+    },
+    "onboarding.title" : {
+      "comment" : "First-run window title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pomace"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

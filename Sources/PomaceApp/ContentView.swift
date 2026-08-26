@@ -55,13 +55,13 @@ private struct OnboardingView: View {
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(.tint)
                 .accessibilityHidden(true)
-            Text("Pomace").font(.system(.title, weight: .semibold))
-            Text("Pomace keeps selected folders smaller using macOS transparent compression. Files still open normally, with no archive to manage. Writing a compressed file expands it again, so Pomace can periodically recheck watched folders. Every compression is verified, and you can decompress files whenever you need to.")
+            Text(AppStrings.onboardingTitle).font(.system(.title, weight: .semibold))
+            Text(AppStrings.onboardingBody)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
-                Button("Get Started", action: onContinue)
+                Button(AppStrings.onboardingGetStarted, action: onContinue)
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             }

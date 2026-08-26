@@ -12,7 +12,11 @@ let package = Package(
     targets: [
         .target(name: "PomaceCore", linkerSettings: [.linkedLibrary("sqlite3")]),
         .executableTarget(name: "pomace-spike", dependencies: ["PomaceCore"]),
-        .executableTarget(name: "PomaceApp", dependencies: ["PomaceCore"]),
+        .executableTarget(
+            name: "PomaceApp",
+            dependencies: ["PomaceCore"],
+            resources: [.process("Resources")]
+        ),
         .testTarget(name: "PomaceCoreTests", dependencies: ["PomaceCore"]),
     ]
 )
