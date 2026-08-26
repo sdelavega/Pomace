@@ -4,7 +4,9 @@
 set -euo pipefail
 
 VERSION="${1:?usage: release.sh <version>}"
-NOTARY_PROFILE="${POMACE_NOTARY_PROFILE:?set POMACE_NOTARY_PROFILE to a notarytool keychain profile}"
+# Reuse the local profile already used for the Developer ID release pipeline. It stays in the
+# keychain; callers can still select a different profile without putting credentials in Git.
+NOTARY_PROFILE="${POMACE_NOTARY_PROFILE:-notarytool}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$HERE/build/Pomace.app"
 DIST="$HERE/dist"
