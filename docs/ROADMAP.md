@@ -104,10 +104,10 @@ The differentiating feature.
 ## M5 — Ship
 
 - [ ] Developer ID signing, hardened runtime, notarization, stapling
-- [ ] DMG packaging with a signed background
+- [ ] Notarized ZIP packaging for GitHub Releases
 - [ ] Update mechanism (Sparkle, or check-and-notify)
 - [ ] Crash reporting
-- [ ] [ADR-0008](DECISIONS.md#adr-0008-project-license-open) — **license decided**
+- [x] [ADR-0008](DECISIONS.md#adr-0008-gpl-30-or-later-for-pomace) — **license decided**
 - [ ] Public README, screenshots, honest description of what compression will and won't do
 - [x] CI: unit tests plus the sparse-image integration suite
 

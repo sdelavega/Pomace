@@ -59,11 +59,12 @@ Pomace covers three things the CLI doesn't:
 | [M2 Findings](docs/M2-FINDINGS.md) | **A data-loss bug in afsctool** — the reason Pomace moved to applesauce ([ADR-0015](docs/DECISIONS.md#adr-0015-applesauce-replaces-afsctool)) |
 | [Roadmap](docs/ROADMAP.md) | Phased milestones from spike to release |
 
-## Licensing note
+## License
 
 `applesauce` is **GPL-3.0**. Pomace does **not** bundle, link against, or redistribute it —
 it invokes a copy installed on the user's own system, and installs one on request if missing.
 See [ADR-0003](docs/DECISIONS.md#adr-0003-never-bundle-afsctool) and
 [ADR-0015](docs/DECISIONS.md#adr-0015-applesauce-replaces-afsctool).
 
-Pomace's own license is not yet chosen. See [ADR-0008](docs/DECISIONS.md#adr-0008-project-license-open).
+Pomace is available under the [GNU General Public License, version 3 or later](LICENSE).
+Donations may support its development but never restrict access to the app or its source.

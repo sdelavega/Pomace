@@ -27,7 +27,7 @@ public final class MutationLog: @unchecked Sendable {
             FileManager.default.createFile(atPath: target.path, contents: nil)
         }
         handle = try? FileHandle(forWritingTo: target)
-        try? handle?.seekToEnd()
+        _ = try? handle?.seekToEnd()
     }
 
     deinit { try? handle?.close() }

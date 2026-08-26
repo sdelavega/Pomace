@@ -11,6 +11,7 @@ CONFIG="${1:-debug}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 APP="$HERE/build/Pomace.app"
 IDENTITY="${POMACE_SIGN_ID:-85E7645225011373853E0C0F50CF9967974BB7BE}"
+VERSION="${POMACE_VERSION:-}"
 
 echo "building ($CONFIG)…"
 swift build -c "$CONFIG" --product PomaceApp
@@ -21,12 +22,15 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/
 cp "$BIN" "$APP/Contents/MacOS/Pomace"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$HERE/Resources/Pomace.icns" "$APP/Contents/Resources/Pomace.icns"
+if [ -n "$VERSION" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+fi
 # The scheduled-sweep agent ships inside the bundle so it is covered by the signature and
 # removed cleanly when the app is deleted (ADR-0005).
 cp "$HERE/Resources/org.pomace.Pomace.Sweep.plist" "$APP/Contents/Library/LaunchAgents/"
 
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
-  codesign --force --options runtime \
+  codesign --force --options runtime --timestamp \
     --entitlements "$HERE/Resources/Pomace.entitlements" \
     --sign "$IDENTITY" "$APP"
   codesign --verify --strict "$APP" && echo "signed with Developer ID"

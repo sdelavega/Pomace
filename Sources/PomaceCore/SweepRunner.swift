@@ -91,8 +91,8 @@ public struct SweepRunner: Sendable {
             report.deferral = deferral
             report.duration = Date().timeIntervalSince(started)
             log.note("deferred \(dir.path): \(deferral.rawValue)")
-            try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration,
-                                   deferral: deferral)
+            _ = try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration,
+                                       deferral: deferral)
             return report
         }
 
@@ -123,7 +123,7 @@ public struct SweepRunner: Sendable {
 
         guard !candidates.isEmpty else {
             report.duration = Date().timeIntervalSince(started)
-            try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration)
+            _ = try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration)
             return report
         }
 
@@ -149,11 +149,11 @@ public struct SweepRunner: Sendable {
         }
 
         report.duration = Date().timeIntervalSince(started)
-        try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration,
-                               filesCompressed: report.filesCompressed,
-                               filesFailed: report.filesFailed,
-                               bytesReclaimed: report.bytesReclaimed,
-                               error: report.error)
+        _ = try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration,
+                                   filesCompressed: report.filesCompressed,
+                                   filesFailed: report.filesFailed,
+                                   bytesReclaimed: report.bytesReclaimed,
+                                   error: report.error)
         return report
     }
 }

@@ -180,18 +180,20 @@ project that currently has none.
 
 ---
 
-## ADR-0008: Project license open
+## ADR-0008: GPL-3.0-or-later for Pomace
 
-**Status:** Open · 2026-08-26
+**Status:** Accepted · 2026-08-26
 
-**Context.** Pomace's own license is undecided. [ADR-0003](#adr-0003-never-bundle-afsctool)
-deliberately preserves the full range of options by keeping afsctool at arm's length.
+**Context.** Pomace's own license must be settled before public distribution. Its external
+compressor, Applesauce, is GPL-3.0; Pomace does not bundle it, but the project should still
+give downstream users a clear copyleft grant and an equally clear source-distribution path.
 
-**Decision.** Deferred. Must be settled before first public distribution.
+**Decision.** Pomace is licensed GPL-3.0-or-later. The canonical license text is in
+[`LICENSE`](../LICENSE).
 
-**Considerations.** MIT/Apache-2.0 if the goal is broad reuse; GPL-3.0 if matching
-afsctool's spirit matters; source-available or proprietary if distribution is to be
-controlled. Nothing in the architecture forecloses any of these — that's the point.
+**Consequences.** Source and corresponding build/release scripts must remain public for
+every distributed release. A donation link is compatible with GPL distribution; it must be
+an optional contribution, not a condition of obtaining the app or source.
 
 ---
 
