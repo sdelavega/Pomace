@@ -75,7 +75,7 @@ public enum CompressionEngineError: Error, CustomStringConvertible {
             "\(CompressorTool.displayName) isn't installed. Pomace can install it for you."
         case .insufficientFreeSpace(let needed, let available):
             "Not enough free space to work safely — \(ByteFormat.short(available)) available, "
-            + "\(ByteFormat.short(needed)) needed. Compression isn't atomic and needs room to work."
+            + "\(ByteFormat.short(needed)) needed for the temporary replacement file."
         case .nothingToDo:
             "Nothing here needs compressing."
         }
@@ -84,9 +84,9 @@ public enum CompressionEngineError: Error, CustomStringConvertible {
 
 public enum CompressionEngine {
 
-    /// Files per afsctool invocation.
+    /// Files per compressor invocation.
     ///
-    /// Pomace passes explicit file lists rather than handing afsctool a directory. That is
+    /// Pomace passes explicit file lists rather than handing the compressor a directory. That is
     /// what makes cancellation land on a file boundary — we stop between batches, never
     /// mid-file — and it guarantees we only ever touch paths that passed a safety check at
     /// mutation time, per SAFETY.md rules 4 and 10.
@@ -95,7 +95,7 @@ public enum CompressionEngine {
     /// argv has a hard limit; long paths could otherwise overflow it well before `batchSize`.
     public static let maxArgumentBytes = 128 * 1024
 
-    /// Refuse to start below this much free space. Compression is not atomic.
+    /// Refuse to start below this much free space. Atomic replacement still needs workspace.
     public static let freeSpaceFloor: Int64 = 1024 * 1024 * 1024
 
     public static func run(operation: CompressionOperation,
@@ -234,7 +234,7 @@ public enum CompressionEngine {
                     continuation.yield(.progress(progress))
                 }
 
-                // --- post-run truth: re-measure natively, don't trust afsctool's summary ---
+                // --- post-run truth: re-measure natively, don't trust tool output ---
                 outcome.bytesAfter = eligible.prefix(index).reduce(0) { $0 + physical($1.path) }
                 outcome.duration = Date().timeIntervalSince(started)
                 logger?.end(outcome: outcome)
@@ -339,7 +339,7 @@ public enum CompressionEngine {
         let message = output
             .split(separator: "\n")
             .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .map(String.init) ?? "afsctool reported an error"
+            .map(String.init) ?? "The compressor reported an error"
         return CompressionFailure(path: path, message: message, remedy: remedy)
     }
 }

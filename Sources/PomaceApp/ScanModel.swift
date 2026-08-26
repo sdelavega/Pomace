@@ -34,6 +34,7 @@ final class ScanModel {
     var showingInspector = false
     var schedule = SweepSchedule()
     var sweepHistory: [Store.SweepRun] = []
+    var snapshotHistory: [Store.SnapshotSummary] = []
     var serviceStatus: SweepService.Status = .notRegistered
     var serviceError: String?
     var isSweeping = false
@@ -84,6 +85,7 @@ final class ScanModel {
         schedule = entry?.schedule ?? SweepSchedule()
         if let m = entry?.mode { mode = m }
         sweepHistory = (try? store?.sweepHistory(path: path)).flatMap { $0 } ?? []
+        snapshotHistory = (try? store?.snapshotHistory(path: path)).flatMap { $0 } ?? []
     }
 
     func saveSchedule() {
@@ -138,7 +140,7 @@ final class ScanModel {
         }
     }
 
-    // MARK: - afsctool
+    // MARK: - Compressor
 
     var toolReady: Bool { installation?.capabilities.isUsable ?? false }
 
@@ -206,7 +208,7 @@ final class ScanModel {
                     self.runState = .running(op, p)
                 case .finished(let outcome):
                     self.runState = .finished(outcome)
-                    // Post-run truth: re-scan natively rather than trusting afsctool's
+                    // Post-run truth: re-scan natively rather than trusting the compressor's
                     // summary, so before and after come from the same code path.
                     self.scan(root)
                 case .failed(let message):

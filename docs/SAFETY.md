@@ -48,9 +48,9 @@ These are hard exclusions — **not** user-overridable in v1.
 | Sparse files and sparse bundles | **Compression materializes them.** Measured: 10 MB sparse file went from 0 bytes on disk to 32,768. Always a net loss, and our savings math inverts. | **[verified 2026-08-26]** |
 | Cloud-sync directories — iCloud Drive, Dropbox, Google Drive, OneDrive | Modifying every file can trigger a full re-upload of the directory; may also conflict with dataless/evicted placeholder files | [expected] |
 | Time Machine backup volumes and local snapshots | Backup integrity; the volume format is not ours to touch | [expected] |
-| **Two paths sharing one inode, in a single afsctool run** | **Destroys file contents.** afsctool truncates hard-linked files to zero bytes — 100% at `-J1` even with `-f`, intermittently at `-J2`. (A directory walk without `-f` is a separate 100%-loss mode.) Pomace submits one path per inode, which is sufficient at any thread count. | **[verified 2026-08-26]** — see [M2-FINDINGS](M2-FINDINGS.md) |
-| Files with an existing non-decmpfs resource fork | afsctool's compression path uses the resource fork; a pre-existing one is a conflict | [expected] |
-| Anything currently open for writing by another process | Race between afsctool and the writer | [expected] |
+| Hard-linked files | Applesauce atomically replaces files and therefore refuses to break their link identity. Pomace excludes them before mutation and explains why. | **[verified 2026-08-26]** — see [ADR-0015](DECISIONS.md#adr-0015-applesauce-replaces-afsctool) |
+| Files with an existing non-decmpfs resource fork | Preserve user data in the resource fork until its interaction with the compressor is explicitly verified | [expected] |
+| Anything currently open for writing by another process | Race between a compressor replacement and the writer | [expected] |
 
 ---
 
@@ -58,14 +58,12 @@ These are hard exclusions — **not** user-overridable in v1.
 
 Presented with a clear explanation and an explicit opt-in.
 
-- **Application bundles (`.app`).** This is afsctool's classic use case and is generally
+- **Application bundles (`.app`).** Transparent compression is generally
   fine — code signature validation reads file *contents*, which are unchanged. **[expected]**
   But signature edge cases exist, so the warning stands, and Pomace should offer to
   re-verify with `codesign --verify --deep` after compressing a bundle.
 - **Git working trees.** Safe, but `git status` may be slow on the next run as it re-stats
   everything, and any subsequent checkout decompresses touched files.
-- **Hard-linked files.** afsctool's `-f` detects them; compressing one link affects every
-  path pointing at that inode. Default `-f` on, and report link counts in the UI.
 - **Very large individual files (>4 GB).** Long, memory-hungry, uninterruptible mid-file.
   Warn about the time cost.
 - **Directories over ~100 GB.** Sweeps will be long. Recommend scheduling rather than
@@ -87,14 +85,13 @@ These are requirements on Pomace's own implementation:
    reachable by a single unconsidered click.
 3. **Dry run before mutation, always.** Every compress is preceded by a scan. Nothing is
    modified until the user has seen the projected outcome.
-4. **Cancel at file boundaries only.** Never signal afsctool mid-file. Track the current
+4. **Cancel at file boundaries only.** Never signal the compressor mid-file. Track the current
    file so an interrupted run can be reported precisely.
 5. **Re-verify after mutation.** Re-scan the affected subtree natively and persist that,
-   not afsctool's summary. Same code path as the "before" figures.
+    not the compressor's summary. Same code path as the "before" figures.
 6. **Free-space precondition.** Refuse to start when free space is under a safety margin —
-   compression is not atomic and needs working room. Enforce a hard floor regardless of the
+   atomic replacement still needs room for a temporary file. Enforce a hard floor regardless of the
    user's wishes.
-7. **Offer `-b` on first-time runs**, with an honest statement of the space it needs.
 8. **Never sweep on battery, in Low Power Mode, under thermal pressure, or during a Time
    Machine backup.** Defer and record the reason.
 9. **Log every mutation** with timestamp, path, flags passed, exit status, and duration.
@@ -127,10 +124,10 @@ Nothing ships until each of these is confirmed on a disposable APFS sparse image
 - [ ] Zero-byte files, and files smaller than one block, are handled without error
 - [ ] Sparse files behave correctly, or are provably excluded
 - [ ] Files with pre-existing resource forks are correctly detected and skipped
-- [ ] Killing afsctool mid-run leaves no truncated or corrupted file
+- [ ] Killing applesauce mid-run leaves no truncated or corrupted file
 - [ ] Full disk mid-compression fails safely, without data loss
 - [ ] A signed `.app` still passes `codesign --verify --deep --strict` after compression
-- [ ] Pomace's computed savings figures agree with `afsctool -v` across the corpus
+- [ ] Pomace's computed savings figures agree with independently measured on-disk usage across the corpus
 - [x] **[done 2026-08-26]** decmpfs reads pass `XATTR_SHOWCOMPRESSION`; without it every
       compressed file misreads as uncompressed
 - [x] **[done 2026-08-26]** inline-xattr storage (types 1/3/7/11) reports `st_blocks = 0`;

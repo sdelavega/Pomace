@@ -516,3 +516,39 @@ struct IncrementalCutoffTests {
         #expect(Date().timeIntervalSince(old) >= SweepRunner.fullVerificationInterval)
     }
 }
+
+@Suite("scan snapshot history")
+struct SnapshotHistoryTests {
+
+    @Test("stored snapshots retain trend metrics in chronological order")
+    func readsHistory() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("pomace-history-\(UUID().uuidString).sqlite")
+        defer {
+            for suffix in ["", "-shm", "-wal"] {
+                try? FileManager.default.removeItem(atPath: url.path + suffix)
+            }
+        }
+        let store = try Store(url: url)
+
+        func record(files: Int, compressed: Int, logical: Int64, physical: Int64) throws {
+            var result = ScanResult()
+            result.root = "/tmp/history-fixture"
+            result.progress.filesSeen = files
+            result.progress.logicalBytes = logical
+            result.progress.physicalBytes = physical
+            result.progress.compressedFiles = compressed
+            result.progress.compressedLogicalBytes = logical
+            result.progress.compressedPhysicalBytes = physical
+            try store.record(result)
+        }
+
+        try record(files: 10, compressed: 2, logical: 2_000, physical: 1_600)
+        try record(files: 10, compressed: 7, logical: 7_000, physical: 2_100)
+
+        let history = try store.snapshotHistory(path: "/tmp/history-fixture")
+        #expect(history.count == 2)
+        #expect(history.last?.compressionCoverage == 0.7)
+        #expect(history.last?.reclaimedBytes == 4_900)
+    }
+}

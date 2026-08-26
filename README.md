@@ -16,9 +16,10 @@ decompressed by being written to.
 
 ## Status
 
-**M0 spike complete**, bar the TCC-inheritance test. `PomaceCore` has a working scan
-engine with 18 passing tests; `pomace-spike` is the verification harness. No UI yet.
-See [M0 Findings](docs/M0-FINDINGS.md).
+**M3 complete; M4 polish in progress.** Pomace has scanning, verified mutation through
+Applesauce, watched-directory sweeps, persisted history, and a native macOS UI. The current
+unit suite has 56 passing tests; `pomace-spike` preserves the original filesystem probes.
+See the [Roadmap](docs/ROADMAP.md) and [M0 Findings](docs/M0-FINDINGS.md).
 
 ## Why this exists
 

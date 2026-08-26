@@ -35,7 +35,7 @@ Pomace/
 │   ├── PomaceApp/                   SwiftUI views, view models, window/scene plumbing
 │   ├── PomaceCore/                  ← all logic lives here. No UI imports.
 │   │   ├── Scanner/                 tree walk, compression-state detection
-│   │   ├── Engine/                  afsctool discovery, invocation, output parsing
+│   │   ├── Engine/                  applesauce discovery and invocation
 │   │   ├── Estimation/              savings prediction
 │   │   ├── Safety/                  exclusion rules (see SAFETY.md)
 │   │   ├── Schedule/                SMAppService registration, sweep planning
@@ -53,7 +53,7 @@ under launchd with no UI attached, and it's the part that gets tested.
 ### 3.1 Detection is native, not shelled out
 
 The single most important performance decision. Determining a file's compression state does
-**not** require afsctool:
+**not** require the compressor:
 
 - **`st_flags & UF_COMPRESSED`** (`0x00000020`) from `lstat(2)` — definitive, and it comes
   free with the directory walk we're already doing.
@@ -85,7 +85,7 @@ Other values exist and are rare or reserved; treat unknown types as "compressed,
 unknown" rather than erroring. On APFS the resource fork is itself an extended attribute
 (`com.apple.ResourceFork`), so both storage classes are xattr reads.
 
-Shelling out to `afsctool -l` per directory would mean process spawn overhead per tree,
+Shelling out to a compressor per directory would mean process spawn overhead per tree,
 stdout parsing, no incremental progress, and no cancellation. Native detection gives us all
 four for free.
 
@@ -126,43 +126,33 @@ Cancellation is cooperative via `Task.checkCancellation()` at batch boundaries.
 
 ## 4. Compression engine
 
-Mutation — and *only* mutation — goes through afsctool as a subprocess.
+Mutation — and *only* mutation — goes through `applesauce` as a subprocess.
 
 ### 4.1 Invocation
 
 `Process` with `stdout`/`stderr` pipes, reading incrementally. A representative compress:
 
 ```
-afsctool -c -T LZFSE -J <n> -s <threshold> -v <path>
+applesauce compress --compression lzfse -r <ratio> --verify <path>
 ```
 
 Flag policy, enforced in code, not left to the UI:
 
-- **`-n` is never passed.** Post-compression verification stays on. Non-negotiable.
-- **`-d` requires explicit confirmation** naming the affected path count. It strips the
-  entire resource fork.
-- **`-b` (backup) is offered** for first-time runs on a directory, with an honest warning
-  that it needs free space equal to the uncompressed set.
-- Thread count (`-J`) defaults to a fraction of `activeProcessorCount`, never all of it.
-- `-f` (hard-link detection) on by default — hard-linked files are a real correctness hazard.
+- **`--verify` is always passed.** Post-compression verification is non-negotiable.
+- **Decompression requires explicit confirmation** naming the affected path count.
+- Hard-linked files are excluded before invocation because Applesauce refuses them.
+- Pomace sorts its own explicit batches smallest-first; Applesauce manages parallelism itself.
 
-### 4.2 Output parsing
+### 4.2 Result verification
 
-afsctool's output is human-formatted and version-dependent. Wrap it in a tolerant parser
-that:
-
-- Extracts progress and per-file results where the format is recognized,
-- Falls back to "running, N files elapsed" when it isn't,
-- **Never fails the operation because a line didn't parse.** The compression is
-  authoritative; our parse of its chatter is not. Log unparsed lines for diagnosis.
-
-Version-pin the parser: check `afsctool` version at discovery, select a parsing strategy,
-and degrade to generic mode for unknown versions.
+Applesauce reports aggregate results and may exit successfully after skipping individual
+paths. Pomace therefore treats native post-run inspection as the per-file verdict; tool
+output is diagnostic only.
 
 ### 4.3 Post-run truth
 
 After any mutation, re-run a native scan of the affected subtree. That result — not
-afsctool's summary — is what's persisted and displayed. It's the same code path that
+the compressor's summary — is what's persisted and displayed. It's the same code path that
 produced the "before" numbers, so before/after are directly comparable.
 
 ## 5. Scheduling
@@ -220,7 +210,7 @@ failed repeatedly.
 
 ```
 pomace.sqlite        watched dirs, settings, scan snapshots, run history
-bin/afsctool         private copy, when not using Homebrew's
+bin/applesauce        private copy, when not using Homebrew's
 Logs/
 ```
 
@@ -251,7 +241,7 @@ iCloud Drive, network volumes, and removable media independently.
 ## 8. Testing
 
 - **`PomaceCore` unit tests** — detection against fixture files with known decmpfs states,
-  safety-rule evaluation, output parsing against captured afsctool transcripts.
+  safety-rule evaluation, and compressor capability detection.
 - **Integration** — a disposable sparse disk image (`hdiutil create -fs APFS`) as scratch
   space. Compress, verify byte-identical reads, decompress, verify again. This is the test
   that matters; run it in CI.

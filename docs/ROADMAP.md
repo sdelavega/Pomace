@@ -90,7 +90,7 @@ The differentiating feature.
 
 ## M4 — Polish
 
-- [ ] History timeline making drift visible over months
+- [x] History timeline making drift visible over months
 - [ ] Menu bar item (optional, off by default)
 - [ ] Full keyboard navigation; VoiceOver pass
 - [ ] Light/dark, Dynamic Type, Reduce Motion

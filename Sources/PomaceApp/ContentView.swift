@@ -26,8 +26,7 @@ struct ContentView: View {
             }
             Button("Cancel", role: .cancel) { model.confirmingDecompress = false }
         } message: {
-            // Naming the count is the point: afsctool's -d strips the entire resource fork,
-            // so this must never be reachable by a single unconsidered click (SAFETY.md §4).
+            // Returning files to their full on-disk size must never be a one-click surprise.
             Text("""
                  This returns those files to their full size on disk. \
                  Their contents are unchanged, and you can compress them again at any time.

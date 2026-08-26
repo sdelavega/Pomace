@@ -12,6 +12,23 @@ The product promise is that Pomace picks correctly without being asked. This doc
 the policy behind that promise: what gets decided automatically, from which inputs, and the
 measurements the decisions rest on.
 
+## Current policy
+
+Pomace invokes `applesauce` with a selected compressor, a minimum compression ratio, and
+`--verify`. Applesauce parallelises internally; Pomace does not select a worker count.
+
+| Setting | Current rule |
+|---|---|
+| Compressor | LZFSE by default; a future per-directory measurement may select another supported compressor |
+| Level | Used only for ZLIB; hidden for LZFSE and LZVN |
+| Minimum ratio | 0.95 by default: leave a file alone unless it saves at least 5% |
+| Verification | Always `--verify`; a build without it is unusable |
+| Hard links | Excluded, because Applesauce refuses them to preserve link identity |
+| Ordering | Smallest eligible files first across Pomace's own batches |
+
+The remainder records the afsctool measurements that motivated earlier defaults. It remains
+useful evidence, but it is not a description of flags Pomace now emits.
+
 Companion ADRs: [ADR-0009](DECISIONS.md#adr-0009-progressive-disclosure--automatic-by-default-every-flag-reachable)
 (disclosure tiers), [ADR-0010](DECISIONS.md#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default)
 (measure, don't guess), [ADR-0011](DECISIONS.md#adr-0011-lzfse-default-not-zlib-9).

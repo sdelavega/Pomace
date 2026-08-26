@@ -102,7 +102,7 @@ private struct JustificationRow: View {
     }
 }
 
-/// Shown when afsctool is missing. The license disclosure is not optional — Pomace is about
+/// Shown when the compressor is missing. The license disclosure is not optional — Pomace is about
 /// to install third-party GPL software on the user's behalf (ADR-0003).
 struct InstallToolView: View {
     @Bindable var model: ScanModel

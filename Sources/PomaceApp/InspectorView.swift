@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import PomaceCore
 
 /// Per-folder schedule and sweep history.
@@ -13,11 +14,60 @@ struct InspectorView: View {
             VStack(alignment: .leading, spacing: 18) {
                 scheduleSection
                 Divider()
+                trendSection
+                Divider()
                 historySection
             }
             .padding(16)
         }
         .frame(minWidth: 260, idealWidth: 300)
+    }
+
+    private var trendSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Compression Trend").font(.headline)
+            if model.snapshotHistory.isEmpty {
+                Text("The first scan will establish this folder's baseline.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Chart(model.snapshotHistory, id: \.scannedAt) { snapshot in
+                    LineMark(
+                        x: .value("Scan", snapshot.scannedAt),
+                        y: .value("Compressed", snapshot.compressionCoverage)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(.tint)
+
+                    PointMark(
+                        x: .value("Scan", snapshot.scannedAt),
+                        y: .value("Compressed", snapshot.compressionCoverage)
+                    )
+                    .foregroundStyle(.tint)
+                }
+                .chartYScale(domain: 0...1)
+                .chartYAxis {
+                    AxisMarks(values: [0, 0.5, 1]) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let coverage = value.as(Double.self) {
+                                Text(Fmt.percent(coverage))
+                            }
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 3))
+                }
+                .frame(height: 120)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Compression coverage over time")
+                .accessibilityValue(trendSummary)
+
+                Text(trendSummary)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var scheduleSection: some View {
@@ -110,5 +160,19 @@ struct InspectorView: View {
         if h == 0 { return "midnight" }
         if h == 12 { return "noon" }
         return h < 12 ? "\(h) AM" : "\(h - 12) PM"
+    }
+
+    private var trendSummary: String {
+        guard let latest = model.snapshotHistory.last else { return "" }
+        let reclaimed = "\(ByteFormat.short(latest.reclaimedBytes)) currently reclaimed"
+        guard let first = model.snapshotHistory.first, first.scannedAt != latest.scannedAt else {
+            return "\(Fmt.percent(latest.compressionCoverage)) compressed · \(reclaimed)"
+        }
+        let points = latest.compressionCoverage - first.compressionCoverage
+        guard abs(points) >= 0.005 else {
+            return "Coverage is steady at \(Fmt.percent(latest.compressionCoverage)) · \(reclaimed)"
+        }
+        let direction = points > 0 ? "rose" : "fell"
+        return "Coverage \(direction) \(Fmt.percent(abs(points))) since the first saved scan · \(reclaimed)"
     }
 }

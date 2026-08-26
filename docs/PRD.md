@@ -4,11 +4,10 @@
 
 ## 1. Problem
 
-macOS has supported transparent filesystem compression since 10.6, and `afsctool` has
-exposed it for nearly as long. Almost nobody uses it, because:
+macOS has supported transparent filesystem compression since 10.6. Almost nobody uses it,
+because the available command-line tools are difficult to assess and run safely:
 
-- The CLI's flags have real consequences and the help text is dense. `-d` silently removes
-  the entire resource fork. There is no dry run.
+- The CLI's choices have real consequences, with little guidance about safe defaults.
 - A compression pass over a large directory takes tens of minutes with no progress output
   and no safe way to interrupt it.
 - Afterwards, you cannot easily tell what state your disk is in — which files compressed,
@@ -36,19 +35,19 @@ compression on non-Apple filesystems.
 | G1 | Make the outcome visible *before* mutating anything | Every compress action is preceded by a scan showing per-file and total estimated savings |
 | G2 | Keep watched directories compressed over time | A directory added in January is still >95% compressed in June with no user action |
 | G3 | Feel like an Apple app | Passes an honest side-by-side with a first-party utility. No web view. |
-| G4 | Remove the install barrier | A user with no Homebrew and no `afsctool` reaches a working first scan without opening Terminal |
+| G4 | Remove the install barrier | A user with no Homebrew and no `applesauce` reaches a working first scan without opening Terminal |
 | G5 | Never lose or corrupt data | Zero data-loss reports. Verification on by default. |
 
 ## 4. Non-goals
 
 - **Not cross-platform.** The entire feature set is Apple-filesystem-specific.
-- **Not an archiver.** `afsctool -a/-x` archive mode is out of scope for v1; it produces
-  files only afsctool can read, which contradicts the transparency premise.
+- **Not an archiver.** Pomace works only with transparent filesystem compression, never a
+  private archive format.
 - **Not a disk analyzer.** Pomace shows sizes in service of compression decisions. It is
   not DaisyDisk and won't grow into it.
 - **Not Mac App Store distributable.** See [ADR-0004](DECISIONS.md#adr-0004-non-sandboxed-developer-id-distribution).
 - **Not a filesystem driver.** Pomace never writes `decmpfs` attributes itself; all
-  mutation goes through afsctool.
+  mutation goes through `applesauce`.
 
 ## 5. Features
 
@@ -72,13 +71,13 @@ never as a promise. Post-compression, real figures replace estimates.
 
 ### 5.2 Compress / Decompress (P0)
 
-- **No compression options in the default path.** Algorithm, level, thread count, sort
-  order, and threshold are all computed. See [DEFAULTS.md](DEFAULTS.md).
+- **No compression options in the default path.** Algorithm, level, and threshold are
+  computed. See [DEFAULTS.md](DEFAULTS.md).
 - Intent expressed, if at all, as *Automatic / Maximum savings / Fastest* in the directory
   inspector — never as individual flags.
 - Every flag remains reachable per-directory in Settings → Advanced, each showing its
   computed value and the reason for it ([ADR-0009](DECISIONS.md#adr-0009-progressive-disclosure--automatic-by-default-every-flag-reachable)).
-- Verification on by default (never pass `-n`).
+- Verification on by default (`--verify` is required).
 - Live progress: current file, files done / total, bytes reclaimed so far, throughput, ETA.
 - **Cancellable at a file boundary** — never mid-file.
 - Decompress is a first-class, equally prominent action. Anything Pomace does, it can undo.
@@ -106,18 +105,17 @@ A per-directory timeline: every scan and sweep, what changed, cumulative bytes r
 This is what makes drift legible — the user should be able to see "this directory decayed
 8% last month" and understand why the watching feature is earning its keep.
 
-### 5.5 afsctool management (P0)
+### 5.5 Compressor management (P0)
 
-On launch, locate `afsctool`. Resolution order:
+On launch, locate `applesauce`. Resolution order:
 
 1. A path the user explicitly configured
-2. `/opt/homebrew/bin/afsctool`, `/usr/local/bin/afsctool`
+2. `/opt/homebrew/bin/applesauce`, `/usr/local/bin/applesauce`
 3. Pomace's private copy in `~/Library/Application Support/Pomace/bin/`
 4. `PATH`
 
-If absent, offer to install — via `brew install afsctool` when Homebrew is present,
-otherwise by fetching an official release into Pomace's private directory. Always explain
-what will be installed, from where, and that it is GPL-licensed third-party software.
+If absent, offer to install via `brew install Dr-Emann/homebrew-tap/applesauce`. Always
+explain what will be installed, from where, and that it is GPL-licensed third-party software.
 Never install silently.
 
 Verify the discovered binary before first use: run it, parse the version, confirm it
@@ -165,5 +163,4 @@ compresses.
   mtime with a periodic full verification.
 - **Q3.** How should Pomace handle a watched directory that disappears — external volume
   unmounted, folder moved? Track by inode where possible; degrade gracefully.
-- **Q4.** Does the app need its own private afsctool build to guarantee flag compatibility,
-  or is depending on whatever Homebrew ships acceptable?
+- **Q4.** Which `applesauce` release becomes Pomace's minimum supported version?

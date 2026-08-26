@@ -311,15 +311,26 @@ public final class Store: @unchecked Sendable {
         public let logicalBytes: Int64
         public let physicalBytes: Int64
         public let compressedFiles: Int
+        public let compressedLogicalBytes: Int64
+        public let compressedPhysicalBytes: Int64
         public let eligibleFiles: Int
+
+        public var compressionCoverage: Double {
+            files > 0 ? Double(compressedFiles) / Double(files) : 0
+        }
+
+        public var reclaimedBytes: Int64 {
+            max(0, compressedLogicalBytes - compressedPhysicalBytes)
+        }
     }
 
     public func latestSnapshot(path: String) throws -> SnapshotSummary? {
         try queue.sync {
             var out: SnapshotSummary?
             try query("""
-                SELECT scanned_at, files, logical_bytes, physical_bytes, compressed_files, eligible_files
-                FROM scan_snapshot WHERE path = ? ORDER BY scanned_at DESC LIMIT 1;
+                SELECT scanned_at, files, logical_bytes, physical_bytes, compressed_files,
+                       compressed_logical, compressed_physical, eligible_files
+                FROM scan_snapshot WHERE path = ? ORDER BY scanned_at DESC, id DESC LIMIT 1;
                 """, [.text(path)]) { stmt in
                 out = SnapshotSummary(
                     scannedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0)),
@@ -327,9 +338,35 @@ public final class Store: @unchecked Sendable {
                     logicalBytes: sqlite3_column_int64(stmt, 2),
                     physicalBytes: sqlite3_column_int64(stmt, 3),
                     compressedFiles: Int(sqlite3_column_int64(stmt, 4)),
-                    eligibleFiles: Int(sqlite3_column_int64(stmt, 5)))
+                    compressedLogicalBytes: sqlite3_column_int64(stmt, 5),
+                    compressedPhysicalBytes: sqlite3_column_int64(stmt, 6),
+                    eligibleFiles: Int(sqlite3_column_int64(stmt, 7)))
             }
             return out
+        }
+    }
+
+    /// Oldest-first so callers can draw a timeline without reversing database output.
+    public func snapshotHistory(path: String, limit: Int = 90) throws -> [SnapshotSummary] {
+        try queue.sync {
+            var out: [SnapshotSummary] = []
+            try query("""
+                SELECT scanned_at, files, logical_bytes, physical_bytes, compressed_files,
+                       compressed_logical, compressed_physical, eligible_files
+                FROM scan_snapshot WHERE path = ?
+                ORDER BY scanned_at DESC, id DESC LIMIT ?;
+                """, [.text(path), .int(Int64(limit))]) { stmt in
+                out.append(SnapshotSummary(
+                    scannedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0)),
+                    files: Int(sqlite3_column_int64(stmt, 1)),
+                    logicalBytes: sqlite3_column_int64(stmt, 2),
+                    physicalBytes: sqlite3_column_int64(stmt, 3),
+                    compressedFiles: Int(sqlite3_column_int64(stmt, 4)),
+                    compressedLogicalBytes: sqlite3_column_int64(stmt, 5),
+                    compressedPhysicalBytes: sqlite3_column_int64(stmt, 6),
+                    eligibleFiles: Int(sqlite3_column_int64(stmt, 7))))
+            }
+            return out.reversed()
         }
     }
 
