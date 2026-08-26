@@ -2,69 +2,107 @@
 
 **Transparent filesystem compression for macOS, with a native UI and a memory.**
 
-> *Pomace* — the dense solids left behind after apples are pressed.
+> *Pomace* is the dense solids left behind after apples are pressed.
 
-Pomace is a native macOS app around [`applesauce`](https://github.com/Dr-Emann/applesauce), which
-applies HFS+/APFS *transparent compression* to files on disk. Compressed files read back
-byte-identically through the normal filesystem APIs — no mounting, no archive format, no
-special handling by other apps. The space is simply reclaimed.
+Pomace is a native macOS app for inspecting, applying, and maintaining APFS/HFS+
+transparent compression. It scans a folder before changing it, makes the current state
+legible file by file, and can revisit watched folders to recover space that returns as
+files are written over time.
 
-It is spiritually a Mac answer to Windows' [CompactGUI](https://github.com/IridiumIO/CompactGUI),
-with one significant addition: **watched folders**. Pomace remembers the directories you
-care about and re-sweeps them on a schedule, recompressing new files and files that were
-decompressed by being written to.
+Compressed files continue to open normally in Finder and every other app. There is no
+archive to mount, extract, or manage: macOS transparently expands the data when it is
+read.
 
-## Status
+![Pomace scan overview](docs/images/scan-overview.png)
 
-**M3 complete; M4 polish in progress.** Pomace has scanning, verified mutation through
-Applesauce, watched-directory sweeps, persisted history, and a native macOS UI. The current
-unit suite has 56 passing tests; `pomace-spike` preserves the original filesystem probes.
-See the [Roadmap](docs/ROADMAP.md) and [M0 Findings](docs/M0-FINDINGS.md).
+## What Pomace Does
 
-## Why this exists
+- **Scan first.** See eligible, already-compressed, and safety-excluded files before any
+  mutation happens.
+- **Compress and decompress.** Use guided modes for automatic behavior, maximum savings, or
+  fastest processing. Every compression is verified, and decompression is a first-class,
+  confirmed action.
+- **Keep folders compressed.** Add a schedule and Pomace will re-sweep watched directories,
+  recording the outcome and explaining when macOS conditions defer a run.
+- **Explain its choices.** The advanced settings view exposes the compression plan and the
+  reasoning behind it without making flags the default experience.
 
-The command-line tools are capable and completely unapproachable. You get one shot at a
-long-running command whose flags materially affect your data, little progress reporting, and
-no way to know afterwards what state your disk is actually in. And
-compression *drifts* — the moment a file is written to, macOS silently decompresses it, so
-a directory you compressed six months ago is now partly uncompressed and you have no way
-to know without rescanning it by hand.
+![Pomace scheduled sweeps inspector](docs/images/scheduled-sweeps.png)
 
-Pomace covers three things the CLI doesn't:
+## A Note on "Transparent"
 
-1. **See before you act.** Scan a directory, see per-file and aggregate estimated savings,
-   what's already compressed and with which algorithm, and what should be skipped — before
-   anything is modified.
-2. **Stay compressed.** Register a directory as watched; a background agent re-sweeps it on
-   a schedule and recompresses drift.
-3. **Just work.** If `applesauce` isn't installed, Pomace installs it.
+This is filesystem compression, not archival compression. Pomace never creates a private
+file format and it never writes `decmpfs` attributes directly. It uses
+[`applesauce`](https://github.com/Dr-Emann/applesauce) to ask macOS to apply transparent
+compression to a file already on disk.
+
+The important tradeoff is that writing to a compressed file may cause macOS to expand it
+again. That is normal behavior, and it is why Pomace can watch a folder and rescan it on a
+schedule.
+
+## Safety
+
+Pomace is deliberately cautious:
+
+- A scan is read-only. Compression and decompression only begin from an explicit action.
+- Compression is verified and the app re-scans through its native detector after a run.
+- Unsafe or unhelpful content is excluded with a visible reason.
+- Decompression names the affected file count and requires confirmation.
+- The scheduled worker defers when system conditions make background I/O a bad citizen.
+
+Read the [safety rules](docs/SAFETY.md) before using Pomace on data you cannot replace.
 
 ## Requirements
 
-- macOS 14 Sonoma or later ([ADR-0012](docs/DECISIONS.md#adr-0012-macos-14-deployment-floor)); developed against macOS 27
-- Apple silicon or Intel
+- macOS 14 Sonoma or later
+- Apple silicon or Intel Mac
 - APFS or HFS+ volume
-- `applesauce` — installed by Pomace on first run if absent
+- [`applesauce`](https://github.com/Dr-Emann/applesauce) for mutation; Pomace can offer a
+  Homebrew installation when it is not already available
 
-## Documents
+Pomace will still scan and explain a directory without changing it until the compressor is
+available. Standard macOS privacy controls apply to locations such as Desktop, Documents,
+Downloads, external volumes, and network shares.
 
-| Document | What's in it |
-|---|---|
-| [PRD](docs/PRD.md) | What Pomace does, for whom, and what it deliberately doesn't do |
-| [Architecture](docs/ARCHITECTURE.md) | Process model, module layout, scan engine, scheduling |
-| [Decisions](docs/DECISIONS.md) | ADR log — the load-bearing technical choices and their costs |
-| [Defaults](docs/DEFAULTS.md) | Auto-tuning policy, benchmark data, and how options are disclosed |
-| [Safety](docs/SAFETY.md) | What must never be compressed, and why. **Read before writing mutation code.** |
-| [M0 Findings](docs/M0-FINDINGS.md) | Spike results — what held, what broke, what's still open |
-| [M2 Findings](docs/M2-FINDINGS.md) | **A data-loss bug in afsctool** — the reason Pomace moved to applesauce ([ADR-0015](docs/DECISIONS.md#adr-0015-applesauce-replaces-afsctool)) |
-| [Roadmap](docs/ROADMAP.md) | Phased milestones from spike to release |
+## Install and Build
+
+Pomace is currently an early preview. Notarized `.zip` downloads will be published on the
+[GitHub Releases page](https://github.com/sdelavega/Pomace/releases). Unzip the release and
+move `Pomace.app` to Applications.
+
+To build from source:
+
+```bash
+swift test
+./build-app.sh debug
+open build/Pomace.app
+```
+
+The assembled application is signed when the configured local Developer ID identity is
+available; otherwise the script makes an ad-hoc development build. Release packaging and
+notarization are documented in [release/README.md](release/README.md).
+
+## Project Status
+
+Pomace has its scan engine, verified mutation flow, watched-folder sweeps, persisted
+history, native UI, CI, and release tooling. The remaining release work includes a
+notarized public build, updates, crash-reporting policy, and accessibility review. See the
+[roadmap](docs/ROADMAP.md) for the honest checklist.
+
+## Technical Notes
+
+| Document | Contents |
+| --- | --- |
+| [Product requirements](docs/PRD.md) | Scope, users, constraints, and non-goals |
+| [Architecture](docs/ARCHITECTURE.md) | Process model, scan engine, persistence, and scheduling |
+| [Safety](docs/SAFETY.md) | Exclusions and operational invariants |
+| [Decisions](docs/DECISIONS.md) | ADRs and their tradeoffs |
+| [Defaults](docs/DEFAULTS.md) | Automatic compression policy |
+| [M2 findings](docs/M2-FINDINGS.md) | The afsctool hard-link data-loss bug that prompted the move to applesauce |
+| [Roadmap](docs/ROADMAP.md) | Milestones and remaining release work |
 
 ## License
 
-`applesauce` is **GPL-3.0**. Pomace does **not** bundle, link against, or redistribute it —
-it invokes a copy installed on the user's own system, and installs one on request if missing.
-See [ADR-0003](docs/DECISIONS.md#adr-0003-never-bundle-afsctool) and
-[ADR-0015](docs/DECISIONS.md#adr-0015-applesauce-replaces-afsctool).
-
 Pomace is available under the [GNU General Public License, version 3 or later](LICENSE).
-Donations may support its development but never restrict access to the app or its source.
+`applesauce` is also GPL-3.0 and remains separate software that Pomace invokes through a
+process boundary.

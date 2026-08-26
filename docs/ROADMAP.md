@@ -108,7 +108,7 @@ The differentiating feature.
 - [ ] Update mechanism (Sparkle, or check-and-notify)
 - [ ] Crash reporting
 - [x] [ADR-0008](DECISIONS.md#adr-0008-gpl-30-or-later-for-pomace) — **license decided**
-- [ ] Public README, screenshots, honest description of what compression will and won't do
+- [x] Public README, screenshots, honest description of what compression will and won't do
 - [x] CI: unit tests plus the sparse-image integration suite
 
 ---

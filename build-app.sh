@@ -16,12 +16,22 @@ VERSION="${POMACE_VERSION:-}"
 echo "building ($CONFIG)…"
 swift build -c "$CONFIG" --product PomaceApp
 BIN="$(swift build -c "$CONFIG" --product PomaceApp --show-bin-path)/PomaceApp"
+PRODUCTS_DIR="$(dirname "$BIN")"
+RESOURCE_BUNDLE="$PRODUCTS_DIR/Pomace_PomaceApp.bundle"
+
+if [ ! -d "$RESOURCE_BUNDLE" ]; then
+  echo "missing processed SwiftPM resource bundle: $RESOURCE_BUNDLE" >&2
+  exit 1
+fi
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents"
 cp "$BIN" "$APP/Contents/MacOS/Pomace"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$HERE/Resources/Pomace.icns" "$APP/Contents/Resources/Pomace.icns"
+# SwiftPM keeps processed localization resources beside the executable rather than in it.
+# Copy the bundle into the application so `Bundle.module` resolves after distribution.
+cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
 if [ -n "$VERSION" ]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 fi
