@@ -1,7 +1,11 @@
 import Foundation
 import IOKit.ps
 
-/// What the machine looks like right now. Read at the moment a run starts, not cached.
+/// What the machine looks like right now. Read when a run starts, never cached.
+///
+/// Since the pivot to applesauce these conditions no longer tune a thread count — applesauce
+/// parallelises internally and exposes no thread flag. They still decide *whether* a
+/// background sweep runs at all (ADR-0015).
 public struct RuntimeConditions: Sendable {
     public var onBattery = false
     public var lowPowerMode = false
@@ -42,8 +46,6 @@ public struct RuntimeConditions: Sendable {
         return type == kIOPSACPowerValue
     }
 
-    /// External or rotational media. Conservative: only claims "slow" when it can tell.
-    /// The clamp-to-2 rule this feeds is still unmeasured — see DEFAULTS.md §6.
     static func isSlowMedia(_ path: String) -> Bool {
         var fs = statfs()
         guard statfs(path, &fs) == 0 else { return false }
@@ -55,19 +57,15 @@ public struct RuntimeConditions: Sendable {
 }
 
 public struct CompressionSettings: Sendable, Equatable {
-    public var compressor = "LZFSE"
-    public var zlibLevel: Int? = nil
-    public var threadCount = 4
-    public var concurrentIO = true          // -J when true, -j when false
-    public var sortBySize = true            // -S
-    public var minSavingsPercent = 5        // -s
-    public var detectHardLinks = true       // -f
-    public var backup = false               // -b
+    public var compressor = "lzfse"
+    /// Skip a file if it would compress to more than this fraction of its original size.
+    /// applesauce's `-r`; 0.95 is its own default.
+    public var minimumRatio = 0.95
+    /// Always true. See `CompressionPolicy.verifyIsMandatory`.
+    public var verify = true
     public init() {}
 }
 
-/// One row of the Settings → Advanced pane: the value, why it was chosen, and whether the
-/// user has overridden it.
 public struct Justification: Sendable, Identifiable, Equatable {
     public let id: String
     public let label: String
@@ -108,144 +106,98 @@ public enum CompressionMode: String, Sendable, CaseIterable, Identifiable {
 
 public enum CompressionPolicy {
 
-    /// Flags Pomace will never emit, at any tier. `-n` disables afsctool's post-compression
-    /// verification; `-L` is flagged "not recommended" by afsctool's own help. These are
-    /// safety properties, not preferences. See SAFETY.md §4.
-    public static let forbiddenFlags: Set<String> = ["-n", "-L"]
+    /// applesauce verifies only when asked — the inverse of afsctool, where verification was
+    /// on unless you passed `-n`. Every compress invocation carries `--verify`, and a test
+    /// asserts it. This is the single most important flag Pomace passes.
+    public static let verifyIsMandatory = true
 
+    /// applesauce exposes no thread flag; it parallelises at block level internally. The
+    /// whole `-J`/`-j`/`-S`/`-R` tuning story from the afsctool era is simply gone, along
+    /// with the hard-link thread-count hazard that made it dangerous (ADR-0015).
     public static func plan(mode: CompressionMode = .automatic,
-                            profile: SystemProfile = .current(),
                             conditions: RuntimeConditions = RuntimeConditions(),
-                            foreground: Bool = true,
                             measuredCompressor: String? = nil,
                             overrides: CompressionSettings? = nil,
-                            capabilities: AfsctoolCapabilities? = nil) -> CompressionPlan {
+                            capabilities: ToolCapabilities? = nil) -> CompressionPlan {
 
         var s = CompressionSettings()
         var j: [Justification] = []
         var warnings: [String] = []
 
-        // ---- compressor ----
         switch mode {
         case .automatic:
             if let m = measuredCompressor {
                 s.compressor = m
-                j.append(.init(id: "compressor", label: "Compressor", value: m,
-                               reason: "measured fastest on this folder"))
+                j.append(.init(id: "compressor", label: "Compressor", value: m.uppercased(),
+                               reason: "measured best on this folder"))
             } else {
-                s.compressor = "LZFSE"
+                s.compressor = "lzfse"
                 j.append(.init(id: "compressor", label: "Compressor", value: "LZFSE",
-                               reason: "default — reads 33% faster than ZLIB for a similar ratio"))
+                               reason: "default — reads back fastest, for a ratio within a point of the alternatives"))
             }
         case .maximumSavings:
-            s.compressor = "ZLIB"; s.zlibLevel = 9
-            j.append(.init(id: "compressor", label: "Compressor", value: "ZLIB level 9",
-                           reason: "you asked for maximum savings — about 0.6% better than LZFSE, and roughly 6x slower"))
-            warnings.append("ZLIB level 9 takes around six times as long as the default for about half a percent more space. It also reads back more slowly, every time.")
+            s.compressor = "zlib"
+            s.minimumRatio = 0.99
+            j.append(.init(id: "compressor", label: "Compressor", value: "ZLIB",
+                           reason: "you asked for maximum savings — a slightly better ratio, and slower to read back"))
+            warnings.append("ZLIB reclaims marginally more space than the default, but every later read of these files is slower. Measured on a mixed corpus the difference in size was under one percent.")
         case .fastest:
-            s.compressor = "LZVN"
+            s.compressor = "lzvn"
             j.append(.init(id: "compressor", label: "Compressor", value: "LZVN",
-                           reason: "you asked for speed — the quickest compressor available"))
+                           reason: "you asked for speed"))
         }
 
         if let caps = capabilities, !caps.compressors.contains(s.compressor) {
-            let fallback = caps.compressors.contains("LZFSE") ? "LZFSE" : (caps.compressors.first ?? "ZLIB")
-            warnings.append("This copy of afsctool doesn't support \(s.compressor); using \(fallback) instead.")
+            let fallback = caps.compressors.contains("lzfse") ? "lzfse" : (caps.compressors.sorted().first ?? "lzfse")
+            warnings.append("This copy of \(CompressorTool.displayName) doesn't support \(s.compressor.uppercased()); using \(fallback.uppercased()) instead.")
             s.compressor = fallback
         }
-        if s.compressor != "ZLIB" { s.zlibLevel = nil }
 
-        // ---- threads ----
-        s.threadCount = profile.threadCount(foreground: foreground,
-                                            constrained: conditions.isConstrained,
-                                            slowMedia: conditions.slowMedia)
-        // The reason must describe the number actually chosen. An earlier version always
-        // said "matched to N performance cores" even when the foreground path had picked
-        // every physical core — a justification that contradicted its own value.
-        var threadReason: String
-        if conditions.slowMedia {
-            threadReason = "external drive — extra threads only contend for the disk"
-        } else if let c = conditions.constraintDescription {
-            threadReason = "reduced because \(c)"
-        } else if foreground {
-            threadReason = profile.isAppleSilicon
-                ? "all \(profile.physicalCores) cores, since you're waiting on this"
-                : "all \(profile.physicalCores) cores, since you're waiting on this"
-        } else {
-            threadReason = profile.isAppleSilicon
-                ? "matched to \(profile.performanceCores) performance cores, leaving the efficiency cores for your other work"
-                : "matched to \(profile.physicalCores) cores"
-        }
-        j.append(.init(id: "threads", label: "Threads", value: "\(s.threadCount)", reason: threadReason))
-
-        // ---- I/O concurrency ----
-        s.concurrentIO = !conditions.slowMedia
-        j.append(.init(id: "io", label: "Disk access",
-                       value: s.concurrentIO ? "Concurrent" : "One file at a time",
-                       reason: s.concurrentIO
-                           ? "26% faster on an internal SSD"
-                           : "safer on external media, which handles parallel writes poorly"))
-
-        // ---- fixed safety properties ----
-        s.sortBySize = true
-        j.append(.init(id: "sort", label: "Order", value: "Smallest first",
-                       reason: "leaves the largest files last, so running low on space can't strand a part-finished run",
-                       isFixed: true))
-        s.detectHardLinks = true
-        j.append(.init(id: "hardlinks", label: "Hard links", value: "Detected",
-                       reason: "compressing one path affects every file sharing its data",
-                       isFixed: true))
-        j.append(.init(id: "verify", label: "Verification", value: "Always on",
-                       reason: "afsctool re-reads every file after compressing it; Pomace never turns this off",
-                       isFixed: true))
-
-        // ---- threshold ----
-        s.minSavingsPercent = mode == .maximumSavings ? 1 : 5
-        j.append(.init(id: "threshold", label: "Minimum saving", value: "\(s.minSavingsPercent)%",
+        j.append(.init(id: "threshold", label: "Minimum saving",
+                       value: "\(Int((1 - s.minimumRatio) * 100))%",
                        reason: "files that would gain less than this are left alone"))
 
-        // ---- overrides ----
+        j.append(.init(id: "verify", label: "Verification", value: "Always on",
+                       reason: "\(CompressorTool.displayName) re-reads every file and compares it before replacing the original; Pomace never turns this off",
+                       isFixed: true))
+        j.append(.init(id: "hardlinks", label: "Hard links", value: "Skipped",
+                       reason: "\(CompressorTool.displayName) refuses files that share storage with another file, which is why Pomace lists them as excluded rather than silently doing nothing",
+                       isFixed: true))
+        j.append(.init(id: "sparse", label: "Sparse files", value: "Skipped",
+                       reason: "compressing one would materialise its empty space and use more disk, not less",
+                       isFixed: true))
+
         if let o = overrides {
             let auto = s
             s = o
+            s.verify = true                      // never overridable
             j = j.map { row in
                 var r = row
                 switch row.id {
-                case "compressor": r.isOverridden = o.compressor != auto.compressor
-                                   r.value = o.compressor + (o.zlibLevel.map { " level \($0)" } ?? "")
-                case "threads":    r.isOverridden = o.threadCount != auto.threadCount
-                                   r.value = "\(o.threadCount)"
-                case "threshold":  r.isOverridden = o.minSavingsPercent != auto.minSavingsPercent
-                                   r.value = "\(o.minSavingsPercent)%"
-                case "io":         r.isOverridden = o.concurrentIO != auto.concurrentIO
-                                   r.value = o.concurrentIO ? "Concurrent" : "One file at a time"
+                case "compressor":
+                    r.isOverridden = o.compressor != auto.compressor
+                    r.value = o.compressor.uppercased()
+                case "threshold":
+                    r.isOverridden = o.minimumRatio != auto.minimumRatio
+                    r.value = "\(Int((1 - o.minimumRatio) * 100))%"
                 default: break
                 }
                 if r.isOverridden { r.reason = "set by you" }
                 return r
             }
-            // Safety properties survive any override.
-            s.sortBySize = true
-            s.detectHardLinks = true
         }
 
         return CompressionPlan(settings: s, justifications: j,
-                               arguments: arguments(for: s), warnings: warnings)
+                               arguments: compressArguments(for: s), warnings: warnings)
     }
 
-    /// Builds the argv. `-v` is always present because the progress UI parses its output;
-    /// the forbidden flags are never emitted, and a test asserts it.
-    public static func arguments(for s: CompressionSettings) -> [String] {
-        var a = ["-c", "-v"]
-        a += ["-T", s.compressor]
-        if s.compressor == "ZLIB", let level = s.zlibLevel { a.append("-\(level)") }
-        a.append("\(s.concurrentIO ? "-J" : "-j")\(s.threadCount)")
-        if s.sortBySize { a.append("-S") }
-        if s.detectHardLinks { a.append("-f") }
-        if s.minSavingsPercent > 0 { a += ["-s", "\(s.minSavingsPercent)"] }
-        if s.backup { a.append("-b") }
+    /// applesauce's compress argv. `--verify` is unconditional.
+    public static func compressArguments(for s: CompressionSettings) -> [String] {
+        var a = ["compress", "--verify"]
+        a += ["-c", s.compressor]
+        a += ["-r", String(format: "%.4f", s.minimumRatio)]
         return a
     }
 
-    public static func decompressArguments() -> [String] { ["-d", "-v"] }
+    public static func decompressArguments() -> [String] { ["decompress"] }
 }

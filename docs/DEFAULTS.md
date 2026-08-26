@@ -1,5 +1,11 @@
 # Pomace — Defaults and Auto-Tuning
 
+> **Superseded in part by [ADR-0015](DECISIONS.md#adr-0015-applesauce-replaces-afsctool).**
+> Pomace now drives `applesauce`, which parallelises internally and exposes no thread flag,
+> so §1.2, §1.3 and every thread-related row in §2 are historical — kept because they record
+> real measurements and because the reasoning still explains why the afsctool era looked the
+> way it did. The compressor comparison in §1.1 and the disclosure model in §3–§4 still stand.
+
 **Status:** Draft · **Last updated:** 2026-08-26
 
 The product promise is that Pomace picks correctly without being asked. This document is

@@ -81,9 +81,41 @@ public final class Store: @unchecked Sendable {
         CREATE INDEX IF NOT EXISTS idx_snapshot_path_time
             ON scan_snapshot(path, scanned_at DESC);
         """)
-        if try scalar("SELECT COUNT(*) FROM schema_version") == 0 {
+        if try scalarLocked("SELECT COUNT(*) FROM schema_version") == 0 {
             try exec("INSERT INTO schema_version (version) VALUES (1);")
         }
+        try migrateToV2()
+    }
+
+    /// M3 adds schedules and sweep history. Columns are added rather than the table
+    /// recreated, so an existing store keeps its scan history.
+    private func migrateToV2() throws {
+        guard try scalarLocked("SELECT COALESCE(MAX(version), 0) FROM schema_version") < 2 else { return }
+        for column in [
+            "cadence TEXT NOT NULL DEFAULT 'weekly'",
+            "preferred_hour INTEGER NOT NULL DEFAULT 3",
+            "schedule_enabled INTEGER NOT NULL DEFAULT 1",
+            "mode TEXT NOT NULL DEFAULT 'Automatic'",
+        ] {
+            // ALTER TABLE ADD COLUMN throws if the column already exists; that is fine.
+            try? exec("ALTER TABLE watched_directory ADD COLUMN \(column);")
+        }
+        try exec("""
+        CREATE TABLE IF NOT EXISTS sweep_run (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            path              TEXT NOT NULL,
+            started_at        REAL NOT NULL,
+            duration          REAL NOT NULL,
+            files_compressed  INTEGER NOT NULL DEFAULT 0,
+            files_failed      INTEGER NOT NULL DEFAULT 0,
+            bytes_reclaimed   INTEGER NOT NULL DEFAULT 0,
+            deferral          TEXT,
+            error             TEXT,
+            cancelled         INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_sweep_path_time ON sweep_run(path, started_at DESC);
+        """)
+        try exec("UPDATE schema_version SET version = 2;")
     }
 
     // MARK: - Watched directories
@@ -99,6 +131,139 @@ public final class Store: @unchecked Sendable {
 
     public func removeWatchedDirectory(path: String) throws {
         try queue.sync { try run("DELETE FROM watched_directory WHERE path = ?;", [.text(path)]) }
+    }
+
+    public struct WatchedDirectory: Sendable, Identifiable {
+        public let id: Int64
+        public let path: String
+        public var schedule: SweepSchedule
+        public var mode: CompressionMode
+
+        public init(id: Int64, path: String, schedule: SweepSchedule, mode: CompressionMode) {
+            self.id = id; self.path = path; self.schedule = schedule; self.mode = mode
+        }
+    }
+
+    public func watched() throws -> [WatchedDirectory] {
+        try queue.sync {
+            var out: [WatchedDirectory] = []
+            try query("""
+                SELECT id, path, cadence, preferred_hour, schedule_enabled, mode
+                FROM watched_directory ORDER BY added_at;
+                """) { stmt in
+                let cadence = SweepCadence(rawValue: String(cString: sqlite3_column_text(stmt, 2))) ?? .weekly
+                let mode = CompressionMode(rawValue: String(cString: sqlite3_column_text(stmt, 5))) ?? .automatic
+                out.append(WatchedDirectory(
+                    id: sqlite3_column_int64(stmt, 0),
+                    path: String(cString: sqlite3_column_text(stmt, 1)),
+                    schedule: SweepSchedule(cadence: cadence,
+                                            preferredHour: Int(sqlite3_column_int64(stmt, 3)),
+                                            enabled: sqlite3_column_int64(stmt, 4) != 0),
+                    mode: mode))
+            }
+            return out
+        }
+    }
+
+    public func updateSchedule(path: String, schedule: SweepSchedule, mode: CompressionMode) throws {
+        try queue.sync {
+            try run("""
+                UPDATE watched_directory
+                SET cadence = ?, preferred_hour = ?, schedule_enabled = ?, mode = ?
+                WHERE path = ?;
+                """, [.text(schedule.cadence.rawValue), .int(Int64(schedule.preferredHour)),
+                      .int(schedule.enabled ? 1 : 0), .text(mode.rawValue), .text(path)])
+        }
+    }
+
+    // MARK: - Sweep history
+
+    public struct SweepRun: Sendable, Identifiable {
+        public let id: Int64
+        public let path: String
+        public let startedAt: Date
+        public let duration: TimeInterval
+        public let filesCompressed: Int
+        public let filesFailed: Int
+        public let bytesReclaimed: Int64
+        public let deferral: SweepDeferral?
+        public let error: String?
+        public let cancelled: Bool
+
+        /// One line for the history list.
+        public var summary: String {
+            if let d = deferral { return d.explanation }
+            if let e = error { return "Failed — \(e)" }
+            if cancelled { return "Stopped after \(filesCompressed) files" }
+            if filesCompressed == 0 { return "Nothing had changed" }
+            var s = "Compressed \(filesCompressed) file\(filesCompressed == 1 ? "" : "s"), reclaimed \(ByteFormat.short(bytesReclaimed))"
+            if filesFailed > 0 { s += " · \(filesFailed) skipped" }
+            return s
+        }
+    }
+
+    @discardableResult
+    public func recordSweep(path: String, startedAt: Date, duration: TimeInterval,
+                            filesCompressed: Int = 0, filesFailed: Int = 0,
+                            bytesReclaimed: Int64 = 0, deferral: SweepDeferral? = nil,
+                            error: String? = nil, cancelled: Bool = false) throws -> Int64 {
+        try queue.sync {
+            try run("""
+                INSERT INTO sweep_run
+                  (path, started_at, duration, files_compressed, files_failed,
+                   bytes_reclaimed, deferral, error, cancelled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """, [.text(path), .real(startedAt.timeIntervalSince1970), .real(duration),
+                      .int(Int64(filesCompressed)), .int(Int64(filesFailed)),
+                      .int(bytesReclaimed),
+                      deferral.map { Value.text($0.rawValue) } ?? .null,
+                      error.map { Value.text($0) } ?? .null,
+                      .int(cancelled ? 1 : 0)])
+            return sqlite3_last_insert_rowid(db)
+        }
+    }
+
+    public func sweepHistory(path: String, limit: Int = 20) throws -> [SweepRun] {
+        try queue.sync {
+            var out: [SweepRun] = []
+            try query("""
+                SELECT id, path, started_at, duration, files_compressed, files_failed,
+                       bytes_reclaimed, deferral, error, cancelled
+                FROM sweep_run WHERE path = ? ORDER BY started_at DESC LIMIT ?;
+                """, [.text(path), .int(Int64(limit))]) { stmt in
+                func text(_ i: Int32) -> String? {
+                    guard let c = sqlite3_column_text(stmt, i) else { return nil }
+                    return String(cString: c)
+                }
+                out.append(SweepRun(
+                    id: sqlite3_column_int64(stmt, 0),
+                    path: String(cString: sqlite3_column_text(stmt, 1)),
+                    startedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 2)),
+                    duration: sqlite3_column_double(stmt, 3),
+                    filesCompressed: Int(sqlite3_column_int64(stmt, 4)),
+                    filesFailed: Int(sqlite3_column_int64(stmt, 5)),
+                    bytesReclaimed: sqlite3_column_int64(stmt, 6),
+                    deferral: text(7).flatMap(SweepDeferral.init(rawValue:)),
+                    error: text(8),
+                    cancelled: sqlite3_column_int64(stmt, 9) != 0))
+            }
+            return out
+        }
+    }
+
+    /// When a real (non-deferred) sweep last completed for this path.
+    public func lastCompletedSweep(path: String) throws -> Date? {
+        try queue.sync {
+            var out: Date?
+            try query("""
+                SELECT started_at FROM sweep_run
+                WHERE path = ? AND deferral IS NULL AND error IS NULL
+                ORDER BY started_at DESC LIMIT 1;
+                """, [.text(path)]) { stmt in
+                out = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0))
+            }
+            return out
+        }
     }
 
     public func watchedDirectories() throws -> [String] {
@@ -170,7 +335,7 @@ public final class Store: @unchecked Sendable {
 
     // MARK: - Thin SQLite wrapper
 
-    public enum Value { case text(String), int(Int64), real(Double) }
+    public enum Value { case text(String), int(Int64), real(Double), null }
 
     private func exec(_ sql: String) throws {
         var err: UnsafeMutablePointer<CChar>?
@@ -193,6 +358,7 @@ public final class Store: @unchecked Sendable {
             case .text(let s): sqlite3_bind_text(stmt, idx, s, -1, transient)
             case .int(let n):  sqlite3_bind_int64(stmt, idx, n)
             case .real(let d): sqlite3_bind_double(stmt, idx, d)
+            case .null:        sqlite3_bind_null(stmt, idx)
             }
         }
         return stmt

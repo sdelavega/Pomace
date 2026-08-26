@@ -348,3 +348,95 @@ a project can be generated on demand without changing the source layout.
 Application" certificates exist in different keychains, and it then produces a **broken
 signature while reporting success**. `build-app.sh` signs by SHA-1 hash for this reason;
 override with `POMACE_SIGN_ID`.
+
+---
+
+## ADR-0014: The agent wakes on a fixed interval and asks the store what is due
+
+**Status:** Accepted · 2026-08-26
+
+**Context.** Scheduled sweeps naturally suggest `StartCalendarInterval` in the launchd plist,
+one entry per cadence the user picks.
+
+**Decision.** The plist carries a fixed `StartInterval` of one hour and no schedule at all.
+Each wake spawns the process, which asks the store which directories are due, and usually
+exits immediately. Per-directory cadence lives in SQLite and is evaluated by `SweepSchedule`.
+
+**Why.** The agent plist ships inside the signed app bundle so it is covered by notarization
+and removed cleanly with the app ([ADR-0005](#adr-0005-launchd-via-smappservice-not-cron)).
+Rewriting it when a user changes a schedule would modify a file inside a signed bundle and
+invalidate the code signature. Keeping schedules in the store also means a schedule change
+needs no re-registration, no Login Items churn, and no risk of landing in
+`.requiresApproval` again.
+
+An hourly wake is a process spawn, a SQLite read and an exit. Under `ProcessType: Background`
+with `LowPriorityIO` that is not something a user can notice.
+
+**Costs.** A daily cadence lands within an hour of its preferred time rather than exactly on
+it, which is why the UI says "around 3 AM". A sweep can also be up to an hour late after
+wake from sleep. Both are acceptable for a maintenance task; neither would be for a reminder.
+
+---
+
+## ADR-0015: applesauce replaces afsctool
+
+**Status:** Accepted · 2026-08-26 · Supersedes the tool choice implied by
+[ADR-0002](#adr-0002-native-detection-subprocess-only-for-mutation) and
+[ADR-0011](#adr-0011-lzfse-default-not-zlib-9)
+
+**Context.** M2 found that afsctool destroys hard-linked files — 100% loss at `-J1`, and a
+directory walk without `-f` loses 100% too ([M2-FINDINGS](M2-FINDINGS.md)). Pomace guarded
+against it, but the guards were ours, wrapped around a tool whose failure mode was silent.
+[applesauce](https://github.com/Dr-Emann/applesauce) is a Rust reimplementation of the same
+idea.
+
+**Decision.** Pomace drives `applesauce` instead of `afsctool`. afsctool support is removed
+rather than kept behind an abstraction.
+
+**Why.** Measured on the same 124-file safety corpus:
+
+| | afsctool | applesauce |
+|---|---|---|
+| Hard-linked files | **destroys them** | refuses to touch them |
+| Round-trip integrity | clean | clean |
+| Sparse files | materialises them | **also materialises them** |
+| Verification | on unless `-n` | **off unless `--verify`** |
+| Failure reporting | per-file, parseable | summary only, exit code always 0 |
+| Thread tuning | `-J`/`-j`/`-S`/`-R` | none — parallelises internally |
+| Whole corpus | ~0.26s | ~0.24s at 212% CPU |
+
+applesauce declines the hazardous case outright, which is a stronger guarantee than our
+one-path-per-inode filter wrapped around a tool that would otherwise corrupt. It also writes
+via atomic replacement rather than modifying in place.
+
+**What the pivot does NOT change.**
+
+- **Still GPL-3.0**, so [ADR-0003](#adr-0003-never-bundle-afsctool) stands unchanged: never
+  bundled, installed at runtime with the licence disclosed. It ships from a Homebrew *tap*,
+  so the install command names `Dr-Emann/homebrew-tap/applesauce`.
+- **Sparse files are still a hazard.** applesauce materialises them exactly as afsctool did.
+  Pomace's exclusion remains load-bearing — verified after the pivot: `blocks=0`, untouched.
+- Native detection, physical-size arithmetic, inode-deduplicated accounting, and the
+  post-mutation re-scan are all unchanged; they were never afsctool-specific.
+
+**What it costs.**
+
+- **Hard-linked files can no longer be compressed at all.** afsctool could do it safely with
+  `-f` on a directory walk; applesauce simply refuses. Pomace now reports them as a named
+  exclusion instead of silently doing nothing, which is the honest version of a capability
+  we no longer have.
+- **`--verify` becomes the critical flag.** The old rule was "never pass `-n`"; the new one
+  is "always pass `--verify`", and a build lacking it is treated as unusable. This is a
+  worse default to inherit, and it is why the flag is asserted in both the policy tests and
+  the engine.
+- **No per-file output, and exit code 0 even for a missing path.** Per-file verdicts now come
+  from re-inspecting the filesystem rather than parsing output — more trustworthy, and it
+  deletes the tolerant-parser machinery entirely.
+- **All thread tuning is gone**, along with `SystemProfile.threadCount` and
+  `minimumSafeThreads`. The benchmark work in [DEFAULTS.md §1.2](DEFAULTS.md#12-thread-scaling-lzfse)
+  is now historical. Power and thermal conditions still gate *whether* a sweep runs.
+- `--level` had no measurable effect on any compressor in testing, so it is not exposed.
+
+**The afsctool findings stay.** [M2-FINDINGS](M2-FINDINGS.md) and the
+[upstream issue draft](../upstream/afsctool-hardlink-issue.md) remain in the repository. The
+bug is real, unfixed, and worth reporting whether or not Pomace still uses the tool.

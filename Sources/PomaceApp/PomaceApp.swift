@@ -2,7 +2,6 @@ import SwiftUI
 import AppKit
 import PomaceCore
 
-@main
 struct PomaceApp: App {
     @State private var model = ScanModel()
 
@@ -17,8 +16,10 @@ struct PomaceApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(model: model)
-                .frame(minWidth: 860, minHeight: 520)
+                .frame(minWidth: 940, minHeight: 560)
                 .task {
+                    SweepNotifier.requestAuthorizationIfNeeded()
+                    model.refreshServiceStatus()
                     if let p = Self.launchScanPath {
                         model.add(path: p)
                     } else {

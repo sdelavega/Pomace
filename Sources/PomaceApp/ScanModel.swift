@@ -28,9 +28,15 @@ final class ScanModel {
     var sortOrder: SortOrder = .potentialSaving
     var mode: CompressionMode = .automatic
     var overrides: CompressionSettings?
-    var installation: AfsctoolInstallation?
+    var installation: ToolInstallation?
     var confirmingDecompress = false
     var showingSettings = false
+    var showingInspector = false
+    var schedule = SweepSchedule()
+    var sweepHistory: [Store.SweepRun] = []
+    var serviceStatus: SweepService.Status = .notRegistered
+    var serviceError: String?
+    var isSweeping = false
 
     enum SortOrder: String, CaseIterable, Identifiable {
         case potentialSaving = "Largest first"
@@ -42,26 +48,107 @@ final class ScanModel {
     private var scanTask: Task<Void, Never>?
     private var runTask: Task<Void, Never>?
     private let store: Store?
-    private let log = MutationLog()
+    let log = MutationLog()
 
     init() {
         // A broken store must not stop the app from scanning — it only costs us history.
         store = try? Store()
         watchedPaths = (try? store?.watchedDirectories()) .flatMap { $0 } ?? []
-        installation = AfsctoolLocator.discover()
+        installation = CompressorTool.discover()
+        serviceStatus = SweepService.status
+    }
+
+    // MARK: - Scheduling
+
+    /// Turning scheduled sweeps on registers a launchd agent, which appears in the user's
+    /// Login Items. The UI reports the real service status rather than assuming success —
+    /// the user can disable it behind our back, and claiming their folders are being swept
+    /// when they are not would be the worst kind of lie for this app to tell.
+    func setScheduledSweepsEnabled(_ enabled: Bool) {
+        serviceError = nil
+        let result = enabled ? SweepService.register() : SweepService.unregister()
+        switch result {
+        case .success(let status): serviceStatus = status
+        case .failure(let error):
+            serviceError = error.description
+            serviceStatus = SweepService.status
+        }
+    }
+
+    func refreshServiceStatus() { serviceStatus = SweepService.status }
+
+    func openLoginItems() { SweepService.openLoginItemsSettings() }
+
+    func loadSchedule(for path: String) {
+        let entry = (try? store?.watched())?.flatMap { $0 }?.first { $0.path == path }
+        schedule = entry?.schedule ?? SweepSchedule()
+        if let m = entry?.mode { mode = m }
+        sweepHistory = (try? store?.sweepHistory(path: path)).flatMap { $0 } ?? []
+    }
+
+    func saveSchedule() {
+        guard let path = selectedPath else { return }
+        try? store?.updateSchedule(path: path, schedule: schedule, mode: mode)
+        if schedule.enabled, schedule.cadence != .manual, !serviceStatus.isActive {
+            setScheduledSweepsEnabled(true)
+        }
+    }
+
+    var nextSweepDescription: String {
+        guard schedule.enabled, schedule.cadence != .manual else { return "No scheduled sweeps" }
+        guard serviceStatus.isActive else { return serviceStatus.explanation }
+        guard let path = selectedPath,
+              let last = (try? store?.lastCompletedSweep(path: path)).flatMap({ $0 }),
+              let interval = schedule.cadence.interval else {
+            return "Will sweep at the next opportunity"
+        }
+        let next = last.addingTimeInterval(interval)
+        if next <= Date() { return "Due now" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .full
+        return "Next sweep \(f.localizedString(for: next, relativeTo: Date()))"
+    }
+
+    /// Runs a sweep immediately for the selected folder, through the same runner the agent
+    /// uses — so "Sweep Now" exercises the scheduled path rather than a parallel one.
+    func sweepNow() {
+        guard let path = selectedPath, let store, let install = installation else { return }
+        isSweeping = true
+        Task { [weak self] in
+            let runner = SweepRunner(store: store, log: self?.log ?? MutationLog())
+            let dir = Store.WatchedDirectory(id: 0, path: path,
+                                             schedule: self?.schedule ?? SweepSchedule(),
+                                             mode: self?.mode ?? .automatic)
+            let report = await runner.sweep(dir, installation: install, lastRun: nil)
+            guard let self else { return }
+            self.isSweeping = false
+            self.loadSchedule(for: path)
+            if let deferral = report.deferral {
+                self.runState = .refused(deferral.explanation)
+            } else if let error = report.error {
+                self.runState = .refused(error)
+            } else {
+                var outcome = CompressionOutcome()
+                outcome.filesSucceeded = report.filesCompressed
+                outcome.bytesBefore = report.bytesReclaimed
+                outcome.duration = report.duration
+                self.runState = .finished(outcome)
+            }
+            self.scan(path)
+        }
     }
 
     // MARK: - afsctool
 
-    var afsctoolReady: Bool { installation?.capabilities.isUsable ?? false }
+    var toolReady: Bool { installation?.capabilities.isUsable ?? false }
 
-    var afsctoolSummary: String {
-        guard let i = installation else { return "afsctool isn't installed" }
-        let v = i.capabilities.version.map { "afsctool \($0)" } ?? "afsctool"
+    var toolSummary: String {
+        guard let i = installation else { return "\(CompressorTool.displayName) isn't installed" }
+        let v = i.capabilities.version.map { "\(CompressorTool.displayName) \($0)" } ?? CompressorTool.displayName
         return "\(v) — from \(i.source.description)"
     }
 
-    func refreshInstallation() { installation = AfsctoolLocator.discover() }
+    func refreshInstallation() { installation = CompressorTool.discover() }
 
     // MARK: - Compression
 
@@ -71,7 +158,6 @@ final class ScanModel {
         CompressionPolicy.plan(
             mode: mode,
             conditions: RuntimeConditions.current(volumePath: selectedPath),
-            foreground: true,
             overrides: overrides,
             capabilities: installation?.capabilities)
     }
@@ -160,6 +246,7 @@ final class ScanModel {
             watchedPaths.append(path)
         }
         selectedPath = path
+        loadSchedule(for: path)
         scan(path)
     }
 
@@ -173,6 +260,7 @@ final class ScanModel {
         guard selectedPath != path else { return }
         selectedPath = path
         state = .idle
+        loadSchedule(for: path)
         scan(path)
     }
 
@@ -181,6 +269,7 @@ final class ScanModel {
     func restoreSelection() {
         guard selectedPath == nil, let first = watchedPaths.first else { return }
         selectedPath = first
+        loadSchedule(for: first)
         scan(first)
     }
 

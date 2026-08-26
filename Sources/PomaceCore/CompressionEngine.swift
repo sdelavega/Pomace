@@ -18,11 +18,24 @@ public struct CompressionProgress: Sendable {
 }
 
 public struct CompressionFailure: Sendable, Identifiable {
+    /// Whether this needs the user's attention, or is the tool correctly declining.
+    ///
+    /// Most non-compressed files are `.skipped`: incompressible media, files below the
+    /// savings threshold, hard-linked files. Presenting those as failures is noise, and
+    /// noise is how a warnings list gets ignored — which then hides the real `.failed`
+    /// entries that do need action.
+    public enum Kind: Sendable { case skipped, failed }
+
     public let id = UUID()
     public let path: String
     public let message: String
     /// Plain-language next step. An error the user can't act on is only half-reported.
     public let remedy: String
+    public var kind: Kind = .skipped
+
+    public init(path: String, message: String, remedy: String, kind: Kind = .skipped) {
+        self.path = path; self.message = message; self.remedy = remedy; self.kind = kind
+    }
 }
 
 public struct CompressionOutcome: Sendable {
@@ -38,6 +51,10 @@ public struct CompressionOutcome: Sendable {
     public init() {}
 
     public var bytesReclaimed: Int64 { bytesBefore - bytesAfter }
+
+    /// Entries that genuinely need attention. `skipped` files are reported quietly.
+    public var realFailures: [CompressionFailure] { failures.filter { $0.kind == .failed } }
+    public var skipped: [CompressionFailure] { failures.filter { $0.kind == .skipped } }
 }
 
 public enum CompressionEvent: Sendable {
@@ -48,14 +65,14 @@ public enum CompressionEvent: Sendable {
 }
 
 public enum CompressionEngineError: Error, CustomStringConvertible {
-    case afsctoolMissing
+    case toolMissing
     case insufficientFreeSpace(needed: Int64, available: Int64)
     case nothingToDo
 
     public var description: String {
         switch self {
-        case .afsctoolMissing:
-            "afsctool isn't installed. Pomace can install it for you."
+        case .toolMissing:
+            "\(CompressorTool.displayName) isn't installed. Pomace can install it for you."
         case .insufficientFreeSpace(let needed, let available):
             "Not enough free space to work safely — \(ByteFormat.short(available)) available, "
             + "\(ByteFormat.short(needed)) needed. Compression isn't atomic and needs room to work."
@@ -84,7 +101,7 @@ public enum CompressionEngine {
     public static func run(operation: CompressionOperation,
                            paths: [String],
                            root: String,
-                           installation: AfsctoolInstallation,
+                           installation: ToolInstallation,
                            plan: CompressionPlan,
                            rules: SafetyRules = SafetyRules(),
                            logger: MutationLog? = nil) -> AsyncStream<CompressionEvent> {
@@ -107,19 +124,19 @@ public enum CompressionEngine {
 
                 // --- re-evaluate safety at mutation time (SAFETY.md rule 10) ---
                 let volume = VolumeContext.probe(path: root)
-                // Hard links share an inode, and afsctool corrupts a file when it processes
-                // the same inode more than once in a run — measured at 100% loss with -J1 and
-                // roughly 8% with -J2, with a directory argument as well as explicit paths,
-                // and `-f` does not prevent it. Passing exactly one path per inode is both
-                // safe and complete: compressing one link compresses every link, because they
-                // are the same file. See docs/M2-FINDINGS.md.
-                var seenInodes = Set<UInt64>()
+                // applesauce refuses any file with more than one link, so hard-linked files
+                // simply cannot be compressed. Pomace filters them here so they are reported
+                // as a named exclusion rather than silently counted as attempted-and-failed.
+                //
+                // (Under afsctool this filter was a data-loss guard rather than a courtesy —
+                // see docs/M2-FINDINGS.md. applesauce declines the hazardous case outright,
+                // which is why the pivot happened. ADR-0015.)
                 var skippedLinks = 0
 
                 var eligible: [(path: String, size: Int64)] = []
                 for p in paths {
                     guard let f = FileInspector.inspect(p) else { continue }
-                    if f.linkCount > 1, !seenInodes.insert(f.inode).inserted {
+                    if f.linkCount > 1 {
                         skippedLinks += 1
                         continue
                     }
@@ -139,11 +156,12 @@ public enum CompressionEngine {
                     continuation.finish(); return
                 }
 
-                // Smallest first, globally — the largest files land last so a low-space
+                // Smallest first, globally. The largest files land last so a low-space
                 // failure cannot strand a run that has already banked the small wins.
-                if plan.settings.sortBySize {
-                    eligible.sort { $0.size < $1.size }
-                }
+                // applesauce has no sort flag of its own, so Pomace does this itself — which
+                // is better anyway, since ordering now spans every batch rather than each
+                // invocation separately.
+                eligible.sort { $0.size < $1.size }
 
                 outcome.bytesBefore = eligible.reduce(0) { $0 + physical($1.path) }
                 var progress = CompressionProgress()
@@ -152,15 +170,17 @@ public enum CompressionEngine {
                 logger?.begin(operation: operation, root: root, fileCount: eligible.count,
                               arguments: plan.arguments)
                 if skippedLinks > 0 {
-                    logger?.note("collapsed \(skippedLinks) hard-linked path(s) to one path per inode")
+                    logger?.note("skipped \(skippedLinks) hard-linked path(s) — \(CompressorTool.displayName) cannot compress them")
                 }
 
                 let baseArgs = operation == .compress
                     ? plan.arguments
                     : CompressionPolicy.decompressArguments()
 
-                assert(!baseArgs.contains { CompressionPolicy.forbiddenFlags.contains($0) },
-                       "forbidden flag reached the argv")
+                // applesauce verifies only when asked. Reaching the filesystem without this
+                // flag would mean compressing without ever checking the result reads back.
+                assert(operation == .decompress || baseArgs.contains("--verify"),
+                       "compress argv must always carry --verify")
 
                 // --- batches ---
                 var index = 0
@@ -181,25 +201,34 @@ public enum CompressionEngine {
                     let result = Subprocess.capture(installation.path, baseArgs + batch)
                     outcome.filesAttempted += batch.count
 
-                    if result.succeeded {
-                        outcome.filesSucceeded += batch.count
-                    } else {
-                        // A batch failure is not fatal: verify each file individually so one
-                        // bad path doesn't discard the whole run's progress.
-                        for p in batch {
-                            let single = Subprocess.capture(installation.path, baseArgs + [p])
-                            if single.succeeded {
-                                outcome.filesSucceeded += 1
-                            } else {
-                                let failure = describeFailure(path: p, output: single.combined)
-                                outcome.failures.append(failure)
-                                logger?.failure(path: p, message: failure.message)
-                            }
+                    // applesauce exits 0 even for a missing or unreadable path, and never
+                    // names the files it skipped — it only reports a summary count. So the
+                    // per-file verdict comes from re-inspecting the filesystem, which is the
+                    // more trustworthy source anyway (ADR-0002).
+                    for p in batch {
+                        guard let after = FileInspector.inspect(p) else {
+                            let f = CompressionFailure(
+                                path: p,
+                                message: "The file is no longer there",
+                                remedy: "It was moved or deleted while Pomace was working. Nothing was changed.",
+                                kind: .failed)
+                            outcome.failures.append(f)
+                            logger?.failure(path: p, message: f.message)
+                            continue
+                        }
+                        let wanted = operation == .compress
+                        if after.isCompressed == wanted {
+                            outcome.filesSucceeded += 1
+                        } else {
+                            let f = classifySkip(path: p, operation: operation,
+                                                 output: result.combined)
+                            outcome.failures.append(f)
+                            logger?.failure(path: p, message: f.message)
                         }
                     }
 
                     progress.filesProcessed = min(index, eligible.count)
-                    progress.failures = outcome.failures.count
+                    progress.failures = outcome.realFailures.count
                     progress.currentPath = batch.last
                     progress.bytesProcessed = eligible.prefix(index).reduce(0) { $0 + $1.size }
                     continuation.yield(.progress(progress))
@@ -247,7 +276,52 @@ public enum CompressionEngine {
         return min(freeSpaceFloor, max(64 * 1024 * 1024, total / 20))
     }
 
-    /// Turns afsctool's output into something the user can act on.
+    /// Why a file came back in the state it started in.
+    ///
+    /// applesauce reports no per-file detail, so this reasons from the file itself. It
+    /// deliberately prefers "skipped, here's why" over "failed" — most of these are the tool
+    /// declining for a good reason, and calling that a failure would train users to ignore
+    /// the list.
+    static func classifySkip(path: String, operation: CompressionOperation,
+                             output: String) -> CompressionFailure {
+        if operation == .compress {
+            if let f = FileInspector.inspect(path) {
+                if f.linkCount > 1 {
+                    return CompressionFailure(
+                        path: path,
+                        message: "Shares its data with \(f.linkCount - 1) other file\(f.linkCount == 2 ? "" : "s")",
+                        remedy: "\(CompressorTool.displayName) can't compress hard-linked files. Nothing was changed.",
+                        kind: .skipped)
+                }
+                if f.logicalSize == 0 {
+                    return CompressionFailure(path: path, message: "Empty file",
+                                              remedy: "There was nothing to compress.", kind: .skipped)
+                }
+            }
+            if access(path, R_OK) != 0 {
+                return CompressionFailure(
+                    path: path,
+                    message: "Couldn't be read",
+                    remedy: "Check the file's permissions, or grant Pomace Full Disk Access. Nothing was changed.",
+                    kind: .failed)
+            }
+            if access(path, W_OK) != 0 {
+                return CompressionFailure(
+                    path: path, message: "Couldn't be modified",
+                    remedy: "The file is read-only or on a read-only volume. Nothing was changed.",
+                    kind: .failed)
+            }
+            return CompressionFailure(
+                path: path,
+                message: "Wouldn't compress enough to be worth it",
+                remedy: "Left as it was — compressing it would have saved little or nothing.",
+                kind: .skipped)
+        }
+        return CompressionFailure(path: path, message: "Couldn't be decompressed",
+                                  remedy: "The file was left exactly as it was.", kind: .failed)
+    }
+
+    /// Retained for the low-level error paths that still surface tool output.
     static func describeFailure(path: String, output: String) -> CompressionFailure {
         let lower = output.lowercased()
         let remedy: String

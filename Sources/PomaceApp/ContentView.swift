@@ -11,6 +11,9 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             Detail(model: model)
+                .inspector(isPresented: $model.showingInspector) {
+                    InspectorView(model: model)
+                }
         }
         .navigationTitle("Pomace")
         .confirmationDialog(
@@ -111,10 +114,10 @@ private struct Detail: View {
                 ScanningView(progress: progress) { model.cancelScan() }
 
             case .done(let result):
-                if model.afsctoolReady {
+                if model.toolReady {
                     ResultView(model: model, result: result)
                 } else {
-                    InstallAfsctoolView(model: model)
+                    InstallToolView(model: model)
                 }
             }
         }
@@ -124,6 +127,13 @@ private struct Detail: View {
                     model.showingSettings = true
                 }
                 .help("See what Pomace chose, and why")
+            }
+            ToolbarItem(placement: .automatic) {
+                Button("Schedule", systemImage: "calendar.badge.clock") {
+                    model.showingInspector.toggle()
+                }
+                .help("Schedule and sweep history")
+                .disabled(model.selectedPath == nil)
             }
             ToolbarItem(placement: .primaryAction) {
                 if model.isScanning {

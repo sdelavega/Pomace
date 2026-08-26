@@ -52,8 +52,8 @@ it safe to run on real directories while the engine is still young.
 
 ## M2 — Compress and decompress
 
-- [x] afsctool discovery, version detection, capability check
-- [x] Install flow — Homebrew path with the license disclosure (direct download deferred)
+- [x] Tool discovery, version detection, capability check (applesauce since ADR-0015)
+- [x] Install flow — Homebrew tap with the licence disclosure (direct download deferred)
 - [x] Auto-tuning policy engine ([DEFAULTS.md §2](DEFAULTS.md#2-policy)) with per-flag
       justification strings
 - [ ] Per-directory compressor measurement ([ADR-0010](DECISIONS.md#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default)) — **deferred to M2.1**, the policy engine accepts a measured winner but nothing measures yet
@@ -77,14 +77,14 @@ direct-download install path, and `-b` backup on first run.
 
 The differentiating feature.
 
-- [ ] `SMAppService` agent registration and status reporting
-- [ ] Schedule editor → `StartCalendarInterval` generation
-- [ ] `--sweep-all` headless mode, `.prohibited` activation policy
-- [ ] Precondition gating: power, thermal, Low Power Mode, Time Machine
-- [ ] Incremental sweep by mtime, with periodic full verification
-- [ ] Run history persisted and shown per directory
-- [ ] Notifications on error only, never on routine success
-- [ ] Login Items state reflected honestly in the UI
+- [x] `SMAppService` agent registration and honest status reporting
+- [x] Schedule editor — cadence evaluated in-process, not baked into the plist ([ADR-0014](DECISIONS.md#adr-0014-the-agent-wakes-on-a-fixed-interval-and-asks-the-store-what-is-due))
+- [x] `--sweep-all` headless mode, argument dispatch before any scene is built
+- [x] Precondition gating: power, thermal, Low Power Mode, Time Machine — deferrals recorded, not dropped
+- [x] Incremental sweep by mtime with a grace period, plus periodic full verification
+- [x] Run history persisted and shown per directory
+- [x] Notifications on error only, never on routine success
+- [x] Login Items state reflected honestly in the UI
 
 ---
 

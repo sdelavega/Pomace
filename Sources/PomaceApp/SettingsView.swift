@@ -46,7 +46,7 @@ struct AdvancedSettingsView: View {
     private var footer: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
-                Text(model.afsctoolSummary).font(.caption)
+                Text(model.toolSummary).font(.caption)
                 if let i = model.installation {
                     Text(i.path).font(.caption2).foregroundStyle(.tertiary)
                         .lineLimit(1).truncationMode(.middle)
@@ -104,7 +104,7 @@ private struct JustificationRow: View {
 
 /// Shown when afsctool is missing. The license disclosure is not optional — Pomace is about
 /// to install third-party GPL software on the user's behalf (ADR-0003).
-struct InstallAfsctoolView: View {
+struct InstallToolView: View {
     @Bindable var model: ScanModel
     @State private var installing = false
     @State private var message: String?
@@ -112,10 +112,10 @@ struct InstallAfsctoolView: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "shippingbox").font(.system(size: 36)).foregroundStyle(.secondary)
-            Text("Pomace needs afsctool").font(.headline)
+            Text("Pomace needs \(CompressorTool.displayName)").font(.headline)
             Text("""
-                 afsctool is the tool that actually applies compression. Pomace can install \
-                 it for you with Homebrew, or you can install it yourself.
+                 \(CompressorTool.displayName) is the tool that actually applies compression. \
+                 Pomace can install it for you with Homebrew, or you can install it yourself.
                  """)
                 .font(.callout)
                 .multilineTextAlignment(.center)
@@ -125,11 +125,11 @@ struct InstallAfsctoolView: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("About to install").font(.caption.weight(.medium))
-                    Text("afsctool, by Brendan Kirchner and René Bertin")
+                    Text("applesauce, by Zachary Dremann")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("Licensed GPL-3.0-only and BSL-1.0 — separate software, not part of Pomace")
+                    Text("Licensed GPL-3.0 — separate software, not part of Pomace")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("Installed via: brew install afsctool")
+                    Text("Installed via: brew install \(ToolInstaller.homebrewFormula)")
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
@@ -145,12 +145,12 @@ struct InstallAfsctoolView: View {
             HStack {
                 Button("Install with Homebrew") { install() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(installing || !AfsctoolInstaller.homebrewAvailable)
+                    .disabled(installing || !ToolInstaller.homebrewAvailable)
                 Button("Check Again") { model.refreshInstallation() }
                     .disabled(installing)
             }
-            if !AfsctoolInstaller.homebrewAvailable {
-                Text("Homebrew isn't installed, so Pomace can't install afsctool automatically.")
+            if !ToolInstaller.homebrewAvailable {
+                Text("Homebrew isn't installed, so Pomace can't install \(CompressorTool.displayName) automatically.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if installing { ProgressView().controlSize(.small) }
@@ -162,12 +162,12 @@ struct InstallAfsctoolView: View {
         installing = true
         message = "Installing…"
         Task {
-            let result = await AfsctoolInstaller.installViaHomebrew()
+            let result = await ToolInstaller.installViaHomebrew()
             installing = false
             switch result {
             case .success:
                 model.refreshInstallation()
-                message = model.afsctoolReady ? nil : "Installed, but Pomace still can't find it."
+                message = model.toolReady ? nil : "Installed, but Pomace still can't find it."
             case .failure(let error):
                 message = error
             }

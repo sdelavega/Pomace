@@ -17,9 +17,12 @@ swift build -c "$CONFIG" --product PomaceApp
 BIN="$(swift build -c "$CONFIG" --product PomaceApp --show-bin-path)/PomaceApp"
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents"
 cp "$BIN" "$APP/Contents/MacOS/Pomace"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
+# The scheduled-sweep agent ships inside the bundle so it is covered by the signature and
+# removed cleanly when the app is deleted (ADR-0005).
+cp "$HERE/Resources/org.pomace.Pomace.Sweep.plist" "$APP/Contents/Library/LaunchAgents/"
 
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
   codesign --force --options runtime \

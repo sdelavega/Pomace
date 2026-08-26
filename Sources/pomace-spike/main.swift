@@ -11,9 +11,8 @@ guard let cmd = args.first else {
       inspect <paths...>              per-file detection detail
       profile                         machine profile and computed thread policy
       walk <dir> [--repeat N]         FTS vs FileManager walk benchmark
-      crosscheck <dir>                our physical-size figures vs afsctool -v, per file
+      crosscheck <dir>                our physical-size figures vs the tool's own, per file
       verify <dir> [--compressor T]   full compress/decompress integrity cycle
-      parse <file>                    parse afsctool -v output for one file
     """)
     exit(2)
 }
@@ -46,8 +45,7 @@ func run(_ launch: String, _ argv: [String]) -> (out: String, err: String, code:
     return (String(decoding: od, as: UTF8.self), String(decoding: ed, as: UTF8.self), p.terminationStatus)
 }
 
-let afsctool = ["/opt/homebrew/bin/afsctool", "/usr/local/bin/afsctool"]
-    .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "afsctool"
+let toolPath = CompressorTool.locate()?.path ?? CompressorTool.executableName
 
 func sha256(_ path: String) -> String? {
     guard let fh = FileHandle(forReadingAtPath: path) else { return nil }
@@ -85,10 +83,7 @@ case "profile":
     print("efficiency cores:   \(p.efficiencyCores)")
     print("physical cores:     \(p.physicalCores)")
     print("")
-    print("background sweep:   -J\(p.threadCount(foreground: false))   (\(p.justification))")
-    print("foreground run:     -J\(p.threadCount(foreground: true))")
-    print("battery/thermal:    -J\(p.threadCount(foreground: false, constrained: true))")
-    print("external media:     -j\(p.threadCount(foreground: false, slowMedia: true))")
+    print("(thread tuning removed with the applesauce pivot — it parallelises internally)")
 
 case "inspect":
     for path in positional {
@@ -123,34 +118,23 @@ case "walk":
     bench("FTS-nostat") { DirectoryWalker.walkFTS(dir, inspect: false) }
     bench("FileManager") { DirectoryWalker.walkFileManager(dir) }
 
-case "parse":
-    guard let path = positional.first else { print("need file"); exit(2) }
-    let r = run(afsctool, ["-v", path])
-    let p = AfsctoolOutput.parse(r.out)
-    print("path:        \(p.path ?? "—")")
-    print("type:        \(p.compressionTypeText ?? "—")  raw=\(p.compressionTypeRaw.map(String.init) ?? "—")")
-    print("content:     \(p.contentType ?? "—")")
-    print("uncompressed:\(p.uncompressedSize.map(String.init) ?? "—")")
-    print("compressed:  \(p.compressedSize.map(String.init) ?? "—")")
-    print("savings:     \(p.savingsPercent.map { "\($0)%" } ?? "—")")
-    print("unparsed:    \(p.unparsedLines.count) line(s)")
-    for l in p.unparsedLines { print("   ? \(l)") }
-
 case "crosscheck":
     guard let dir = positional.first else { print("need dir"); exit(2) }
+    guard let install = CompressorTool.discover() else { print("tool not found"); exit(1) }
     var files: [FileFacts] = []
     _ = DirectoryWalker.walkFTS(dir) { if $0.isRegularFile { files.append($0) } }
-    var agree = 0, disagree = 0, afsctoolZero = 0
-    print("comparing our physical-size figures against afsctool -v on \(files.count) files\n")
+    var agree = 0, disagree = 0, toolZero = 0
+    print("comparing our physical-size figures against `\(CompressorTool.displayName) info` on \(files.count) files\n")
     for f in files {
-        let r = run(afsctool, ["-v", f.path])
-        let p = AfsctoolOutput.parse(r.out)
-        guard let theirs = p.compressedSize else { continue }
+        let out = Subprocess.capture(install.path, ["info", f.path]).combined
+        guard let line = out.split(separator: "\n").first(where: { $0.contains("Compressed size:") }),
+              let theirs = Int64(line.split(separator: ":").last?.trimmingCharacters(in: .whitespaces) ?? "")
+        else { continue }
         let ours = f.physicalSize
         if theirs == 0 && ours > 0 {
-            afsctoolZero += 1
-            if afsctoolZero <= 3 {
-                print("  afsctool reports 0, we report \(ours)  [\(f.type?.description ?? "?")]  \((f.path as NSString).lastPathComponent)")
+            toolZero += 1
+            if toolZero <= 3 {
+                print("  tool reports 0, we report \(ours)  [\(f.type?.description ?? "?")]  \((f.path as NSString).lastPathComponent)")
             }
         } else if theirs == ours { agree += 1 } else {
             disagree += 1
@@ -159,14 +143,11 @@ case "crosscheck":
             }
         }
     }
-    print("\nagree=\(agree)  disagree=\(disagree)  afsctool-reported-zero=\(afsctoolZero)")
-    print(afsctoolZero > 0
-          ? "afsctool under-reports inline-xattr storage as 0 bytes; our figure is the accurate one."
-          : "")
+    print("\nagree=\(agree)  disagree=\(disagree)  tool-reported-zero=\(toolZero)")
 
 case "verify":
     guard let dir = positional.first else { print("need dir"); exit(2) }
-    let comp = flag("--compressor") ?? "LZFSE"
+    let comp = flag("--compressor") ?? "lzfse"
     var failures: [String] = []
     func check(_ ok: Bool, _ label: String) {
         print("  [\(ok ? "PASS" : "FAIL")] \(label)")
@@ -179,12 +160,12 @@ case "verify":
 
     print("compressing…")
     let t0 = now()
-    let c = run(afsctool, ["-c", "-T", comp, "-J4", "-S", "-f", "-v", dir])
+    let c = run(toolPath, ["compress", "--verify", "-c", comp.lowercased(), dir])
     let dt = now() - t0
-    print(String(format: "  afsctool exit=%d in %.1fs\n", c.code, dt))
+    print(String(format: "  compress exit=%d in %.1fs\n", c.code, dt))
 
     let afterC = snapshot(dir)
-    check(c.code == 0, "afsctool -c exited cleanly")
+    check(c.code == 0, "compress exited cleanly")
     check(afterC.count == before.count, "file count unchanged (\(before.count) -> \(afterC.count))")
     var shaMismatch = 0, sizeMismatch = 0, nlinkMismatch = 0, inoChanged = 0, gotCompressed = 0
     for (path, b) in before {
@@ -202,10 +183,10 @@ case "verify":
     print("  [INFO] \(gotCompressed)/\(before.count) files now carry UF_COMPRESSED")
 
     print("\ndecompressing…")
-    let d = run(afsctool, ["-d", dir])
-    print("  afsctool exit=\(d.code)\n")
+    let d = run(toolPath, ["decompress", dir])
+    print("  decompress exit=\(d.code)\n")
     let afterD = snapshot(dir)
-    check(d.code == 0, "afsctool -d exited cleanly")
+    check(d.code == 0, "decompress exited cleanly")
     var shaMismatch2 = 0, stillCompressed = 0
     for (path, b) in before {
         guard let a = afterD[path] else { continue }
@@ -262,10 +243,10 @@ case "scan":
 case "engine-verify":
     guard let dir = positional.first else { print("need dir"); exit(2) }
     let mode = CompressionMode(rawValue: flag("--mode") ?? "Automatic") ?? .automatic
-    guard let install = AfsctoolLocator.discover() else {
-        print("afsctool not found"); exit(1)
+    guard let install = CompressorTool.discover() else {
+        print("\(CompressorTool.displayName) not found"); exit(1)
     }
-    print("afsctool: \(install.path) (\(install.source.description))")
+    print("\(CompressorTool.displayName): \(install.path) (\(install.source.description))")
     print("  version: \(install.capabilities.version?.description ?? "?")")
     print("  compressors: \(install.capabilities.compressors.sorted().joined(separator: ", "))")
     print("  usable: \(install.capabilities.isUsable)")
@@ -273,7 +254,7 @@ case "engine-verify":
         print("  missing: \(install.capabilities.missingCapabilities.joined(separator: ", "))")
     }
 
-    let plan = CompressionPolicy.plan(mode: mode, foreground: true)
+    let plan = CompressionPolicy.plan(mode: mode)
     print("\nplan (\(mode.rawValue)):")
     for j in plan.justifications {
         print("  \(j.label.padding(toLength: 14, withPad: " ", startingAt: 0)) \(j.value.padding(toLength: 18, withPad: " ", startingAt: 0)) \(j.reason)\(j.isFixed ? "  [fixed]" : "")")
@@ -323,13 +304,17 @@ case "engine-verify":
     check(engineRefused == nil, "engine ran (did not refuse: \(engineRefused ?? "-"))")
     check(compressOutcome != nil, "engine produced an outcome")
     if let o = compressOutcome {
-        print(String(format: "  attempted=%d succeeded=%d failed=%d reclaimed=%@ in %.2fs",
-                     o.filesAttempted, o.filesSucceeded, o.failures.count,
+        print(String(format: "  attempted=%d succeeded=%d problems=%d skipped=%d reclaimed=%@ in %.2fs",
+                     o.filesAttempted, o.filesSucceeded, o.realFailures.count, o.skipped.count,
                      ByteFormat.short(o.bytesReclaimed), o.duration))
-        for f in o.failures.prefix(5) {
-            print("    FAIL \((f.path as NSString).lastPathComponent): \(f.message)")
-            print("         -> \(f.remedy)")
+        for f in o.realFailures.prefix(5) {
+            print("    PROBLEM \((f.path as NSString).lastPathComponent): \(f.message)")
+            print("            -> \(f.remedy)")
         }
+        for f in o.skipped.prefix(5) {
+            print("    skipped \((f.path as NSString).lastPathComponent): \(f.message)")
+        }
+        check(o.realFailures.isEmpty, "no real failures (\(o.realFailures.count))")
         check(o.filesSucceeded > 0, "engine compressed at least one file")
         check(o.bytesReclaimed > 0, "engine reclaimed space")
     }

@@ -80,10 +80,11 @@ Presented with a clear explanation and an explicit opt-in.
 
 These are requirements on Pomace's own implementation:
 
-1. **Never pass `-n`.** afsctool's post-compression verification stays on, always. A
-   nonexistent "fast mode" is not worth the risk surface.
-2. **`-d` is a confirmed destructive action.** It removes the entire resource fork. The
-   confirmation must name the file count and the path. Never reachable by a single click.
+1. **Always pass `--verify`.** applesauce verifies only when asked — the inverse of
+   afsctool, where verification was on unless you passed `-n`. A build of the tool without
+   the flag is treated as unusable. This is the single most important flag Pomace emits.
+2. **Decompression is a confirmed action.** The confirmation names the file count. Never
+   reachable by a single unconsidered click.
 3. **Dry run before mutation, always.** Every compress is preceded by a scan. Nothing is
    modified until the user has seen the projected outcome.
 4. **Cancel at file boundaries only.** Never signal afsctool mid-file. Track the current
@@ -107,10 +108,9 @@ These are requirements on Pomace's own implementation:
     That is the sparse-file signature, and the arithmetic is inverted there.
 13. **A test run that inspects zero files must fail, not pass.** The first integrity run
     reported `ALL CHECKS PASSED` over an empty set. Assert a minimum baseline count.
-14. **Never submit two paths that share an inode to one afsctool run**, and never emit a
-    thread count below `SystemProfile.minimumSafeThreads`. Both guard the same data-loss
-    bug ([M2-FINDINGS](M2-FINDINGS.md)); the inode rule is the fix and the floor is a
-    backstop.
+14. **Never rely on the tool's exit code.** applesauce exits 0 even for a missing or
+    unreadable path, and never names the files it skipped. Per-file verdicts come from
+    re-inspecting the filesystem afterwards.
 15. **Render negative savings honestly.** A pre-existing resource fork produces −13.8%;
     the UI must not display that as a gain or break its layout.
 

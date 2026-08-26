@@ -18,10 +18,11 @@ struct ActionBar: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(model.compressibleCount == 0 || !model.afsctoolReady || model.isRunning)
-            .help(model.afsctoolReady
+            .fixedSize()
+            .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
+            .help(model.toolReady
                   ? "Compress \(Fmt.count(model.compressibleCount, "eligible file"))"
-                  : "afsctool isn't available")
+                  : "\(CompressorTool.displayName) isn't available")
 
             Button {
                 model.requestDecompress()
@@ -29,7 +30,8 @@ struct ActionBar: View {
                 Label("Decompress", systemImage: "arrow.up.left.and.arrow.down.right")
             }
             .controlSize(.large)
-            .disabled(model.compressedCount == 0 || !model.afsctoolReady || model.isRunning)
+            .fixedSize()
+            .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
 
             Picker("Mode", selection: $model.mode) {
                 ForEach(CompressionMode.allCases) { m in
@@ -38,7 +40,10 @@ struct ActionBar: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 300)
+            // Flexible, not fixed: a fixed width squeezed the buttons until SwiftUI dropped
+            // their labels down to bare icons when the inspector opened.
+            .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
+            .layoutPriority(-1)
             .disabled(model.isRunning)
             .help(model.mode.explanation)
         }
@@ -119,12 +124,19 @@ private struct OutcomeBanner: View {
                 // can't act on is only half-reported.
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(outcome.failures) { f in
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text((f.path as NSString).lastPathComponent)
-                                    .font(.caption.weight(.medium))
-                                Text(f.message).font(.caption2).foregroundStyle(.secondary)
-                                Text(f.remedy).font(.caption2).foregroundStyle(.tertiary)
+                        // Real problems first; the tool declining a file politely is not one.
+                        ForEach(outcome.realFailures + outcome.skipped) { f in
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: f.kind == .failed
+                                      ? "exclamationmark.triangle.fill" : "minus.circle")
+                                    .foregroundStyle(f.kind == .failed ? .orange : .secondary)
+                                    .font(.caption2)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text((f.path as NSString).lastPathComponent)
+                                        .font(.caption.weight(.medium))
+                                    Text(f.message).font(.caption2).foregroundStyle(.secondary)
+                                    Text(f.remedy).font(.caption2).foregroundStyle(.tertiary)
+                                }
                             }
                         }
                     }
@@ -139,11 +151,11 @@ private struct OutcomeBanner: View {
 
     private var icon: String {
         if outcome.wasCancelled { return "stop.circle" }
-        return outcome.failures.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+        return outcome.realFailures.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
     }
     private var tint: Color {
         if outcome.wasCancelled { return .secondary }
-        return outcome.failures.isEmpty ? .green : .orange
+        return outcome.realFailures.isEmpty ? .green : .orange
     }
 
     private var headline: String {
@@ -163,8 +175,11 @@ private struct OutcomeBanner: View {
         } else {
             parts.append("\(ByteFormat.short(abs(outcome.bytesReclaimed))) returned to disk")
         }
-        if !outcome.failures.isEmpty {
-            parts.append("\(Fmt.count(outcome.failures.count, "file")) skipped")
+        if !outcome.realFailures.isEmpty {
+            parts.append("\(Fmt.count(outcome.realFailures.count, "file")) had problems")
+        }
+        if !outcome.skipped.isEmpty {
+            parts.append("\(outcome.skipped.count) left alone")
         }
         parts.append(String(format: "%.1fs", outcome.duration))
         if outcome.wasCancelled {

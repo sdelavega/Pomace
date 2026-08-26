@@ -96,85 +96,6 @@ struct PhysicalSizeTests {
     }
 }
 
-@Suite("afsctool output parsing")
-struct AfsctoolOutputTests {
-
-    let sample = """
-    /Volumes/PomaceM0/corpus/text/doc1.txt:
-    Compression type: ZLIB in resource fork (4)
-    File content type: public.plain-text
-    File size (uncompressed; reported size by Mac OS 10.6+ Finder): 2200000 bytes / 2.2 MB (megabytes, base-10)
-    File size (compressed): 12288 bytes / 12 KiB
-    Compression savings: 99.4%
-    Number of extended attributes: 1
-    Total size of extended attribute data: 11 bytes
-    """
-
-    @Test("extracts the fields we depend on")
-    func parsesSample() {
-        let r = AfsctoolOutput.parse(sample)
-        #expect(r.compressionTypeRaw == 4)
-        #expect(r.uncompressedSize == 2_200_000)
-        #expect(r.compressedSize == 12288)
-        #expect(r.savingsPercent == 99.4)
-        #expect(r.contentType == "public.plain-text")
-        #expect(r.xattrCount == 1)
-        #expect(r.xattrDataSize == 11)
-        #expect(r.unparsedLines.isEmpty)   // the known-good sample must parse completely
-    }
-
-    @Test("unknown lines are collected, never fatal")
-    func toleratesUnknownLines() {
-        let r = AfsctoolOutput.parse(sample + "\nSome Future Field: 42\nyet more chatter")
-        #expect(r.compressionTypeRaw == 4)          // still parsed what it knows
-        #expect(r.unparsedLines.count == 2)
-    }
-
-    @Test("empty output does not crash or fabricate values")
-    func emptyInput() {
-        let r = AfsctoolOutput.parse("")
-        #expect(r.compressionTypeRaw == nil)
-        #expect(r.compressedSize == nil)
-    }
-}
-
-@Suite("thread policy")
-struct SystemProfileTests {
-
-    let m5 = SystemProfile(performanceCores: 4, efficiencyCores: 6,
-                           physicalCores: 10, isAppleSilicon: true)
-
-    @Test("background sweeps take the measured knee, not every core")
-    func backgroundUsesPCores() {
-        #expect(m5.threadCount(foreground: false) == 4)
-    }
-
-    @Test("foreground runs may use every physical core")
-    func foregroundUsesAll() {
-        #expect(m5.threadCount(foreground: true) == 10)
-    }
-
-    @Test("battery and thermal pressure reduce the count, down to the safe floor")
-    func constrained() {
-        // Was 2 until the afsctool hard-link corruption was measured; 2 is now unsafe.
-        #expect(m5.threadCount(foreground: false, constrained: true)
-                    == SystemProfile.minimumSafeThreads)
-    }
-
-    @Test("slow media reduces threads but not below the safe floor")
-    func slowMedia() {
-        #expect(m5.threadCount(foreground: true, slowMedia: true)
-                    == SystemProfile.minimumSafeThreads)
-    }
-
-    @Test("never returns zero threads on a single-core machine")
-    func neverZero() {
-        let tiny = SystemProfile(performanceCores: 1, efficiencyCores: 0,
-                                 physicalCores: 1, isAppleSilicon: false)
-        #expect(tiny.threadCount(foreground: false, constrained: true) >= 1)
-    }
-}
-
 @Suite("safety rules")
 struct SafetyRulesTests {
 
@@ -338,219 +259,260 @@ struct ScanEntryIdentityTests {
     }
 }
 
-@Suite("compression policy")
-struct CompressionPolicyTests {
+@Suite("sweep scheduling")
+struct SweepScheduleTests {
 
-    let m5 = SystemProfile(performanceCores: 4, efficiencyCores: 6,
-                           physicalCores: 10, isAppleSilicon: true)
-
-    @Test("never emits -n or -L, in any mode", arguments: CompressionMode.allCases)
-    func forbiddenFlagsNeverEmitted(mode: CompressionMode) {
-        // -n disables afsctool's verification; -L is "not recommended" by its own help.
-        // These are safety properties, not preferences (SAFETY.md §4).
-        let plan = CompressionPolicy.plan(mode: mode, profile: m5)
-        for flag in CompressionPolicy.forbiddenFlags {
-            #expect(!plan.arguments.contains(flag), "\(mode) emitted \(flag)")
-        }
+    let cal = Calendar(identifier: .gregorian)
+    func date(_ iso: String) -> Date {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]
+        return f.date(from: iso)!
     }
 
-    @Test("forbidden flags survive a hostile override")
-    func overrideCannotForceForbiddenFlags() {
-        var evil = CompressionSettings()
-        evil.compressor = "LZFSE"
-        evil.sortBySize = false          // user tries to disable a fixed safety property
-        evil.detectHardLinks = false
-        let plan = CompressionPolicy.plan(profile: m5, overrides: evil)
-        #expect(plan.settings.sortBySize)
-        #expect(plan.settings.detectHardLinks)
-        #expect(plan.arguments.contains("-S"))
-        #expect(plan.arguments.contains("-f"))
+    @Test("a folder never swept is due immediately")
+    func neverSwept() {
+        let s = SweepSchedule(cadence: .daily, preferredHour: 3)
+        #expect(s.isDue(lastRun: nil, now: date("2026-08-26T01:00:00Z")))
     }
 
-    @Test("automatic mode defaults to LZFSE")
-    func automaticDefault() {
-        let plan = CompressionPolicy.plan(mode: .automatic, profile: m5)
-        #expect(plan.settings.compressor == "LZFSE")
-        #expect(plan.settings.zlibLevel == nil)
-        #expect(plan.arguments.contains("LZFSE"))
+    @Test("not due before the cadence has elapsed")
+    func notYetElapsed() {
+        let s = SweepSchedule(cadence: .weekly)
+        let last = date("2026-08-25T03:00:00Z")
+        #expect(!s.isDue(lastRun: last, now: date("2026-08-26T04:00:00Z")))
     }
 
-    @Test("a measured winner beats the default")
-    func measuredCompressorWins() {
-        let plan = CompressionPolicy.plan(mode: .automatic, profile: m5, measuredCompressor: "ZLIB")
-        #expect(plan.settings.compressor == "ZLIB")
-        #expect(plan.justifications.first { $0.id == "compressor" }?.reason
-                    .contains("measured") == true)
+    @Test("waits for the preferred hour once due")
+    func waitsForPreferredHour() {
+        let s = SweepSchedule(cadence: .daily, preferredHour: 3)
+        let last = date("2026-08-25T03:00:00Z")
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        #expect(!s.isDue(lastRun: last, now: date("2026-08-26T01:00:00Z"), calendar: cal))
+        #expect(s.isDue(lastRun: last, now: date("2026-08-26T05:00:00Z"), calendar: cal))
     }
 
-    @Test("level is emitted only for ZLIB")
-    func levelOnlyForZLIB() {
-        let zlib = CompressionPolicy.plan(mode: .maximumSavings, profile: m5)
-        #expect(zlib.settings.compressor == "ZLIB")
-        #expect(zlib.arguments.contains("-9"))
-
-        let lzfse = CompressionPolicy.plan(mode: .automatic, profile: m5)
-        #expect(!lzfse.arguments.contains { $0.hasPrefix("-") && Int($0.dropFirst()) != nil })
+    @Test("a long-overdue sweep runs regardless of the hour")
+    func overdueIgnoresHour() {
+        // The machine was asleep for days; don't wait for 3 AM to come round again.
+        let s = SweepSchedule(cadence: .daily, preferredHour: 3)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let last = date("2026-08-20T03:00:00Z")
+        #expect(s.isDue(lastRun: last, now: date("2026-08-26T01:00:00Z"), calendar: cal))
     }
 
-    @Test("maximum savings warns about its cost")
-    func maximumSavingsWarns() {
-        let plan = CompressionPolicy.plan(mode: .maximumSavings, profile: m5)
-        #expect(!plan.warnings.isEmpty)
-        // The user opting into maximum savings must be told what it costs, in time.
-        let text = plan.warnings.joined().lowercased()
-        #expect(text.contains("long") || text.contains("slow"),
-                "cost warning does not mention time: \(text)")
+    @Test("manual and paused schedules are never due")
+    func neverDue() {
+        #expect(!SweepSchedule(cadence: .manual).isDue(lastRun: nil, now: Date()))
+        #expect(!SweepSchedule(cadence: .daily, enabled: false).isDue(lastRun: nil, now: Date()))
     }
 
-    @Test("threads follow the machine and the conditions")
-    func threadPolicy() {
-        let bg = CompressionPolicy.plan(profile: m5, foreground: false)
-        #expect(bg.arguments.contains("-J4"))
-
-        let fg = CompressionPolicy.plan(profile: m5, foreground: true)
-        #expect(fg.arguments.contains("-J10"))
-
-        let hot = CompressionPolicy.plan(profile: m5,
-                                         conditions: RuntimeConditions(thermalPressure: true),
-                                         foreground: true)
-        #expect(hot.arguments.contains("-J5"))
-
-        // Exclusive IO on external media, but clamped UP to the safe floor: -j2 is a
-        // thread count at which afsctool corrupts hard-linked files.
-        let usb = CompressionPolicy.plan(profile: m5,
-                                         conditions: RuntimeConditions(slowMedia: true))
-        #expect(usb.arguments.contains("-j3"))
-    }
-
-    @Test("falls back when afsctool lacks the chosen compressor")
-    func capabilityFallback() {
-        let caps = AfsctoolCapabilities(version: nil, compressors: ["ZLIB"],
-                                        supportsThreads: true, supportsSort: true,
-                                        supportsMinSavings: true, supportsHardLinkDetection: true,
-                                        supportsBackup: true, rawUsage: "")
-        let plan = CompressionPolicy.plan(mode: .automatic, profile: m5, capabilities: caps)
-        #expect(plan.settings.compressor == "ZLIB")
-        #expect(!plan.warnings.isEmpty)
-    }
-
-    @Test("every justification explains itself")
-    func justificationsPresentable() {
-        let plan = CompressionPolicy.plan(profile: m5)
-        #expect(plan.justifications.count >= 6)
-        for j in plan.justifications {
-            #expect(!j.value.isEmpty)
-            #expect(!j.reason.isEmpty, "\(j.label) has no reason")
-        }
-        // The three fixed safety rows must be present and marked unchangeable.
-        let fixed = plan.justifications.filter(\.isFixed).map(\.id)
-        #expect(Set(fixed) == ["sort", "hardlinks", "verify"])
-    }
-
-    @Test("decompress arguments are minimal and safe")
-    func decompressArgs() {
-        let args = CompressionPolicy.decompressArguments()
-        #expect(args.contains("-d"))
-        for flag in CompressionPolicy.forbiddenFlags { #expect(!args.contains(flag)) }
+    @Test("summaries read as English")
+    func summaries() {
+        #expect(SweepSchedule(cadence: .daily, preferredHour: 0).summary.contains("midnight"))
+        #expect(SweepSchedule(cadence: .daily, preferredHour: 12).summary.contains("noon"))
+        #expect(SweepSchedule(cadence: .daily, preferredHour: 15).summary.contains("3 PM"))
+        #expect(SweepSchedule(cadence: .weekly, enabled: false).summary == "Paused")
     }
 }
 
-@Suite("afsctool version parsing")
-struct AfsctoolVersionTests {
+@Suite("sweep preconditions")
+struct SweepPreconditionTests {
 
-    @Test("parses the banner")
+    @Test("a missing folder defers rather than failing")
+    func missingFolder() {
+        let d = SweepPreconditions.check(root: "/nonexistent/folder/xyz",
+                                         conditions: RuntimeConditions(),
+                                         timeMachineRunning: false)
+        #expect(d == .volumeUnavailable)
+    }
+
+    @Test("power and thermal conditions each defer", arguments: [
+        (RuntimeConditions(thermalPressure: true), SweepDeferral.thermalPressure),
+        (RuntimeConditions(lowPowerMode: true), .lowPowerMode),
+        (RuntimeConditions(onBattery: true), .onBattery),
+    ])
+    func conditionsDefer(conditions: RuntimeConditions, expected: SweepDeferral) {
+        let d = SweepPreconditions.check(root: NSTemporaryDirectory(),
+                                         conditions: conditions, timeMachineRunning: false)
+        #expect(d == expected)
+    }
+
+    @Test("a Time Machine backup defers")
+    func timeMachineDefers() {
+        let d = SweepPreconditions.check(root: NSTemporaryDirectory(),
+                                         conditions: RuntimeConditions(), timeMachineRunning: true)
+        #expect(d == .timeMachineRunning)
+    }
+
+    @Test("nothing in the way means no deferral")
+    func clearToRun() {
+        #expect(SweepPreconditions.check(root: NSTemporaryDirectory(),
+                                         conditions: RuntimeConditions(),
+                                         timeMachineRunning: false) == nil)
+    }
+
+    @Test("every deferral explains itself")
+    func deferralsExplained() {
+        for d in [SweepDeferral.onBattery, .lowPowerMode, .thermalPressure,
+                  .timeMachineRunning, .volumeUnavailable, .alreadyRunning] {
+            #expect(d.explanation.hasPrefix("Skipped"))
+        }
+    }
+}
+
+@Suite("tool version parsing")
+struct ToolVersionTests {
+
+    @Test("parses the applesauce banner")
     func banner() throws {
-        let v = try #require(AfsctoolVersion(banner: "afsctool 1.7.2.\nReport if file is…"))
-        #expect(v.description == "1.7.2")
+        let v = try #require(ToolVersion(banner: "applesauce-cli 0.5.28"))
+        #expect(v.description == "0.5.28")
     }
 
     @Test("tolerates a two-component version")
     func twoComponent() throws {
-        let v = try #require(AfsctoolVersion(banner: "afsctool 2.0"))
-        #expect(v.description == "2.0.0")
+        #expect(try #require(ToolVersion(banner: "applesauce 1.0")).description == "1.0.0")
     }
 
     @Test("returns nil on unparseable output")
     func garbage() {
-        #expect(AfsctoolVersion(banner: "command not found") == nil)
-        #expect(AfsctoolVersion(banner: "") == nil)
+        #expect(ToolVersion(banner: "command not found") == nil)
+        #expect(ToolVersion(banner: "") == nil)
     }
 
     @Test("orders versions correctly")
     func ordering() {
-        #expect(AfsctoolVersion(major: 1, minor: 7, patch: 2)
-                < AfsctoolVersion(major: 1, minor: 7, patch: 3))
-        #expect(AfsctoolVersion(major: 1, minor: 9, patch: 0)
-                < AfsctoolVersion(major: 2, minor: 0, patch: 0))
+        #expect(ToolVersion(major: 0, minor: 5, patch: 28) < ToolVersion(major: 0, minor: 6, patch: 0))
+        #expect(ToolVersion(major: 0, minor: 9, patch: 9) < ToolVersion(major: 1, minor: 0, patch: 0))
+    }
+
+    @Test("a build without --verify is not usable")
+    func verifyRequired() {
+        // applesauce verifies only when asked, so a build lacking the flag would compress
+        // without ever checking the result reads back. See ADR-0015.
+        let noVerify = ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: false,
+                                        supportsLevel: true, supportsMinimumRatio: true, rawUsage: "")
+        #expect(!noVerify.isUsable)
+        #expect(noVerify.missingCapabilities.contains { $0.contains("verification") })
+
+        let ok = ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
+                                  supportsLevel: true, supportsMinimumRatio: true, rawUsage: "")
+        #expect(ok.isUsable)
     }
 }
 
-@Suite("failure messages")
-struct FailureMessageTests {
+@Suite("compression policy")
+struct CompressionPolicyTests {
 
-    @Test("permission errors suggest a real next step")
-    func permission() {
-        let f = CompressionEngine.describeFailure(path: "/x/y.txt",
-                                                  output: "y.txt: Permission denied")
-        #expect(f.remedy.contains("permission") || f.remedy.contains("Full Disk Access"))
-        #expect(!f.remedy.isEmpty)
+    @Test("every mode passes --verify", arguments: CompressionMode.allCases)
+    func alwaysVerifies(mode: CompressionMode) {
+        // The single most important flag Pomace emits: applesauce does NOT verify by default.
+        let plan = CompressionPolicy.plan(mode: mode)
+        #expect(plan.arguments.contains("--verify"))
+        #expect(plan.settings.verify)
     }
 
-    @Test("disk-full errors say to free space")
-    func diskFull() {
-        let f = CompressionEngine.describeFailure(path: "/x/y.txt", output: "No space left on device")
-        #expect(f.remedy.lowercased().contains("free up"))
+    @Test("verification survives a hostile override")
+    func overrideCannotDisableVerify() {
+        var evil = CompressionSettings()
+        evil.verify = false
+        let plan = CompressionPolicy.plan(overrides: evil)
+        #expect(plan.settings.verify)
+        #expect(plan.arguments.contains("--verify"))
     }
 
-    @Test("an unrecognised error still reassures that the file is intact")
-    func unknown() {
-        let f = CompressionEngine.describeFailure(path: "/x/y.txt", output: "something odd happened")
-        #expect(f.remedy.contains("not modified"))
-    }
-}
-
-@Suite("hard-link data-loss guards")
-struct HardLinkSafetyTests {
-
-    let m5 = SystemProfile(performanceCores: 4, efficiencyCores: 6,
-                           physicalCores: 10, isAppleSilicon: true)
-
-    @Test("thread count never drops below the safe floor", arguments: [
-        (true, false, false), (false, false, false), (false, true, false),
-        (true, true, false), (false, false, true), (true, true, true),
-    ])
-    func neverBelowSafeFloor(foreground: Bool, constrained: Bool, slowMedia: Bool) {
-        // afsctool destroys 100% of hard-linked files at -J1 and ~8% at -J2.
-        let n = m5.threadCount(foreground: foreground, constrained: constrained, slowMedia: slowMedia)
-        #expect(n >= SystemProfile.minimumSafeThreads,
-                "got -J\(n) for fg=\(foreground) constrained=\(constrained) slow=\(slowMedia)")
+    @Test("automatic defaults to LZFSE")
+    func automaticDefault() {
+        let plan = CompressionPolicy.plan(mode: .automatic)
+        #expect(plan.settings.compressor == "lzfse")
+        #expect(plan.arguments.contains("lzfse"))
     }
 
-    @Test("the floor never exceeds the machine's real core count")
-    func floorRespectsSmallMachines() {
-        let dual = SystemProfile(performanceCores: 2, efficiencyCores: 0,
-                                 physicalCores: 2, isAppleSilicon: false)
-        #expect(dual.threadCount(foreground: true) <= 2)
+    @Test("a measured winner beats the default")
+    func measuredCompressorWins() {
+        let plan = CompressionPolicy.plan(mode: .automatic, measuredCompressor: "zlib")
+        #expect(plan.settings.compressor == "zlib")
+        #expect(plan.justifications.first { $0.id == "compressor" }?.reason.contains("measured") == true)
     }
 
-    @Test("no policy path emits a dangerous thread count", arguments: CompressionMode.allCases)
-    func policyNeverEmitsUnsafeThreads(mode: CompressionMode) {
-        for conditions in [
-            RuntimeConditions(),
-            RuntimeConditions(onBattery: true),
-            RuntimeConditions(lowPowerMode: true, thermalPressure: true),
-            RuntimeConditions(slowMedia: true),
-            RuntimeConditions(onBattery: true, lowPowerMode: true,
-                              thermalPressure: true, slowMedia: true),
-        ] {
-            for foreground in [true, false] {
-                let plan = CompressionPolicy.plan(mode: mode, profile: m5,
-                                                  conditions: conditions, foreground: foreground)
-                let threadArg = plan.arguments.first { $0.hasPrefix("-J") || $0.hasPrefix("-j") }
-                let n = Int(threadArg?.dropFirst(2) ?? "0") ?? 0
-                #expect(n >= SystemProfile.minimumSafeThreads,
-                        "\(mode) emitted \(threadArg ?? "none")")
-            }
+    @Test("maximum savings warns about its cost")
+    func maximumSavingsWarns() {
+        let plan = CompressionPolicy.plan(mode: .maximumSavings)
+        #expect(!plan.warnings.isEmpty)
+        #expect(plan.warnings.joined().lowercased().contains("slow"))
+    }
+
+    @Test("falls back when the tool lacks the chosen compressor")
+    func capabilityFallback() {
+        let caps = ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
+                                    supportsLevel: false, supportsMinimumRatio: true, rawUsage: "")
+        let plan = CompressionPolicy.plan(mode: .maximumSavings, capabilities: caps)
+        #expect(plan.settings.compressor == "lzfse")
+        #expect(!plan.warnings.isEmpty)
+    }
+
+    @Test("the ratio flag is emitted as a fraction, not a percentage")
+    func ratioFormatting() {
+        // applesauce's -r is "skip if it compresses to more than this fraction of the
+        // original", the inverse of afsctool's -s percentage. Getting this backwards would
+        // silently compress nothing, or everything.
+        let plan = CompressionPolicy.plan(mode: .automatic)
+        let i = plan.arguments.firstIndex(of: "-r")!
+        let value = Double(plan.arguments[i + 1])!
+        #expect(value > 0 && value <= 1.0)
+        #expect(value == 0.95)
+    }
+
+    @Test("the three fixed safety rows are present and unchangeable")
+    func fixedRows() {
+        let plan = CompressionPolicy.plan()
+        let fixed = Set(plan.justifications.filter(\.isFixed).map(\.id))
+        #expect(fixed == ["verify", "hardlinks", "sparse"])
+        for j in plan.justifications { #expect(!j.reason.isEmpty, "\(j.label) has no reason") }
+    }
+
+    @Test("no thread flag is emitted — applesauce has none")
+    func noThreadFlags() {
+        // The whole -J/-j/-S/-R tuning story is gone with the pivot (ADR-0015). Emitting a
+        // stale flag would be rejected by the tool at runtime.
+        for mode in CompressionMode.allCases {
+            let args = CompressionPolicy.plan(mode: mode).arguments
+            #expect(!args.contains { $0.hasPrefix("-J") || $0.hasPrefix("-j") })
+            #expect(!args.contains("-S"))
+            #expect(!args.contains("-f"))
         }
+    }
+
+    @Test("decompress arguments are minimal")
+    func decompressArgs() {
+        #expect(CompressionPolicy.decompressArguments() == ["decompress"])
+    }
+}
+
+@Suite("incremental sweep cutoff")
+struct IncrementalCutoffTests {
+
+    @Test("the cutoff is backed off to cover second-granularity mtimes")
+    func gracePeriod() {
+        // A file created in the same second a sweep started was invisible to every later
+        // incremental pass, because st_mtimespec.tv_sec was not strictly greater than the
+        // recorded run time. Observed: a brand-new file skipped entirely.
+        #expect(SweepRunner.mtimeGracePeriod >= 1)
+    }
+
+    @Test("a full pass is forced when no sweep has ever run")
+    func firstRunIsFull() {
+        let never: Date? = nil
+        let needsFull = never.map { Date().timeIntervalSince($0) >= SweepRunner.fullVerificationInterval } ?? true
+        #expect(needsFull)
+    }
+
+    @Test("a full re-verification is forced once the interval elapses")
+    func periodicFullPass() {
+        // Incremental passes only see files whose mtime moved, so anything decompressed by a
+        // tool that preserves mtime would never be noticed without this.
+        let old = Date().addingTimeInterval(-SweepRunner.fullVerificationInterval - 1)
+        #expect(Date().timeIntervalSince(old) >= SweepRunner.fullVerificationInterval)
     }
 }

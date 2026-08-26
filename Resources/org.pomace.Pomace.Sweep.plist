@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>org.pomace.Pomace.Sweep</string>
+
+  <!-- Relative to the app bundle, so Pomace works wherever it is installed. -->
+  <key>BundleProgram</key><string>Contents/MacOS/Pomace</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>Contents/MacOS/Pomace</string>
+    <string>--sweep-all</string>
+  </array>
+
+  <!-- The agent carries no per-directory schedule: it wakes hourly, asks the store what is
+       due, and usually exits immediately. The plist lives inside a signed bundle and cannot
+       be rewritten when a schedule changes without breaking the signature. See ADR-0014. -->
+  <key>StartInterval</key><integer>3600</integer>
+
+  <!-- A compression sweep must never be something the user notices. -->
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+  <key>LowPriorityBackgroundIO</key><true/>
+  <key>Nice</key><integer>10</integer>
+
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>AbandonProcessGroup</key><false/>
+</dict>
+</plist>
