@@ -48,7 +48,7 @@ These are hard exclusions — **not** user-overridable in v1.
 | Sparse files and sparse bundles | **Compression materializes them.** Measured: 10 MB sparse file went from 0 bytes on disk to 32,768. Always a net loss, and our savings math inverts. | **[verified 2026-08-26]** |
 | Cloud-sync directories — iCloud Drive, Dropbox, Google Drive, OneDrive | Modifying every file can trigger a full re-upload of the directory; may also conflict with dataless/evicted placeholder files | [expected] |
 | Time Machine backup volumes and local snapshots | Backup integrity; the volume format is not ours to touch | [expected] |
-| **Two paths sharing one inode, in a single afsctool run** | **Destroys file contents.** afsctool truncates hard-linked files to zero bytes — 100% of them at `-J1`, ~8% at `-J2`. `-f` does not prevent it. Pomace submits one path per inode. | **[verified 2026-08-26]** — see [M2-FINDINGS](M2-FINDINGS.md) |
+| **Two paths sharing one inode, in a single afsctool run** | **Destroys file contents.** afsctool truncates hard-linked files to zero bytes — 100% at `-J1` even with `-f`, intermittently at `-J2`. (A directory walk without `-f` is a separate 100%-loss mode.) Pomace submits one path per inode, which is sufficient at any thread count. | **[verified 2026-08-26]** — see [M2-FINDINGS](M2-FINDINGS.md) |
 | Files with an existing non-decmpfs resource fork | afsctool's compression path uses the resource fork; a pre-existing one is a conflict | [expected] |
 | Anything currently open for writing by another process | Race between afsctool and the writer | [expected] |
 

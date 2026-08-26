@@ -23,27 +23,49 @@ sha256 = e3b0c44298fc1c14…   ← the hash of empty input
 
 ## 2. Reproduction
 
-Ten sets of three hard-linked files, `afsctool -c -T LZFSE -S -f`, five repeats each:
+Ten sets of three hard-linked files each. Counts are files destroyed, on an internal APFS
+volume (a sparse disk image behaves identically).
 
-| `-J` | Sets destroyed |
+### Mode A — a directory walk without `-f`. Deterministic, 100%.
+
+| Command | Destroyed |
 |---|---|
-| **1** | **50 / 50 — every single one** |
-| 2 | 4 / 50 |
-| 3 | 0 / 50 |
-| 4, 6, 8, 10 | 0 / 50 |
+| `afsctool -c <dir>` | **30 / 30** |
+| `afsctool -c -S <dir>` | **30 / 30** |
+| `afsctool -c -J1 <dir>` | **30 / 30** |
+| `afsctool -c -f <dir>` | 0 / 30 |
+| `afsctool -c -S -f <dir>` | 0 / 30 |
 
-**Single-threaded compression destroys 100% of hard-linked files.** Two threads corrupt
-roughly 8% of them, nondeterministically.
+**The plainest invocation there is — `afsctool -c <dir>` — destroys every hard-linked file
+under it.** `-f` prevents this mode entirely.
 
-Things that do **not** prevent it:
+### Mode B — an explicit file list at one thread. Deterministic, 100%, and `-f` does not help.
 
-- **`-f`** (afsctool's own hard-link detection) — 4/50 destroyed with it, 4/50 without.
-- **Passing a directory** instead of explicit paths — 5/50 destroyed. This is the ordinary
-  way people invoke afsctool.
+| Command | Destroyed |
+|---|---|
+| `afsctool -c -J1 -f <files…>` | **30 / 30** |
+| `afsctool -c -j1 -f <files…>` | **10 / 10** |
+| `afsctool -c -f <files…>` *(no `-J`)* | 0 / 30 |
 
-Within a single invocation given all three paths at a high thread count, afsctool reports
-`1 of 3 processed files`, so the detection logic clearly exists. It just does not hold at
-low concurrency.
+Note that the default and `-J1` are **not** the same code path: omitting the flag is safe,
+asking for exactly one thread is not.
+
+### Mode C — an explicit file list at two threads. Intermittent, rate unstable.
+
+Observed between 0 and 31 per 100 across samples of the *same* command, so treat the rate as
+"sometimes" rather than any particular figure. `-J4` and above showed no failures in every
+sample taken.
+
+### Affects every compressor
+
+At `-J1` with an explicit list: ZLIB 10/10, LZVN 10/10, LZFSE 10/10.
+
+### Correction
+
+An earlier draft of this document claimed "`-f` does not prevent it" and "passing a
+directory fails too" as general statements. Both came from conflating the two modes in one
+test run. `-f` fully prevents Mode A; it does not prevent Mode B. The matrices above replace
+those claims.
 
 ## 3. Why it nearly shipped
 
@@ -62,32 +84,42 @@ the app detected `/Volumes/…` as external media and dropped to `-j2` while the
 
 **Never hand afsctool two paths that share an inode.**
 
-Pomace already passes explicit file lists rather than directories, so it can enforce this:
-the engine collapses paths by `(linkCount > 1, inode)` and submits exactly one per inode.
-This is both safe and complete — hard links *are* the same file, so compressing one link
-compresses all of them. Verified: the siblings come back `compressed` without ever being
-named on the command line.
+Pomace passes explicit file lists rather than directories, so it can enforce this: the engine
+collapses paths by `(linkCount > 1, inode)` and submits exactly one per inode. This is both
+safe and complete — hard links *are* the same file, so compressing one link compresses all of
+them. The siblings come back `compressed` without ever appearing on a command line.
 
-Validated at the worst-case `-J2`: **0 failures in 100 sets**, then 0 failures across 90 sets
-in six end-to-end engine runs on fresh disk images.
+The rule is sufficient on its own, at the worst possible settings: **0 failures in 300 sets**
+across `-J1`, `-j1`, and `-J2` — including the `-J1` configuration that otherwise destroys
+100%. Then 0 across 90 sets in six end-to-end engine runs on fresh disk images, and through
+the GUI path that originally caused the loss.
 
-A second, independent guard: `SystemProfile.minimumSafeThreads = 3`. No policy path may emit
-a thread count below it, and a test asserts this across every mode and every combination of
-runtime conditions. The inode rule is the actual fix; the floor exists so that one missed
-path cannot land in the 100%-loss case.
+Two further guards, neither load-bearing:
+
+- **`SystemProfile.minimumSafeThreads = 3`.** No policy path may emit fewer, asserted across
+  every mode and every combination of runtime conditions.
+- **`-f` is always passed**, which independently closes Mode A.
 
 ## 5. Consequences beyond Pomace
 
-Worth reporting upstream. In the meantime, anyone running afsctool by hand should know:
+Drafted for upstream in [`upstream/afsctool-hardlink-issue.md`](../upstream/afsctool-hardlink-issue.md),
+with a self-contained reproduction at [`upstream/repro-hardlink-loss.sh`](../upstream/repro-hardlink-loss.sh).
+**Not yet filed** — awaiting review.
 
-- `afsctool -c -J1 <anything containing hard links>` **will** destroy those files.
-- `-J2` will corrupt some of them, unpredictably.
-- `-f` does not protect you, and neither does passing a directory.
-- Three or more threads showed no failures in 250 sampled sets — which is evidence of
-  safety, not proof of it.
+In Mode C afsctool also crashes (`SIGBUS` in `_platform_memcmp` under `compressFile`, on a
+worker thread) in roughly 12 of 15 runs, which suggests the truncation and the crash share a
+cause: verification comparing against a mapping another worker has just invalidated.
 
-Hard links are common in the places people most want to compress: Time Machine local
-snapshots, `node_modules` with pnpm or npm links, Homebrew Cellar, and any tree built with
+For anyone running afsctool by hand:
+
+- **Always pass `-f`.** Without it, `afsctool -c <dir>` destroys every hard-linked file in
+  the tree. This is the default invocation and the one most documentation shows.
+- **Never pass `-J1` or `-j1`** with an explicit file list. `-f` will not save you.
+- **`-J2` is unsafe intermittently.** Use four or more threads, or omit the flag.
+- Omitting `-J` entirely is safe; asking for one thread is not.
+
+Hard links are common in exactly the trees people most want to compress: Time Machine local
+snapshots, `node_modules` under pnpm or npm links, Homebrew's Cellar, and anything built with
 `cp -al`.
 
 ## 6. Method note
