@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Xcode
+build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Signing / secrets — never commit
+*.p12
+*.mobileprovision
+*.cer
+ExportOptions.plist
+.env
+
+# Local scratch
+scratch/
+*.sparseimage
+*.dmg
+
+# Built spike artifacts — regenerate with spikes/tcc/build.sh
+spikes/tcc/*.app/
