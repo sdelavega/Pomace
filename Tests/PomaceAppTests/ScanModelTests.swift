@@ -14,6 +14,32 @@ struct ScanModelTests {
         #expect(condition(), "Timed out waiting for the model or fake compressor")
     }
 
+    @Test("administrator compression requires confirmation and can be cancelled")
+    func administratorConfirmation() {
+        let model = ScanModel(store: nil, installation: ToolInstallation(
+            source: .userConfigured("/opt/homebrew/bin/applesauce"), capabilities:
+                ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
+                                 supportsLevel: false, supportsMinimumRatio: true, rawUsage: "")))
+        model.selectedPath = "/Applications/Example.app"
+        var result = ScanResult()
+        result.root = model.selectedPath!
+        result.entries = [ScanEntry(inode: 1, path: result.root + "/Contents/file", logicalSize: 4096,
+                                   physicalSize: 4096, isCompressed: false, type: nil, reasons: [.applicationBundle])]
+        model.state = .done(result)
+        model.useAdministratorPrivileges = true
+        model.startCompress()
+        #expect(model.confirmingAdministrator)
+        #expect(!model.isRunning)
+        #expect(model.administratorConfirmation.contains("/Applications/Example.app"))
+        #expect(model.administratorConfirmation.contains("/opt/homebrew/bin/applesauce"))
+        model.cancelAdministrator()
+        #expect(!model.confirmingAdministrator)
+        #expect(!model.isRunning)
+        #expect(model.administratorConfirmation.isEmpty)
+        model.confirmAdministrator() // A cancelled request cannot be replayed.
+        #expect(!model.isRunning)
+    }
+
     @Test("folder switching reuses results, while Rescan fetches new files")
     func recentScans() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PomaceModel-\(UUID())")

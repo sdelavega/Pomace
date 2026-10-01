@@ -442,3 +442,26 @@ via atomic replacement rather than modifying in place.
 **The afsctool findings stay.** [M2-FINDINGS](M2-FINDINGS.md) and the
 [upstream issue draft](../upstream/afsctool-hardlink-issue.md) remain in the repository. The
 bug is real, unfixed, and worth reporting whether or not Pomace still uses the tool.
+
+
+## ADR-0016: Interactive administrator compression
+
+**Status:** Accepted · **Date:** 2026-10-01
+
+**Decision.** Offer per-run administrator access for scanned files under `/Applications`,
+`/opt/homebrew`, and `/usr/local`. Confirm the folder, file count, and exact compressor
+before using [macOS administrator authorization](https://developer.apple.com/library/archive/technotes/tn2065/_index.html).
+Only the compressor is elevated. Keep the UI, native scanner, and scheduled sweeps running
+as the normal user; never store passwords, change sudoers, or install a privileged service.
+
+**Constraints.** Pass arguments as argv to a fixed AppleScript that shell-quotes each
+argument. Resolve target paths and reapply the existing safety exclusions before mutation;
+only explicit regular files inside the confirmed root may be passed. Preserve `--verify`
+for compression. A cancelled authorization starts no new batch and keeps prior results.
+Stop still waits for an active batch. Do not retry later batches after invocation errors.
+
+**Tradeoffs.** macOS may request authorization again for later batches, particularly in
+long runs. Native scanning still requires normal-user access to the directory. App Store
+and Adobe applications remain excluded. This feature grants the disclosed external
+compressor administrator access for the operation; it does not authenticate or sandbox
+that user-selected executable.

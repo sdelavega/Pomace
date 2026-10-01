@@ -1,6 +1,6 @@
 # Pomace — Safety Rules
 
-**Status:** Draft · **Last updated:** 2026-08-26
+**Status:** Draft · **Last updated:** 2026-10-01
 
 **Read this before writing any code that mutates files.** Pomace's entire value depends on
 users trusting it with directories they care about. One data-loss report ends the project.
@@ -79,6 +79,17 @@ Presented with a clear explanation and an explicit opt-in.
 ## 4. Operational rules
 
 These are requirements on Pomace's own implementation:
+
+- **Administrator access is interactive and scoped.** The user must opt in and confirm
+  the folder, file count, and compressor path. Only the compressor is elevated, using
+  macOS authorization; Pomace never handles passwords or changes sudoers. Allowed roots
+  are `/Applications`, `/opt/homebrew`, and `/usr/local`, including subdirectories.
+  Resolve paths before applying the same safety exclusions and never hand the elevated
+  compressor a directory, symlink, or file outside the confirmed root. Refuse elevated
+  compression if native inspection cannot determine whether an uncompressed file has a
+  resource fork. Scheduled sweeps
+  do not request elevation. Cancelling authorization starts no further batches and
+  preserves the outcome of earlier work.
 
 1. **Always pass `--verify`.** applesauce verifies only when asked — the inverse of
    afsctool, where verification was on unless you passed `-n`. A build of the tool without

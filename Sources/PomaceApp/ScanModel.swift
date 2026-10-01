@@ -32,6 +32,17 @@ final class ScanModel {
     var overrides: CompressionSettings?
     var installation: ToolInstallation?
     var confirmingDecompress = false
+    var confirmingAdministrator = false
+    var useAdministratorPrivileges = false
+    private struct PreparedRun {
+        let operation: CompressionOperation
+        let root: String
+        let installation: ToolInstallation
+        let paths: [String]
+        let plan: CompressionPlan
+        let executor: CompressionExecutor
+    }
+    private var pendingAdministratorRun: PreparedRun?
     var showingSettings = false
     var showingInspector = false
     var showingOnboarding = false
@@ -208,6 +219,31 @@ final class ScanModel {
         start(.decompress)
     }
 
+    var administratorAvailable: Bool {
+        selectedPath.map { AdministratorAccess.supports(root: $0) } ?? false
+    }
+
+    var administratorConfirmation: String {
+        guard let run = pendingAdministratorRun else { return "" }
+        return "\(run.operation == .compress ? "Compress" : "Decompress") \(Fmt.count(run.paths.count, "scanned file")) in \(run.root)?\n\nThe compressor at \(run.installation.path) will run as administrator. macOS will ask for authorization; Pomace does not store your password. Safety exclusions still apply."
+    }
+
+    func confirmAdministrator() {
+        confirmingAdministrator = false
+        guard let run = pendingAdministratorRun else { return }
+        pendingAdministratorRun = nil
+        guard run.root == selectedPath else {
+            runState = .refused("The selected folder changed. Start the operation again.")
+            return
+        }
+        launch(run)
+    }
+
+    func cancelAdministrator() {
+        confirmingAdministrator = false
+        pendingAdministratorRun = nil
+    }
+
     private func start(_ op: CompressionOperation) {
         guard !isRunning, !isSweeping,
               let root = selectedPath, let install = installation else { return }
@@ -218,7 +254,25 @@ final class ScanModel {
                 : "Nothing here is compressed.")
             return
         }
-        let plan = self.plan
+        let run = PreparedRun(operation: op, root: root, installation: install,
+                              paths: paths, plan: self.plan,
+                              executor: useAdministratorPrivileges ? .administrator : .standard)
+        if useAdministratorPrivileges {
+            guard administratorAvailable else {
+                runState = .refused("Administrator access is available only for /Applications, /opt/homebrew, and /usr/local.")
+                return
+            }
+            pendingAdministratorRun = run
+            confirmingAdministrator = true
+            return
+        }
+        launch(run)
+    }
+
+    private func launch(_ run: PreparedRun) {
+        guard !isRunning, !isSweeping else { return }
+        let op = run.operation, root = run.root
+        let install = run.installation, paths = run.paths, plan = run.plan
         let cancellation = CompressionCancellation()
         runCancellation = cancellation
         isStopping = false
@@ -228,7 +282,8 @@ final class ScanModel {
             guard let self else { return }
             for await event in CompressionEngine.run(operation: op, paths: paths, root: root,
                                                      installation: install, plan: plan,
-                                                     logger: self.log, cancellation: cancellation) {
+                                                     logger: self.log, cancellation: cancellation,
+                                                     executor: run.executor) {
                 if Task.isCancelled { return }
                 switch event {
                 case .started(let p), .progress(let p):
@@ -288,6 +343,8 @@ final class ScanModel {
             schedulesByPath[path] = SweepSchedule(cadence: .manual)
         }
         selectedPath = path
+        useAdministratorPrivileges = false
+        cancelAdministrator()
         loadSchedule(for: path)
         scan(path)
     }
@@ -303,6 +360,8 @@ final class ScanModel {
     func select(_ path: String) {
         guard selectedPath != path else { return }
         selectedPath = path
+        useAdministratorPrivileges = false
+        cancelAdministrator()
         cancelScan()
         state = .idle
         loadSchedule(for: path)

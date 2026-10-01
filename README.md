@@ -52,6 +52,20 @@ Pomace is deliberately cautious:
 
 Read the [safety rules](docs/SAFETY.md) before using Pomace on data you cannot replace.
 
+### Protected Homebrew and application files
+
+When scanning `/Applications`, `/opt/homebrew`, or `/usr/local` (or a folder inside one
+of them), enable **Use administrator privileges** before compressing or decompressing
+protected files. Pomace confirms the selected folder, scanned file count, and exact
+compressor path. macOS handles administrator authorization; Pomace never asks for or
+stores your password. Long runs may require authorization again for a later batch.
+
+Only the compressor runs with elevated access. Scans, the app, and scheduled sweeps keep
+running as your normal user. This option does not bypass safety exclusions, macOS privacy
+controls, or a read-only volume. Mac App Store and Adobe applications remain excluded.
+Stop lets the active batch finish safely; cancel the macOS authorization dialog to stop
+before that batch starts.
+
 ## Requirements
 
 - macOS 14 Sonoma or later

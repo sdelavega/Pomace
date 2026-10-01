@@ -10,42 +10,51 @@ struct ActionBar: View {
     @Bindable var model: ScanModel
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button {
-                model.startCompress()
-            } label: {
-                Label("Compress", systemImage: "arrow.down.right.and.arrow.up.left")
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .fixedSize()
-            .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
-            .help(model.toolReady
-                  ? "Compress \(Fmt.count(model.compressibleCount, "eligible file"))"
-                  : "\(CompressorTool.displayName) isn't available")
-
-            Button {
-                model.requestDecompress()
-            } label: {
-                Label("Decompress", systemImage: "arrow.up.left.and.arrow.down.right")
-            }
-            .controlSize(.large)
-            .fixedSize()
-            .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
-
-            Picker("Mode", selection: $model.mode) {
-                ForEach(CompressionMode.allCases) { m in
-                    Text(m.rawValue).tag(m)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Button {
+                    model.startCompress()
+                } label: {
+                    Label("Compress", systemImage: "arrow.down.right.and.arrow.up.left")
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .fixedSize()
+                .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
+                .help(model.toolReady
+                      ? "Compress \(Fmt.count(model.compressibleCount, "eligible file"))"
+                      : "\(CompressorTool.displayName) isn't available")
+
+                Button {
+                    model.requestDecompress()
+                } label: {
+                    Label("Decompress", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .controlSize(.large)
+                .fixedSize()
+                .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
+
+                Picker("Mode", selection: $model.mode) {
+                    ForEach(CompressionMode.allCases) { m in
+                        Text(m.rawValue).tag(m)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                // Flexible, not fixed: a fixed width squeezed the buttons until SwiftUI dropped
+                // their labels down to bare icons when the inspector opened.
+                .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
+                .layoutPriority(-1)
+                .disabled(model.isRunning)
+                .help(model.mode.explanation)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            // Flexible, not fixed: a fixed width squeezed the buttons until SwiftUI dropped
-            // their labels down to bare icons when the inspector opened.
-            .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
-            .layoutPriority(-1)
-            .disabled(model.isRunning)
-            .help(model.mode.explanation)
+            if model.administratorAvailable {
+                Toggle("Use administrator privileges", isOn: $model.useAdministratorPrivileges)
+                    .toggleStyle(.checkbox)
+                    .font(.caption)
+                    .disabled(model.isRunning || model.isSweeping)
+                    .help("Authorize compression or decompression of protected Homebrew and application files. macOS handles authentication.")
+            }
         }
     }
 }

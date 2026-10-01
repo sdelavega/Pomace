@@ -33,6 +33,16 @@ struct ContentView: View {
                  Their contents are unchanged, and you can compress them again at any time.
                  """)
         }
+        .confirmationDialog(
+            "Authorize administrator access?",
+            isPresented: $model.confirmingAdministrator,
+            titleVisibility: .visible
+        ) {
+            Button("Continue as Administrator") { model.confirmAdministrator() }
+            Button("Cancel", role: .cancel) { model.cancelAdministrator() }
+        } message: {
+            Text(model.administratorConfirmation)
+        }
         .sheet(isPresented: $model.showingSettings) {
             AdvancedSettingsView(model: model)
                 .toolbar {
