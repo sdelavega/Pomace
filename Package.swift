@@ -18,5 +18,6 @@ let package = Package(
             resources: [.process("Resources")]
         ),
         .testTarget(name: "PomaceCoreTests", dependencies: ["PomaceCore"]),
+        .testTarget(name: "PomaceAppTests", dependencies: ["PomaceApp", "PomaceCore"]),
     ]
 )

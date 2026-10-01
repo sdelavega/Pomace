@@ -165,7 +165,14 @@ private struct Detail: View {
 
             case .done(let result):
                 if model.toolReady {
-                    ResultView(model: model, result: result)
+                    VStack(spacing: 0) {
+                        if model.showingRecentScan {
+                            Text("Showing a recent scan. Rescan to check for changes.")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .padding(.top, 8)
+                        }
+                        ResultView(model: model, result: result)
+                    }
                 } else {
                     InstallToolView(model: model)
                 }

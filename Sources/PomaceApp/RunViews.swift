@@ -66,13 +66,18 @@ struct RunBanner: View {
                     Text("\(op.verb) — \(Fmt.count(progress.filesProcessed, "file")) of \(progress.filesTotal.formatted())")
                         .font(.callout).monospacedDigit()
                     Spacer()
-                    Button("Stop") { model.cancelRun() }
+                    Button(model.isStopping ? "Stopping…" : "Stop") { model.cancelRun() }
                         .controlSize(.small)
+                        .disabled(model.isStopping)
                 }
                 ProgressView(value: progress.fraction)
                     .progressViewStyle(.linear)
+                if model.isStopping {
+                    Text("Waiting for the active batch to finish safely. No further batches will start.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if let p = progress.currentPath {
-                    Text(p).font(.caption2).foregroundStyle(.secondary)
+                    Text("Current batch starts with: \(p)").font(.caption2).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
                 }
                 if progress.failures > 0 {

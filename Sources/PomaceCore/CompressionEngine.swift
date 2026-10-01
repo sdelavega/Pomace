@@ -82,6 +82,15 @@ public enum CompressionEngineError: Error, CustomStringConvertible {
     }
 }
 
+/// Requests a safe stop without cancelling the consumer of the final outcome.
+public final class CompressionCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var requested = false
+    public init() {}
+    public func request() { lock.lock(); defer { lock.unlock() }; requested = true }
+    public var isRequested: Bool { lock.lock(); defer { lock.unlock() }; return requested }
+}
+
 public enum CompressionEngine {
 
     /// Files per compressor invocation.
@@ -104,7 +113,8 @@ public enum CompressionEngine {
                            installation: ToolInstallation,
                            plan: CompressionPlan,
                            rules: SafetyRules = SafetyRules(),
-                           logger: MutationLog? = nil) -> AsyncStream<CompressionEvent> {
+                           logger: MutationLog? = nil,
+                           cancellation: CompressionCancellation? = nil) -> AsyncStream<CompressionEvent> {
 
         AsyncStream { continuation in
             let task = Task.detached(priority: .userInitiated) {
@@ -133,8 +143,9 @@ public enum CompressionEngine {
                 // which is why the pivot happened. ADR-0015.)
                 var skippedLinks = 0
 
-                var eligible: [(path: String, size: Int64)] = []
+                var eligible: [(path: String, size: Int64, physicalBefore: Int64)] = []
                 for p in paths {
+                    if Task.isCancelled || cancellation?.isRequested == true { break }
                     guard let f = FileInspector.inspect(p) else { continue }
                     if f.linkCount > 1 {
                         skippedLinks += 1
@@ -148,7 +159,14 @@ public enum CompressionEngine {
                     } else {
                         guard f.isCompressed else { continue }
                     }
-                    eligible.append((p, f.logicalSize))
+                    eligible.append((p, f.logicalSize, f.physicalSize))
+                }
+
+                if Task.isCancelled || cancellation?.isRequested == true {
+                    outcome.wasCancelled = true
+                    outcome.duration = Date().timeIntervalSince(started)
+                    continuation.yield(.finished(outcome))
+                    continuation.finish(); return
                 }
 
                 guard !eligible.isEmpty else {
@@ -185,7 +203,7 @@ public enum CompressionEngine {
                 // --- batches ---
                 var index = 0
                 while index < eligible.count {
-                    if Task.isCancelled {
+                    if Task.isCancelled || cancellation?.isRequested == true {
                         outcome.wasCancelled = true
                         break
                     }
@@ -198,7 +216,14 @@ public enum CompressionEngine {
                         index += 1
                     }
 
+                    // This is a batch boundary, not a claim that applesauce exposes its
+                    // currently active file. Publish before the blocking invocation.
+                    progress.currentPath = batch.first
+                    continuation.yield(.progress(progress))
+                    let batchStarted = Date()
+                    logger?.note("batch BEGIN files=\(batch.count) first=\(batch.first ?? "") last=\(batch.last ?? "")")
                     let result = Subprocess.capture(installation.path, baseArgs + batch)
+                    logger?.note("batch END exit=\(result.code) duration=\(Date().timeIntervalSince(batchStarted))s")
                     outcome.filesAttempted += batch.count
 
                     // applesauce exits 0 even for a missing or unreadable path, and never
@@ -229,12 +254,18 @@ public enum CompressionEngine {
 
                     progress.filesProcessed = min(index, eligible.count)
                     progress.failures = outcome.realFailures.count
-                    progress.currentPath = batch.last
+                    progress.currentPath = nil
                     progress.bytesProcessed = eligible.prefix(index).reduce(0) { $0 + $1.size }
                     continuation.yield(.progress(progress))
                 }
 
+                // A request during the final batch must also be acknowledged.
+                outcome.wasCancelled = outcome.wasCancelled || Task.isCancelled || cancellation?.isRequested == true
+
                 // --- post-run truth: re-measure natively, don't trust tool output ---
+                // Compare the same attempted files on both sides. Unprocessed files
+                // must not look like reclaimed space after a safe stop.
+                outcome.bytesBefore = eligible.prefix(index).reduce(0) { $0 + $1.physicalBefore }
                 outcome.bytesAfter = eligible.prefix(index).reduce(0) { $0 + physical($1.path) }
                 outcome.duration = Date().timeIntervalSince(started)
                 logger?.end(outcome: outcome)

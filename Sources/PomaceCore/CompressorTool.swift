@@ -147,6 +147,14 @@ public enum CompressorTool {
 
 public enum Subprocess {
 
+    // One reader per pipe: a child can fill stderr while keeping stdout open.
+    private final class CapturedData: @unchecked Sendable {
+        private let lock = NSLock()
+        private var data = Data()
+        func store(_ value: Data) { lock.lock(); defer { lock.unlock() }; data = value }
+        func load() -> Data { lock.lock(); defer { lock.unlock() }; return data }
+    }
+
     public struct Output: Sendable {
         public let stdout: String, stderr: String, code: Int32
         public var combined: String { stdout + stderr }
@@ -160,9 +168,17 @@ public enum Subprocess {
         let o = Pipe(), e = Pipe()
         p.standardOutput = o; p.standardError = e
         do { try p.run() } catch { return Output(stdout: "", stderr: "\(error)", code: -1) }
-        let od = o.fileHandleForReading.readDataToEndOfFile()
+        let stdout = CapturedData()
+        let readers = DispatchGroup()
+        readers.enter()
+        DispatchQueue.global(qos: .utility).async {
+            stdout.store(o.fileHandleForReading.readDataToEndOfFile())
+            readers.leave()
+        }
         let ed = e.fileHandleForReading.readDataToEndOfFile()
+        readers.wait()
         p.waitUntilExit()
+        let od = stdout.load()
         return Output(stdout: String(decoding: od, as: UTF8.self),
                       stderr: String(decoding: ed, as: UTF8.self),
                       code: p.terminationStatus)

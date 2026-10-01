@@ -51,16 +51,23 @@ final class ScanModel {
 
     private var scanTask: Task<Void, Never>?
     private var runTask: Task<Void, Never>?
+    private var runCancellation: CompressionCancellation?
+    private var scanCache = ScanCache()
+    var isStopping = false
+    var showingRecentScan = false
     private let store: Store?
-    let log = MutationLog()
+    let log: MutationLog
 
-    init() {
+    init(store: Store? = try? Store(),
+         installation: ToolInstallation? = CompressorTool.discover(),
+         log: MutationLog = MutationLog()) {
         // A broken store must not stop the app from scanning — it only costs us history.
-        store = try? Store()
+        self.store = store
+        self.log = log
         let watched = (try? store?.watched()) .flatMap { $0 } ?? []
         watchedPaths = watched.map(\.path)
         schedulesByPath = Dictionary(uniqueKeysWithValues: watched.map { ($0.path, $0.schedule) })
-        installation = CompressorTool.discover()
+        self.installation = installation
         serviceStatus = SweepService.status
         showingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
     }
@@ -122,7 +129,9 @@ final class ScanModel {
     /// Runs a sweep immediately for the selected folder, through the same runner the agent
     /// uses — so "Sweep Now" exercises the scheduled path rather than a parallel one.
     func sweepNow() {
-        guard let path = selectedPath, let store, let install = installation else { return }
+        guard !isRunning, !isSweeping,
+              let path = selectedPath, let store, let install = installation else { return }
+        scanCache.invalidate(path)
         isSweeping = true
         Task { [weak self] in
             let runner = SweepRunner(store: store, log: self?.log ?? MutationLog())
@@ -144,7 +153,7 @@ final class ScanModel {
                 outcome.duration = report.duration
                 self.runState = .finished(outcome)
             }
-            self.scan(path)
+            self.refreshAfterMutation(path)
         }
     }
 
@@ -200,7 +209,8 @@ final class ScanModel {
     }
 
     private func start(_ op: CompressionOperation) {
-        guard let root = selectedPath, let install = installation else { return }
+        guard !isRunning, !isSweeping,
+              let root = selectedPath, let install = installation else { return }
         let paths = targetPaths(for: op)
         guard !paths.isEmpty else {
             runState = .refused(op == .compress
@@ -209,12 +219,16 @@ final class ScanModel {
             return
         }
         let plan = self.plan
+        let cancellation = CompressionCancellation()
+        runCancellation = cancellation
+        isStopping = false
+        scanCache.invalidate(root)
         runState = .running(op, CompressionProgress())
         runTask = Task { [weak self] in
             guard let self else { return }
             for await event in CompressionEngine.run(operation: op, paths: paths, root: root,
                                                      installation: install, plan: plan,
-                                                     logger: self.log) {
+                                                     logger: self.log, cancellation: cancellation) {
                 if Task.isCancelled { return }
                 switch event {
                 case .started(let p), .progress(let p):
@@ -223,17 +237,29 @@ final class ScanModel {
                     self.runState = .finished(outcome)
                     // Post-run truth: re-scan natively rather than trusting the compressor's
                     // summary, so before and after come from the same code path.
-                    self.scan(root)
+                    self.refreshAfterMutation(root)
                 case .failed(let message):
                     self.runState = .refused(message)
                 }
+            }
+            if self.runCancellation === cancellation {
+                self.runCancellation = nil
+                self.isStopping = false
+                self.runTask = nil
             }
         }
     }
 
     func cancelRun() {
-        runTask?.cancel()
-        runTask = nil
+        guard isRunning, !isStopping else { return }
+        isStopping = true
+        log.note("stop requested — waiting for the active batch to finish safely")
+        runCancellation?.request()
+    }
+
+    private func refreshAfterMutation(_ root: String) {
+        scanCache.invalidate(root)
+        if let path = selectedPath, ScanCache.overlaps(path, root) { scan(path) }
     }
 
     func dismissRunResult() { runState = .none }
@@ -270,15 +296,24 @@ final class ScanModel {
         try? store?.removeWatchedDirectory(path: path)
         watchedPaths.removeAll { $0 == path }
         schedulesByPath[path] = nil
+        scanCache.invalidate(path)
         if selectedPath == path { selectedPath = watchedPaths.first; state = .idle }
     }
 
     func select(_ path: String) {
         guard selectedPath != path else { return }
         selectedPath = path
+        cancelScan()
         state = .idle
         loadSchedule(for: path)
-        scan(path)
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+           isDirectory.boolValue, let cached = scanCache.result(for: path) {
+            showingRecentScan = true
+            state = .done(cached)
+        } else {
+            scan(path)
+        }
     }
 
     func schedule(for path: String) -> SweepSchedule {
@@ -322,6 +357,8 @@ final class ScanModel {
 
     func scan(_ path: String) {
         cancelScan()
+        showingRecentScan = false
+        scanCache.invalidate(path)
         // Fail fast and legibly rather than showing an empty tree the user can't explain.
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
@@ -343,6 +380,7 @@ final class ScanModel {
                     self.state = .scanning(p)
                 case .finished(let r):
                     self.state = .done(r)
+                    if !self.isRunning && !self.isSweeping { self.scanCache.insert(r) }
                     _ = try? self.store?.record(r)
                 }
             }
