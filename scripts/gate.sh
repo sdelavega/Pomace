@@ -10,3 +10,5 @@ scripts/build-applesauce.sh
 cargo test --manifest-path tools/applesauce/Cargo.toml --locked
 cargo deny --manifest-path tools/applesauce/Cargo.toml --config tools/applesauce/deny.toml check licenses
 Tests/integration/sparse-image.sh
+./build-app.sh release
+scripts/check-bundle.sh --universal build/Pomace.app

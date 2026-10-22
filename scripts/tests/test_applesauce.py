@@ -86,9 +86,11 @@ class HelperScriptsTests(unittest.TestCase):
         self.script('cargo', 'echo "cargo $*" >> "$COMMAND_LOG"\nif [ "${FAIL_CARGO_TEST:-0}" = 1 ] && [ "$1" = test ]; then exit 17; fi')
         self.write('scripts/build-applesauce.sh', '#!/bin/bash\necho build >> "$COMMAND_LOG"\n')
         self.write('Tests/integration/sparse-image.sh', '#!/bin/bash\necho integration >> "$COMMAND_LOG"\n')
+        self.write('build-app.sh', '#!/bin/bash\necho "app $*" >> "$COMMAND_LOG"\n')
+        self.write('scripts/check-bundle.sh', '#!/bin/bash\necho "bundle $*" >> "$COMMAND_LOG"\n')
         expected = ['swift', 'build', 'cargo test --manifest-path tools/applesauce/Cargo.toml --locked',
                     'cargo deny --manifest-path tools/applesauce/Cargo.toml --config tools/applesauce/deny.toml check licenses',
-                    'integration']
+                    'integration', 'app release', 'bundle --universal build/Pomace.app']
         result = subprocess.run(['bash', str(destination)], cwd=self.root,
                                 env=self.environment, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
