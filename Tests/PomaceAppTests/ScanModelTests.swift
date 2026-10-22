@@ -97,6 +97,48 @@ struct ScanModelTests {
         model.cancelAdministrator()
     }
 
+    @Test("bundled administrator confirmation omits the custom compressor warning")
+    func adminConfirmationNamesBundled() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PomaceBundledConfirmation-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = try customCompressor(in: directory)
+        let installation = CompressorTool.probe(.bundled(path))
+        #expect(installation.source == .bundled(path))
+        #expect(installation.capabilities.isUsable)
+        let model = ScanModel(store: nil, resolution: CompressorResolution(installation: installation, customRejection: nil))
+        model.selectedPath = "/Applications/Example.app"
+        var result = ScanResult()
+        result.root = model.selectedPath!
+        result.entries = [ScanEntry(inode: 1, path: result.root + "/Contents/file", logicalSize: 4096,
+                                   physicalSize: 4096, isCompressed: false, type: nil, reasons: [.applicationBundle])]
+        model.state = .done(result)
+        model.useAdministratorPrivileges = true
+        model.startCompress()
+        #expect(model.confirmingAdministrator)
+        #expect(!model.isRunning)
+        #expect(model.administratorConfirmationText.contains(path))
+        #expect(model.administratorConfirmationText.contains(result.root))
+        #expect(!model.administratorConfirmationText.contains("not the one bundled"))
+        model.cancelAdministrator()
+    }
+
+    @Test("custom rejection explains a missing file and the bundled fallback")
+    func customRejectionExplainsFallback() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PomaceRejection-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bundled = try customCompressor(in: directory)
+        let missing = directory.appendingPathComponent("missing").path
+        #expect(!FileManager.default.fileExists(atPath: missing))
+        let resolution = CompressorTool.resolve(customPath: missing, bundledURL: URL(fileURLWithPath: bundled),
+                                               signatureIsValid: { _ in true })
+        #expect(resolution.customRejection == .notFound)
+        #expect(resolution.installation?.source == .bundled(bundled))
+        let model = ScanModel(store: nil, resolution: resolution)
+        let text = try #require(model.customCompressorRejectionText)
+        #expect(text.contains("The chosen compressor could not be found."))
+        #expect(text.contains("Pomace is using the bundled compressor."))
+    }
+
     @Test("administrator compression requires confirmation and can be cancelled")
     func administratorConfirmation() {
         let model = ScanModel(store: nil, resolution: CompressorResolution(installation: ToolInstallation(

@@ -68,6 +68,7 @@ public enum CompressionEngineError: Error, CustomStringConvertible {
     case toolMissing
     case insufficientFreeSpace(needed: Int64, available: Int64)
     case nothingToDo
+    case compressorChanged(confirmed: String, resolved: String)
 
     public var description: String {
         switch self {
@@ -78,6 +79,9 @@ public enum CompressionEngineError: Error, CustomStringConvertible {
             + "\(ByteFormat.short(needed)) needed for the temporary replacement file."
         case .nothingToDo:
             "Nothing here needs compressing."
+        case .compressorChanged(let confirmed, let resolved):
+            "The compressor changed after you confirmed administrator access. "
+            + "Confirmed: \(confirmed). Resolved: \(resolved). Start the operation again to confirm the new compressor."
         }
     }
 }
@@ -115,7 +119,10 @@ public enum CompressionEngine {
                            rules: SafetyRules = SafetyRules(),
                            logger: MutationLog? = nil,
                            cancellation: CompressionCancellation? = nil,
-                           executor: CompressionExecutor = .standard) -> AsyncStream<CompressionEvent> {
+                           executor: CompressionExecutor = .standard,
+                           resolveCompressor: @escaping @Sendable (String?) -> CompressorResolution = {
+                               CompressorTool.resolve(customPath: $0)
+                           }) -> AsyncStream<CompressionEvent> {
 
         AsyncStream { continuation in
             let task = Task.detached(priority: .userInitiated) {
@@ -134,8 +141,15 @@ public enum CompressionEngine {
                 case .custom(let path): customPath = path
                 case .bundled: customPath = nil
                 }
-                guard let installation = CompressorTool.resolve(customPath: customPath).installation else {
+                let confirmedPath = installation.path
+                guard let installation = resolveCompressor(customPath).installation else {
                     continuation.yield(.failed("The compressor is unavailable or lacks required verification support."))
+                    continuation.finish(); return
+                }
+                // Elevated execution must use the exact compressor named in the confirmation.
+                if executor.isAdministrator && installation.path != confirmedPath {
+                    continuation.yield(.failed(CompressionEngineError.compressorChanged(
+                        confirmed: confirmedPath, resolved: installation.path).description))
                     continuation.finish(); return
                 }
                 let required = requiredFreeSpace(at: root)

@@ -151,6 +151,72 @@ struct CompressorResolutionTests {
         #expect(!FileManager.default.fileExists(atPath: url.path + ".invoked"))
     }
 
+    @Test("only standard runs may fall back after the confirmed compressor changes",
+          arguments: [true, false], [true, false])
+    func engineFallbackHonorsConfirmation(deleted: Bool, isAdministrator: Bool) async throws {
+        let f = try Fixture(); defer { f.remove() }
+        let url = try f.custom()
+        let confirmed = try #require(f.resolve(url.path).installation)
+        #expect(confirmed.source == .custom(url.path))
+        #expect(confirmed.capabilities.isUsable)
+        if deleted {
+            try FileManager.default.removeItem(at: url)
+            #expect(!FileManager.default.fileExists(atPath: url.path))
+        } else {
+            try Fixture.writeFake(at: url, verified: false)
+            #expect(!CompressorTool.probe(.custom(url.path)).capabilities.isUsable)
+        }
+        let resolution = f.resolve(url.path)
+        let fallback = try #require(resolution.installation)
+        #expect(resolution.customRejection == (deleted ? .notFound : .missingCapabilities([.verify, .minimumRatio])))
+        #expect(fallback.source == .bundled(f.bundled.path))
+        #expect(fallback.path != confirmed.path)
+        #expect(fallback.capabilities.isUsable)
+        let file = f.directory.appendingPathComponent("file.txt")
+        try Data(repeating: 65, count: 4096).write(to: file)
+        let metadata = try #require(FileInspector.inspect(file.path))
+        #expect(metadata.isRegularFile && !metadata.isCompressed)
+        #expect(!SafetyRules().isExcluded(metadata, volume: VolumeContext.probe(path: f.directory.path), depth: .thorough))
+        let marker = f.bundled.path + ".invoked"
+        #expect(!FileManager.default.fileExists(atPath: marker))
+        let executor = CompressionExecutor(isAdministrator: isAdministrator) { path, args in
+            // This fake executor never requests authorization, even for the elevated case.
+            .completed(Subprocess.capture(path, args))
+        }
+        var failures: [String] = []
+        var started = false
+        var outcome: CompressionOutcome?
+        let root = isAdministrator ? "/Applications" : f.directory.path
+        #expect(!isAdministrator || AdministratorAccess.supports(root: root))
+        for await event in CompressionEngine.run(operation: .compress, paths: [file.path], root: root,
+                installation: confirmed, plan: CompressionPolicy.plan(), executor: executor,
+                resolveCompressor: { [bundled = f.bundled] path in
+                    CompressorTool.resolve(customPath: path, bundledURL: bundled, signatureIsValid: { _ in true })
+                }) {
+            switch event {
+            case .failed(let message): failures.append(message)
+            case .started, .progress: started = true
+            case .finished(let result): outcome = result
+            }
+        }
+        if isAdministrator {
+            let failure = try #require(failures.first)
+            #expect(failures.count == 1)
+            #expect(failure.contains("The compressor changed after you confirmed"))
+            #expect(failure.contains(confirmed.path))
+            #expect(failure.contains(fallback.path))
+            #expect(!started)
+            #expect(outcome == nil)
+            #expect(!FileManager.default.fileExists(atPath: marker))
+        } else {
+            #expect(failures.isEmpty)
+            #expect(started)
+            #expect(try #require(outcome).filesAttempted == 1)
+            #expect(FileManager.default.fileExists(atPath: marker))
+        }
+        #expect(!FileManager.default.fileExists(atPath: confirmed.path + ".invoked"))
+    }
+
     @Test func compressArgumentsAlwaysVerify() {
         for mode in CompressionMode.allCases {
             let plan = CompressionPolicy.plan(mode: mode)
