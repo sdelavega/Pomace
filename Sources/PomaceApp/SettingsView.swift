@@ -106,75 +106,21 @@ private struct JustificationRow: View {
     }
 }
 
-/// Shown when the compressor is missing. The license disclosure is not optional — Pomace is about
-/// to install third-party GPL software on the user's behalf (ADR-0003).
+/// Shown when neither compressor source is usable.
 struct InstallToolView: View {
     @Bindable var model: ScanModel
-    @State private var installing = false
-    @State private var message: String?
 
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "shippingbox").font(.system(size: 36)).foregroundStyle(.secondary)
             Text("Pomace needs \(CompressorTool.displayName)").font(.headline)
-            Text("""
-                 \(CompressorTool.displayName) is the tool that actually applies compression. \
-                 Pomace can install it for you with Homebrew, or you can install it yourself.
-                 """)
+            Text("The compressor is unavailable. Pomace can still scan your files.")
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 420)
-
-            GroupBox {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("About to install").font(.caption.weight(.medium))
-                    Text("applesauce, by Zachary Dremann")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("Licensed GPL-3.0 — separate software, not part of Pomace")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("Installed via: brew install \(ToolInstaller.homebrewFormula)")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxWidth: 420)
-
-            if let message {
-                Text(message).font(.caption).foregroundStyle(.secondary)
-                    .frame(maxWidth: 420)
-            }
-
-            HStack {
-                Button("Install with Homebrew") { install() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(installing || !ToolInstaller.homebrewAvailable)
-                Button("Check Again") { model.refreshInstallation() }
-                    .disabled(installing)
-            }
-            if !ToolInstaller.homebrewAvailable {
-                Text("Homebrew isn't installed, so Pomace can't install \(CompressorTool.displayName) automatically.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            if installing { ProgressView().controlSize(.small) }
+            Button("Check Again") { model.refreshInstallation() }
         }
         .padding(28)
-    }
-
-    private func install() {
-        installing = true
-        message = "Installing…"
-        Task {
-            let result = await ToolInstaller.installViaHomebrew()
-            installing = false
-            switch result {
-            case .success:
-                model.refreshInstallation()
-                message = model.toolReady ? nil : "Installed, but Pomace still can't find it."
-            case .failure(let error):
-                message = error
-            }
-        }
     }
 }

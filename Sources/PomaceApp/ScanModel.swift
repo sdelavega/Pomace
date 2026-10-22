@@ -70,7 +70,7 @@ final class ScanModel {
     let log: MutationLog
 
     init(store: Store? = try? Store(),
-         installation: ToolInstallation? = CompressorTool.discover(),
+         installation: ToolInstallation? = CompressorTool.resolve(customPath: UserDefaults.standard.string(forKey: CompressorTool.customPathDefaultsKey)).installation,
          log: MutationLog = MutationLog()) {
         // A broken store must not stop the app from scanning — it only costs us history.
         self.store = store
@@ -175,10 +175,15 @@ final class ScanModel {
     var toolSummary: String {
         guard let i = installation else { return "\(CompressorTool.displayName) isn't installed" }
         let v = i.capabilities.version.map { "\(CompressorTool.displayName) \($0)" } ?? CompressorTool.displayName
-        return "\(v) — from \(i.source.description)"
+        let source: String
+        switch i.source {
+        case .bundled: source = "Bundled"
+        case .custom: source = "Custom"
+        }
+        return "\(v) — \(source)"
     }
 
-    func refreshInstallation() { installation = CompressorTool.discover() }
+    func refreshInstallation() { installation = CompressorTool.resolve(customPath: UserDefaults.standard.string(forKey: CompressorTool.customPathDefaultsKey)).installation }
 
     func dismissOnboarding() {
         UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")

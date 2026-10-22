@@ -63,7 +63,8 @@ public struct SweepRunner: Sendable {
         }
         defer { flock(lock.fileDescriptor, LOCK_UN); try? lock.close() }
 
-        guard let installation = CompressorTool.discover(), installation.capabilities.isUsable else {
+        guard let installation = CompressorTool.resolve(
+            customPath: UserDefaults.standard.string(forKey: CompressorTool.customPathDefaultsKey)).installation else {
             log.note("sweep skipped — \(CompressorTool.displayName) unavailable")
             return []
         }

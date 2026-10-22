@@ -418,7 +418,7 @@ struct ToolVersionTests {
         let noVerify = ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: false,
                                         supportsLevel: true, supportsMinimumRatio: true, rawUsage: "")
         #expect(!noVerify.isUsable)
-        #expect(noVerify.missingCapabilities.contains { $0.contains("verification") })
+        #expect(noVerify.missingCapabilities.contains(.verify))
 
         let ok = ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
                                   supportsLevel: true, supportsMinimumRatio: true, rawUsage: "")

@@ -129,8 +129,12 @@ public enum CompressionEngine {
                     continuation.yield(.failed("Administrator access is available only for /Applications, /opt/homebrew, and /usr/local."))
                     continuation.finish(); return
                 }
-                guard !executor.isAdministrator || installation.path.hasPrefix("/"),
-                      installation.capabilities.isUsable else {
+                let customPath: String?
+                switch installation.source {
+                case .custom(let path): customPath = path
+                case .bundled: customPath = nil
+                }
+                guard let installation = CompressorTool.resolve(customPath: customPath).installation else {
                     continuation.yield(.failed("The compressor is unavailable or lacks required verification support."))
                     continuation.finish(); return
                 }

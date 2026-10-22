@@ -178,7 +178,7 @@ struct AdministratorAccessTests {
     }
 
     private var installation: ToolInstallation {
-        ToolInstallation(source: .userConfigured("/unused-test-compressor"), capabilities:
+        ToolInstallation(source: .custom("/unused-test-compressor"), capabilities:
             ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
                              supportsLevel: false, supportsMinimumRatio: true, rawUsage: ""))
     }
@@ -187,6 +187,17 @@ struct AdministratorAccessTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PomaceAdminTest-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
+        let binary = directory.appendingPathComponent("compressor")
+        try """
+        #!/bin/sh
+        case "$*" in
+            --version) echo 'applesauce 0.5.30' ;;
+            'compress --help') echo 'lzfse --verify --minimum-compression-ratio' ;;
+            *) exit 9 ;;
+        esac
+        """.write(to: binary, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
+        let installation = try #require(CompressorTool.resolve(customPath: binary.path, bundledURL: nil).installation)
         var paths: [String] = []
         for index in 0...CompressionEngine.batchSize {
             let file = directory.appendingPathComponent("file-\(index).txt")

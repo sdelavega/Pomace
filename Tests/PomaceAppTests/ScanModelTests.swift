@@ -17,7 +17,7 @@ struct ScanModelTests {
     @Test("administrator compression requires confirmation and can be cancelled")
     func administratorConfirmation() {
         let model = ScanModel(store: nil, installation: ToolInstallation(
-            source: .userConfigured("/opt/homebrew/bin/applesauce"), capabilities:
+            source: .custom("/opt/homebrew/bin/applesauce"), capabilities:
                 ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
                                  supportsLevel: false, supportsMinimumRatio: true, rawUsage: "")))
         model.selectedPath = "/Applications/Example.app"
@@ -76,6 +76,10 @@ struct ScanModelTests {
         let binary = directory.appendingPathComponent("compressor")
         try """
         #!/bin/sh
+        case "$*" in
+            --version) echo 'applesauce 0.5.30'; exit 0 ;;
+            'compress --help') echo 'lzfse --verify --minimum-compression-ratio'; exit 0 ;;
+        esac
         touch "$0.started"
         attempts=0
         while [ ! -f "$0.release" ] && [ "$attempts" -lt 250 ]; do
@@ -86,7 +90,7 @@ struct ScanModelTests {
         """.write(to: binary, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
         try Data(repeating: 65, count: 4096).write(to: root.appendingPathComponent("test.txt"))
-        let installation = ToolInstallation(source: .userConfigured(binary.path), capabilities:
+        let installation = ToolInstallation(source: .custom(binary.path), capabilities:
             ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
                              supportsLevel: false, supportsMinimumRatio: true, rawUsage: ""))
         let model = ScanModel(store: nil, installation: installation,
