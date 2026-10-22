@@ -14,12 +14,74 @@ struct ScanModelTests {
         #expect(condition(), "Timed out waiting for the model or fake compressor")
     }
 
-    @Test("administrator compression requires confirmation and can be cancelled")
-    func administratorConfirmation() {
-        let model = ScanModel(store: nil, installation: ToolInstallation(
-            source: .custom("/opt/homebrew/bin/applesauce"), capabilities:
-                ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
-                                 supportsLevel: false, supportsMinimumRatio: true, rawUsage: "")))
+    private func customCompressor(in directory: URL) throws -> String {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let binary = directory.appendingPathComponent("applesauce")
+        try """
+        #!/bin/sh
+        case "$*" in
+            --version) echo 'applesauce 0.5.30' ;;
+            'compress --help') echo 'lzfse --verify --minimum-compression-ratio' ;;
+            *) exit 1 ;;
+        esac
+        """.write(to: binary, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
+        return binary.resolvingSymlinksInPath().path
+    }
+
+    @Test("choosing a custom compressor persists and resolves it")
+    func choosingCustomPersists() throws {
+        let suite = "PomaceCustom-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let path = try customCompressor(in: directory)
+        #expect(CompressorTool.probe(.custom(path)).capabilities.isUsable)
+        #expect(defaults.string(forKey: CompressorTool.customPathDefaultsKey) == nil)
+        let model = ScanModel(store: nil, defaults: defaults)
+        model.setCustomCompressor(path)
+        #expect(defaults.string(forKey: CompressorTool.customPathDefaultsKey) == path)
+        #expect(model.resolution.installation?.source == .custom(path))
+        let restored = ScanModel(store: nil, defaults: defaults)
+        #expect(restored.resolution.installation?.source == .custom(path))
+    }
+
+    @Test("using the bundled compressor clears the custom choice")
+    func useBundledClearsCustom() throws {
+        let suite = "PomaceBundled-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let path = try customCompressor(in: directory)
+        defaults.set(path, forKey: CompressorTool.customPathDefaultsKey)
+        let model = ScanModel(store: nil, defaults: defaults)
+        #expect(defaults.string(forKey: CompressorTool.customPathDefaultsKey) == path)
+        #expect(model.resolution.installation?.source == .custom(path))
+        model.setCustomCompressor(nil)
+        #expect(defaults.string(forKey: CompressorTool.customPathDefaultsKey) == nil)
+        #expect(model.resolution.installation?.source != .custom(path))
+        #expect(model.resolution.customRejection == nil)
+    }
+
+    @Test("administrator confirmation names and warns about the custom compressor")
+    func adminConfirmationNamesCustom() throws {
+        let suite = "PomaceConfirmation-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let path = try customCompressor(in: directory)
+        let model = ScanModel(store: nil, defaults: defaults)
+        model.setCustomCompressor(path)
+        #expect(model.resolution.installation?.source == .custom(path))
         model.selectedPath = "/Applications/Example.app"
         var result = ScanResult()
         result.root = model.selectedPath!
@@ -30,12 +92,33 @@ struct ScanModelTests {
         model.startCompress()
         #expect(model.confirmingAdministrator)
         #expect(!model.isRunning)
-        #expect(model.administratorConfirmation.contains("/Applications/Example.app"))
-        #expect(model.administratorConfirmation.contains("/opt/homebrew/bin/applesauce"))
+        #expect(model.administratorConfirmationText.contains(path))
+        #expect(model.administratorConfirmationText.contains("This is a compressor you chose, not the one bundled with Pomace. It will run with administrator privileges."))
+        model.cancelAdministrator()
+    }
+
+    @Test("administrator compression requires confirmation and can be cancelled")
+    func administratorConfirmation() {
+        let model = ScanModel(store: nil, resolution: CompressorResolution(installation: ToolInstallation(
+            source: .custom("/opt/homebrew/bin/applesauce"), capabilities:
+                ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
+                                 supportsLevel: false, supportsMinimumRatio: true, rawUsage: "")), customRejection: nil))
+        model.selectedPath = "/Applications/Example.app"
+        var result = ScanResult()
+        result.root = model.selectedPath!
+        result.entries = [ScanEntry(inode: 1, path: result.root + "/Contents/file", logicalSize: 4096,
+                                   physicalSize: 4096, isCompressed: false, type: nil, reasons: [.applicationBundle])]
+        model.state = .done(result)
+        model.useAdministratorPrivileges = true
+        model.startCompress()
+        #expect(model.confirmingAdministrator)
+        #expect(!model.isRunning)
+        #expect(model.administratorConfirmationText.contains("/Applications/Example.app"))
+        #expect(model.administratorConfirmationText.contains("/opt/homebrew/bin/applesauce"))
         model.cancelAdministrator()
         #expect(!model.confirmingAdministrator)
         #expect(!model.isRunning)
-        #expect(model.administratorConfirmation.isEmpty)
+        #expect(model.administratorConfirmationText.isEmpty)
         model.confirmAdministrator() // A cancelled request cannot be replayed.
         #expect(!model.isRunning)
     }
@@ -48,7 +131,7 @@ struct ScanModelTests {
         try FileManager.default.createDirectory(at: a, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: b, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let model = ScanModel(store: nil, installation: nil,
+        let model = ScanModel(store: nil, resolution: CompressorResolution(installation: nil, customRejection: nil),
                               log: MutationLog(url: directory.appendingPathComponent("log")))
         model.select(a.path)
         try await waitUntil { model.result != nil }
@@ -93,7 +176,7 @@ struct ScanModelTests {
         let installation = ToolInstallation(source: .custom(binary.path), capabilities:
             ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
                              supportsLevel: false, supportsMinimumRatio: true, rawUsage: ""))
-        let model = ScanModel(store: nil, installation: installation,
+        let model = ScanModel(store: nil, resolution: CompressorResolution(installation: installation, customRejection: nil),
                               log: MutationLog(url: directory.appendingPathComponent("log")))
         model.select(root.path)
         try await waitUntil { model.result != nil }

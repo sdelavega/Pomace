@@ -30,7 +30,8 @@ final class ScanModel {
     var sortOrder: SortOrder = .potentialSaving
     var mode: CompressionMode = .automatic
     var overrides: CompressionSettings?
-    var installation: ToolInstallation?
+    var resolution: CompressorResolution
+    private let defaults: UserDefaults
     var confirmingDecompress = false
     var confirmingAdministrator = false
     var useAdministratorPrivileges = false
@@ -70,15 +71,17 @@ final class ScanModel {
     let log: MutationLog
 
     init(store: Store? = try? Store(),
-         installation: ToolInstallation? = CompressorTool.resolve(customPath: UserDefaults.standard.string(forKey: CompressorTool.customPathDefaultsKey)).installation,
+         resolution: CompressorResolution? = nil,
+         defaults: UserDefaults = .standard,
          log: MutationLog = MutationLog()) {
         // A broken store must not stop the app from scanning — it only costs us history.
         self.store = store
         self.log = log
+        self.defaults = defaults
         let watched = (try? store?.watched()) .flatMap { $0 } ?? []
         watchedPaths = watched.map(\.path)
         schedulesByPath = Dictionary(uniqueKeysWithValues: watched.map { ($0.path, $0.schedule) })
-        self.installation = installation
+        self.resolution = resolution ?? CompressorTool.resolve(customPath: defaults.string(forKey: CompressorTool.customPathDefaultsKey))
         serviceStatus = SweepService.status
         showingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
     }
@@ -141,7 +144,7 @@ final class ScanModel {
     /// uses — so "Sweep Now" exercises the scheduled path rather than a parallel one.
     func sweepNow() {
         guard !isRunning, !isSweeping,
-              let path = selectedPath, let store, let install = installation else { return }
+              let path = selectedPath, let store, let install = resolution.installation else { return }
         scanCache.invalidate(path)
         isSweeping = true
         Task { [weak self] in
@@ -170,10 +173,10 @@ final class ScanModel {
 
     // MARK: - Compressor
 
-    var toolReady: Bool { installation?.capabilities.isUsable ?? false }
+    var toolReady: Bool { resolution.installation?.capabilities.isUsable ?? false }
 
     var toolSummary: String {
-        guard let i = installation else { return "\(CompressorTool.displayName) isn't installed" }
+        guard let i = resolution.installation else { return "Compressor unavailable — scanning only" }
         let v = i.capabilities.version.map { "\(CompressorTool.displayName) \($0)" } ?? CompressorTool.displayName
         let source: String
         switch i.source {
@@ -183,7 +186,42 @@ final class ScanModel {
         return "\(v) — \(source)"
     }
 
-    func refreshInstallation() { installation = CompressorTool.resolve(customPath: UserDefaults.standard.string(forKey: CompressorTool.customPathDefaultsKey)).installation }
+    func refreshCompressor() {
+        resolution = CompressorTool.resolve(customPath: defaults.string(forKey: CompressorTool.customPathDefaultsKey))
+    }
+
+    func setCustomCompressor(_ path: String?) {
+        if let path {
+            defaults.set(path, forKey: CompressorTool.customPathDefaultsKey)
+        } else {
+            defaults.removeObject(forKey: CompressorTool.customPathDefaultsKey)
+        }
+        refreshCompressor()
+    }
+
+    var customCompressorRejectionText: String? {
+        guard let rejection = resolution.customRejection else { return nil }
+        let reason: String
+        switch rejection {
+        case .notFound: reason = "The chosen compressor could not be found."
+        case .notExecutable: reason = "The chosen compressor is not executable."
+        case .notRegularFile: reason = "Choose a regular executable file."
+        case .relativePath: reason = "The chosen compressor needs an absolute path."
+        case .missingCapabilities(let capabilities):
+            let names = capabilities.map { capability in
+                switch capability {
+                case .lzfse: "LZFSE compression"
+                case .verify: "--verify"
+                case .minimumRatio: "--minimum-compression-ratio"
+                }
+            }
+            reason = "The chosen compressor lacks: \(names.joined(separator: ", "))."
+        }
+        let fallback = resolution.installation == nil
+            ? "No usable compressor is available. Pomace can still scan your files."
+            : "Pomace is using the bundled compressor."
+        return "\(reason) \(fallback)"
+    }
 
     func dismissOnboarding() {
         UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
@@ -199,7 +237,7 @@ final class ScanModel {
             mode: mode,
             conditions: RuntimeConditions.current(volumePath: selectedPath),
             overrides: overrides,
-            capabilities: installation?.capabilities)
+            capabilities: resolution.installation?.capabilities)
     }
 
     /// Every path the user's current view would act on. Built from the scan, then
@@ -228,9 +266,15 @@ final class ScanModel {
         selectedPath.map { AdministratorAccess.supports(root: $0) } ?? false
     }
 
-    var administratorConfirmation: String {
+    var administratorConfirmationText: String {
         guard let run = pendingAdministratorRun else { return "" }
-        return "\(run.operation == .compress ? "Compress" : "Decompress") \(Fmt.count(run.paths.count, "scanned file")) in \(run.root)?\n\nThe compressor at \(run.installation.path) will run as administrator. macOS will ask for authorization; Pomace does not store your password. Safety exclusions still apply."
+        let customWarning: String
+        switch run.installation.source {
+        case .bundled: customWarning = ""
+        case .custom:
+            customWarning = "\n\nCustom compressor: This is a compressor you chose, not the one bundled with Pomace. It will run with administrator privileges."
+        }
+        return "\(run.operation == .compress ? "Compress" : "Decompress") \(Fmt.count(run.paths.count, "scanned file")) in \(run.root)?\n\nThe compressor at \(run.installation.path) will run as administrator. macOS will ask for authorization; Pomace does not store your password. Safety exclusions still apply.\(customWarning)"
     }
 
     func confirmAdministrator() {
@@ -251,7 +295,7 @@ final class ScanModel {
 
     private func start(_ op: CompressionOperation) {
         guard !isRunning, !isSweeping,
-              let root = selectedPath, let install = installation else { return }
+              let root = selectedPath, let install = resolution.installation else { return }
         let paths = targetPaths(for: op)
         guard !paths.isEmpty else {
             runState = .refused(op == .compress

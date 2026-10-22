@@ -1,6 +1,23 @@
 import SwiftUI
 import PomaceCore
 
+struct AdministratorConfirmation: ViewModifier {
+    @Bindable var model: ScanModel
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "Authorize administrator access?",
+            isPresented: $model.confirmingAdministrator,
+            titleVisibility: .visible
+        ) {
+            Button("Continue as Administrator") { model.confirmAdministrator() }
+            Button("Cancel", role: .cancel) { model.cancelAdministrator() }
+        } message: {
+            Text(model.administratorConfirmationText)
+        }
+    }
+}
+
 /// The action row: compress, decompress, and the mode picker.
 ///
 /// Decompress sits beside compress rather than buried in a menu — the PRD's promise is that

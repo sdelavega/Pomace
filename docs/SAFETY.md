@@ -80,6 +80,18 @@ Presented with a clear explanation and an explicit opt-in.
 
 These are requirements on Pomace's own implementation:
 
+- **Resolve and check the compressor before every run.** Use the bundled applesauce by
+  default; its executable, code signature and capabilities must pass validation. A custom
+  override is accepted only from an absolute path resolving to a regular executable file
+  with usable capabilities, including LZFSE and `--verify`. If it is deleted, replaced
+  with an unusable executable or otherwise fails validation, fall back to the checked
+  bundled copy and show the rejection reason in Settings → Advanced → Compressor.
+  Never run a compressor that failed its capability check. If neither source is usable,
+  allow scanning but disable mutation. Use Bundled clears the saved custom path.
+  Administrator confirmation names the resolved executable and explicitly warns that a
+  custom compressor is user-chosen, is not bundled with Pomace, and will run with
+  administrator privileges. Capability probing does not authenticate or sandbox it.
+
 - **Administrator access is interactive and scoped.** The user must opt in and confirm
   the folder, file count, and compressor path. Only the compressor is elevated, using
   macOS authorization; Pomace never handles passwords or changes sudoers. Allowed roots

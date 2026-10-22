@@ -33,16 +33,7 @@ struct ContentView: View {
                  Their contents are unchanged, and you can compress them again at any time.
                  """)
         }
-        .confirmationDialog(
-            "Authorize administrator access?",
-            isPresented: $model.confirmingAdministrator,
-            titleVisibility: .visible
-        ) {
-            Button("Continue as Administrator") { model.confirmAdministrator() }
-            Button("Cancel", role: .cancel) { model.cancelAdministrator() }
-        } message: {
-            Text(model.administratorConfirmation)
-        }
+        .modifier(AdministratorConfirmation(model: model))
         .sheet(isPresented: $model.showingSettings) {
             AdvancedSettingsView(model: model)
                 .toolbar {
@@ -174,17 +165,18 @@ private struct Detail: View {
                 ScanningView(progress: progress) { model.cancelScan() }
 
             case .done(let result):
-                if model.toolReady {
-                    VStack(spacing: 0) {
-                        if model.showingRecentScan {
-                            Text("Showing a recent scan. Rescan to check for changes.")
-                                .font(.caption).foregroundStyle(.secondary)
-                                .padding(.top, 8)
-                        }
-                        ResultView(model: model, result: result)
+                VStack(spacing: 0) {
+                    if !model.toolReady {
+                        Text("The compressor is unavailable. You can still scan; choose a compressor in Settings → Advanced.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .padding(8)
                     }
-                } else {
-                    InstallToolView(model: model)
+                    if model.showingRecentScan {
+                        Text("Showing a recent scan. Rescan to check for changes.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .padding(.top, 8)
+                    }
+                    ResultView(model: model, result: result)
                 }
             }
         }

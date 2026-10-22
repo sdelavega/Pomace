@@ -16,6 +16,8 @@ struct AdvancedSettingsView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    compressorSection
+                    Divider()
                     ForEach(model.plan.justifications) { j in
                         JustificationRow(justification: j)
                         Divider()
@@ -45,15 +47,43 @@ struct AdvancedSettingsView: View {
         .padding(16)
     }
 
+    private var compressorSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Compressor").font(.headline)
+            Text(model.toolSummary).font(.callout)
+            if let installation = model.resolution.installation {
+                Text(installation.path).font(.caption).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let rejection = model.customCompressorRejectionText {
+                Text(rejection).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                Button("Choose…") { chooseCompressor() }
+                Button("Use Bundled") { model.setCustomCompressor(nil) }
+            }
+            .disabled(model.isRunning || model.isSweeping || model.confirmingAdministrator)
+        }
+        .padding(16)
+        .onAppear { model.refreshCompressor() }
+    }
+
+    private func chooseCompressor() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose an applesauce executable. Pomace checks its capabilities before use."
+        if panel.runModal() == .OK, let url = panel.url {
+            model.setCustomCompressor(url.path)
+        }
+    }
+
     private var footer: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(model.toolSummary).font(.caption)
-                if let i = model.installation {
-                    Text(i.path).font(.caption2).foregroundStyle(.tertiary)
-                        .lineLimit(1).truncationMode(.middle)
-                }
-            }
             Spacer()
             Toggle("Show menu bar item", isOn: $menuBarEnabled)
                 .controlSize(.small)
@@ -103,24 +133,5 @@ private struct JustificationRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
-    }
-}
-
-/// Shown when neither compressor source is usable.
-struct InstallToolView: View {
-    @Bindable var model: ScanModel
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "shippingbox").font(.system(size: 36)).foregroundStyle(.secondary)
-            Text("Pomace needs \(CompressorTool.displayName)").font(.headline)
-            Text("The compressor is unavailable. Pomace can still scan your files.")
-                .font(.callout)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: 420)
-            Button("Check Again") { model.refreshInstallation() }
-        }
-        .padding(28)
     }
 }

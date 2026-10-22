@@ -36,6 +36,9 @@ struct PomaceApp: App {
         }
         .windowToolbarStyle(.unified)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Pomace") { showAbout() }
+            }
             CommandGroup(after: .newItem) {
                 Button("Add Folder…") { addFolder() }
                     .keyboardShortcut("o", modifiers: .command)
@@ -80,6 +83,15 @@ struct PomaceApp: App {
         if panel.runModal() == .OK, let url = panel.url {
             model.add(path: url.path)
         }
+    }
+
+    private func showAbout() {
+        let source = "https://github.com/Dr-Emann/applesauce"
+        let credits = NSMutableAttributedString(string:
+            "applesauce (GPL-3.0)\n\(source)\n\nTranslations are machine-translated — corrections welcome.")
+        credits.addAttribute(.link, value: URL(string: source)!,
+                             range: (credits.string as NSString).range(of: source))
+        NSApp.orderFrontStandardAboutPanel(options: [NSApplication.AboutPanelOptionKey.credits: credits])
     }
 
     private func bringToFront() {

@@ -71,11 +71,14 @@ before that batch starts.
 - macOS 14 Sonoma or later
 - Apple silicon or Intel Mac
 - APFS or HFS+ volume
-- [`applesauce`](https://github.com/Dr-Emann/applesauce) for mutation; Pomace can offer a
-  Homebrew installation when it is not already available
 
-Pomace will still scan and explain a directory without changing it until the compressor is
-available. Standard macOS privacy controls apply to locations such as Desktop, Documents,
+Pomace includes a pinned [`applesauce`](https://github.com/Dr-Emann/applesauce) compressor;
+Homebrew and a separate compressor installation are not required. Settings → Advanced →
+Compressor shows its source, version and path. Choose… selects a custom applesauce executable;
+Use Bundled clears that override. Pomace checks the chosen executable before every run and
+falls back to its checked bundled copy if the custom choice becomes unusable, with the
+reason shown in Advanced. If neither is usable, Pomace still scans and explains files
+while compression and decompression stay disabled. Standard macOS privacy controls apply to locations such as Desktop, Documents,
 Downloads, external volumes, and network shares.
 
 ## Install and Build
@@ -118,5 +121,8 @@ notarized public build, updates, crash-reporting policy, and accessibility revie
 ## License
 
 Pomace is available under the [GNU General Public License, version 3 or later](LICENSE).
-`applesauce` is also GPL-3.0 and remains separate software that Pomace invokes through a
-process boundary.
+The bundled `applesauce` compressor is GPL-3.0 and runs as a separate process.
+Its source is available at [Dr-Emann/applesauce](https://github.com/Dr-Emann/applesauce);
+Pomace's pinned wrapper, dependency lockfile and build instructions are in
+[tools/applesauce](tools/applesauce/README.md). The About panel includes the credit and
+source link.

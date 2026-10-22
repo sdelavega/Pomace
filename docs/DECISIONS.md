@@ -58,7 +58,8 @@ reaches the UI — this is an explicit M0 gate.
 
 ## ADR-0003: Never bundle afsctool
 
-**Status:** Accepted · 2026-08-26
+**Status:** Superseded by [ADR-0017](#adr-0017-bundle-applesauce) · 2026-10-22
+(originally accepted 2026-08-26)
 
 **Context.** afsctool is licensed **GPL-3.0-only AND BSL-1.0**. Bundling the binary inside
 `Pomace.app` would make distribution simple and offline-capable.
@@ -465,3 +466,35 @@ long runs. Native scanning still requires normal-user access to the directory. A
 and Adobe applications remain excluded. This feature grants the disclosed external
 compressor administrator access for the operation; it does not authenticate or sandbox
 that user-selected executable.
+
+---
+
+## ADR-0017: Bundle applesauce
+
+**Status:** Accepted · 2026-10-22 · Supersedes [ADR-0003](#adr-0003-never-bundle-afsctool)
+
+**Context.** ADR-0003 predates Pomace adopting GPL-3.0-or-later (ADR-0008).
+applesauce is GPL-3.0, so bundling it is licence-compatible when its notice and
+corresponding source accompany distribution. Requiring Homebrew or a separate install
+adds first-run network and setup work to an app that should work on a clean Mac.
+
+**Decision.** Bundle a pinned universal applesauce executable at
+`Contents/Helpers/applesauce`, built from the separately locked `tools/applesauce/`
+Cargo wrapper. Build both architectures with a macOS 14 floor and sign the helper before
+the app. Credit applesauce and link its source in About; keep the licence notice, pinned
+source dependencies and build scripts available with each release.
+
+Use the bundled compressor by default. Settings → Advanced offers an explicit custom
+path and Use Bundled removes it. Remove Homebrew discovery, PATH search and runtime
+installation. The Advanced pane shows the resolved source, version and path.
+
+**Safety.** A custom path must be absolute and resolve to a regular executable file whose
+capability probe is usable (including LZFSE and `--verify`). Re-resolve before every run.
+If custom validation fails, use the checked bundled copy and show the rejection reason.
+The bundled copy must also have a valid code signature and pass the capability check.
+If neither is usable, retain read-only scanning and disable mutation. Administrator
+confirmation names the resolved path and explicitly warns when the compressor is custom.
+
+**Costs.** The app grows and releases own the pinned helper build, licence/source
+availability and signature checks. A custom executable remains the user's choice;
+capability checks do not authenticate it or sandbox it, including during elevated runs.
