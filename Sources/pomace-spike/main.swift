@@ -243,7 +243,7 @@ case "scan":
 case "engine-verify":
     guard let dir = positional.first else { print("need dir"); exit(2) }
     let mode = CompressionMode(rawValue: flag("--mode") ?? "Automatic") ?? .automatic
-    guard let install = CompressorTool.discover() else {
+    guard let install = CompressorTool.discover(userConfigured: ProcessInfo.processInfo.environment["POMACE_COMPRESSOR"]) else {
         print("\(CompressorTool.displayName) not found"); exit(1)
     }
     print("\(CompressorTool.displayName): \(install.path) (\(install.source.description))")

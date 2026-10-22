@@ -1,0 +1,12 @@
+#!/bin/bash
+# Project checks in dependency order. Later tasks append their gates here.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+export PATH="$HOME/.cargo/bin:$PATH"
+export RUSTUP_TOOLCHAIN=stable
+
+swift test
+scripts/build-applesauce.sh
+cargo test --manifest-path tools/applesauce/Cargo.toml --locked
+cargo deny --manifest-path tools/applesauce/Cargo.toml --config tools/applesauce/deny.toml check licenses
+Tests/integration/sparse-image.sh
