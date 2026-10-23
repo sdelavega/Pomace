@@ -30,6 +30,99 @@ public enum AdministratorAccess {
         path == root || path.hasPrefix(root + "/")
     }
 
+    // uid and chainFloor are explicit test seams. Production always uses uid 0 and /.
+    // Tests execute this exact script as the current user in disposable directories.
+    static let boundaryScript = #"""
+    set -eu
+    PATH=/usr/bin:/bin
+    fail() { printf '%s\n' "$1" >&2; exit 1; }
+    changed='The confirmed compressor changed. Choose it again before using administrator access.'
+    unsafe='Administrator access is only used for folders that only administrators can change'
+    digest() { /usr/bin/shasum -a 256 "$1" | /usr/bin/cut -d ' ' -f 1; }
+    private_dir() {
+        case "$1" in /private/tmp/pomace-*) ;; *) fail "$changed" ;; esac
+        [ "${1%/*}" = /private/tmp ] || fail "$changed"
+        [ -d "$1" ] && [ ! -L "$1" ] || fail "$changed"
+        [ "$(/usr/bin/stat -f '%u:%Lp' "$1")" = "$(/usr/bin/id -u):700" ] || fail "$changed"
+    }
+    directory() {
+        [ -d "$1" ] && [ ! -L "$1" ] || fail "$unsafe"
+        local owner mode
+        read -r owner mode <<< "$(/usr/bin/stat -f '%u %Lp' "$1")"
+        [ "$owner" = "$uid" ] || fail "$unsafe"
+        (( (8#$mode & 0022) == 0 )) || fail "$unsafe"
+        # ACLs can grant directory writes independently of the Unix mode bits.
+        local description
+        description="$(/bin/ls -lde "$1")"
+        [[ "$description" != *$'\n'* ]] || fail "$unsafe"
+    }
+    targets() {
+        local root="$1" uid="$2" floor="$3" p parent physical d found=false
+        shift 3
+        [ "$(cd -P "$root" && pwd -P)" = "$root" ] || fail "$unsafe"
+        for p in "$@"; do
+            if [ "$found" = false ]; then
+                if [ "$p" = -- ]; then found=true; fi
+                continue
+            fi
+            case "$p" in "$root"/*) ;; *) fail "$unsafe" ;; esac
+            [ -f "$p" ] && [ ! -L "$p" ] || fail "$unsafe"
+            [ "$(/usr/bin/stat -f '%l' "$p")" = 1 ] || fail "$unsafe"
+            parent="${p%/*}"
+            physical="$(cd -P "$parent" && pwd -P)/${p##*/}"
+            [ "$physical" = "$p" ] || fail "$unsafe"
+            case "$physical" in "$root"/*) ;; *) fail "$unsafe" ;; esac
+            d="$parent"
+            while :; do
+                directory "$d"
+                [ "$d" != "$floor" ] || break
+                [ "$d" != / ] || fail "$unsafe"
+                d="${d%/*}"
+                [ -n "$d" ] || d=/
+            done
+        done
+        [ "$found" = true ] || fail "$unsafe"
+    }
+    phase="$1"
+    shift
+    case "$phase" in
+        validate) targets "$@" ;;
+        prepare)
+            source="$1" expected="$2"
+            [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || fail "$changed"
+            umask 077
+            work="$(/usr/bin/mktemp -d /private/tmp/pomace-XXXXXXXX)"
+            trap '/bin/rm -rf "$work"' EXIT
+            /bin/cp "$source" "$work/compressor"
+            /bin/chmod 500 "$work/compressor"
+            [ "$(digest "$work/compressor")" = "$expected" ] || fail "$changed"
+            printf '%s\n' "$work"
+            trap - EXIT
+            ;;
+        run)
+            work="$1" source="$2" expected="$3" root="$4" uid="$5" floor="$6"
+            shift 6
+            private_dir "$work"
+            [ -f "$work/compressor" ] && [ ! -L "$work/compressor" ] || fail "$changed"
+            [ "$(digest "$source")" = "$expected" ] || fail "$changed"
+            [ "$(digest "$work/compressor")" = "$expected" ] || fail "$changed"
+            targets "$root" "$uid" "$floor" "$@"
+            "$work/compressor" "$@"
+            ;;
+        cleanup) private_dir "$1"; /bin/rm -rf "$1" ;;
+        *) exit 2 ;;
+    esac
+    """#
+
+    static func boundaryArguments(_ arguments: [String]) -> [String] {
+        // Privileged mode ignores BASH_ENV and imported functions/options.
+        ["-p", "-c", boundaryScript, "pomace"] + arguments
+    }
+
+    static func validates(paths: [String], root: String) -> Bool {
+        Subprocess.capture("/bin/bash", boundaryArguments(["validate", root, "0", "/", "--"] + paths)).succeeded
+    }
+
     // Arguments are passed as argv, never interpolated into AppleScript source. AppleScript
     // quotes each argument for the shell, including spaces, quotes, and shell metacharacters.
     // No password is supplied, captured, or persisted; macOS owns authorization.
@@ -87,6 +180,9 @@ enum CompressorInvocation: Sendable {
 public struct CompressionExecutor: Sendable {
     public let isAdministrator: Bool
     let invoke: @Sendable (String, [String]) -> CompressorInvocation
+    var prepare: (@Sendable (String, String) -> CompressorInvocation)?
+    var invokePrepared: (@Sendable (String, String, String, String, [String]) -> CompressorInvocation)?
+    var cleanup: (@Sendable (String) -> Void)?
 
     init(isAdministrator: Bool, invoke: @escaping @Sendable (String, [String]) -> CompressorInvocation) {
         self.isAdministrator = isAdministrator
@@ -97,8 +193,18 @@ public struct CompressionExecutor: Sendable {
         .completed(Subprocess.capture($0, $1))
     }
     public static func administrator(prompt: String, fileChangedMessage: String) -> CompressionExecutor {
-        CompressionExecutor(isAdministrator: true) {
-            AdministratorAccess.capture($0, $1, prompt: prompt, fileChangedMessage: fileChangedMessage)
+        let transport: @Sendable ([String]) -> CompressorInvocation = { arguments in
+            AdministratorAccess.capture("/bin/bash", AdministratorAccess.boundaryArguments(arguments),
+                                        prompt: prompt, fileChangedMessage: fileChangedMessage)
         }
+        var executor = CompressionExecutor(isAdministrator: true) { _, _ in
+            .completed(Subprocess.Output(stdout: "", stderr: "An administrator session is required", code: 1))
+        }
+        executor.prepare = { transport(["prepare", $0, $1]) }
+        executor.invokePrepared = { directory, binary, hash, root, arguments in
+            transport(["run", directory, binary, hash, root, "0", "/"] + arguments)
+        }
+        executor.cleanup = { _ = transport(["cleanup", $0]) }
+        return executor
     }
 }

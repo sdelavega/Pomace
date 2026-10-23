@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import CryptoKit
 
 /// Where the compressor binary came from. Surfaced in the UI, because "which binary is
 /// about to touch my files?" deserves an answer.
@@ -89,12 +90,38 @@ public struct ToolInstallation: Sendable {
     public let source: ToolSource
     public let capabilities: ToolCapabilities
     public var path: String { source.path }
+    public let sha256: String?
+
+    public init(source: ToolSource, capabilities: ToolCapabilities) {
+        self.init(source: source, capabilities: capabilities, sha256: CompressorTool.sha256(at: source.path))
+    }
+
+    init(source: ToolSource, capabilities: ToolCapabilities, sha256: String?) {
+        self.source = source
+        self.capabilities = capabilities
+        self.sha256 = sha256
+    }
 }
 
 /// Resolves and probes `applesauce`.
 ///
 /// See ADR-0015 for why applesauce rather than afsctool.
 public enum CompressorTool {
+
+    public static func sha256(at path: String) -> String? {
+        guard let stream = InputStream(fileAtPath: path) else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var hash = SHA256()
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { return nil }
+            if count == 0 { break }
+            hash.update(data: Data(buffer.prefix(count)))
+        }
+        return hash.finalize().map { String(format: "%02x", $0) }.joined()
+    }
 
     public static let executableName = "applesauce"
     public static let displayName = "applesauce"
@@ -115,18 +142,20 @@ public enum CompressorTool {
 
     /// Reads what the binary can do from its own help, rather than inferring from a version.
     public static func probe(_ source: ToolSource) -> ToolInstallation {
+        let hash = sha256(at: source.path)
         let version = Subprocess.capture(source.path, ["--version"]).combined
         let help = Subprocess.capture(source.path, ["compress", "--help"]).combined
+        let stable = hash != nil && sha256(at: source.path) == hash
         var compressors: Set<String> = []
         for name in ["lzfse", "zlib", "lzvn"] where help.contains(name) { compressors.insert(name) }
         let caps = ToolCapabilities(
             version: ToolVersion(banner: version),
             compressors: compressors,
-            supportsVerify: help.contains("--verify"),
+            supportsVerify: stable && help.contains("--verify"),
             supportsLevel: help.contains("--level"),
             supportsMinimumRatio: help.contains("--minimum-compression-ratio"),
             rawUsage: help)
-        return ToolInstallation(source: source, capabilities: caps)
+        return ToolInstallation(source: source, capabilities: caps, sha256: stable ? hash : nil)
     }
 
     public static func resolve(customPath: String?, bundledURL: URL? = CompressorTool.bundledURL,

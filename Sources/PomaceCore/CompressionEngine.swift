@@ -74,6 +74,7 @@ public struct CompressionOutcome: Sendable {
 }
 
 public enum CompressionEvent: Sendable {
+    case resolved(CompressorResolution)
     case started(CompressionProgress)
     case progress(CompressionProgress)
     case finished(CompressionOutcome)
@@ -86,6 +87,7 @@ public enum CompressionEngineError: Error, Sendable, Equatable, Codable {
     case nothingToDo
     case compressorChanged(confirmed: String, resolved: String)
     case administratorUnsupported
+    case administratorUnsafeDirectory
     case compressorUnavailable
     case readOnlyVolume
     case safetyMetadataUnreadable(path: String)
@@ -149,14 +151,22 @@ public enum CompressionEngine {
                 case .bundled: customPath = nil
                 }
                 let confirmedPath = installation.path
-                guard let installation = resolveCompressor(customPath).installation else {
+                let confirmedHash = installation.sha256
+                let resolution = resolveCompressor(customPath)
+                continuation.yield(.resolved(resolution))
+                guard let installation = resolution.installation, installation.capabilities.isUsable else {
                     continuation.yield(.failed(.compressorUnavailable))
                     continuation.finish(); return
                 }
                 // Elevated execution must use the exact compressor named in the confirmation.
-                if executor.isAdministrator && installation.path != confirmedPath {
+                if executor.isAdministrator && (installation.path != confirmedPath || confirmedHash == nil
+                    || installation.sha256 != confirmedHash || CompressorTool.sha256(at: installation.path) != confirmedHash) {
                     continuation.yield(.failed(CompressionEngineError.compressorChanged(
                         confirmed: confirmedPath, resolved: installation.path)))
+                    continuation.finish(); return
+                }
+                if executor.isAdministrator && !AdministratorAccess.validates(paths: paths, root: root) {
+                    continuation.yield(.failed(.administratorUnsafeDirectory))
                     continuation.finish(); return
                 }
                 let required = requiredFreeSpace(at: root)
@@ -166,6 +176,17 @@ public enum CompressionEngine {
                             needed: required, available: free)))
                     continuation.finish(); return
                 }
+
+                guard operation == .decompress || plan.arguments.contains("--verify") else {
+                    continuation.yield(.failed(.verificationRequired))
+                    continuation.finish(); return
+                }
+                var settings = plan.settings
+                if !installation.capabilities.compressors.contains(settings.compressor) {
+                    settings.compressor = "lzfse"
+                }
+                let plan = CompressionPolicy.plan(overrides: settings, capabilities: installation.capabilities)
+                outcome.settings = plan.settings
 
                 // --- re-evaluate safety at mutation time (SAFETY.md rule 10) ---
                 let volume = VolumeContext.probe(path: root)
@@ -256,6 +277,29 @@ public enum CompressionEngine {
                     continuation.finish(); return
                 }
 
+                var privateDirectory: String?
+                func cleanupPrivateCopy() {
+                    if let directory = privateDirectory {
+                        executor.cleanup?(directory)
+                        privateDirectory = nil
+                    }
+                }
+                defer { cleanupPrivateCopy() }
+                if let prepare = executor.prepare, let hash = confirmedHash {
+                    switch prepare(installation.path, hash) {
+                    case .authorizationCancelled:
+                        outcome.wasCancelled = true
+                        continuation.yield(.finished(outcome))
+                        continuation.finish(); return
+                    case .completed(let output):
+                        guard output.succeeded else {
+                            continuation.yield(.failed(.compressorChanged(confirmed: confirmedPath, resolved: installation.path)))
+                            continuation.finish(); return
+                        }
+                        privateDirectory = output.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                }
+
                 // --- batches ---
                 var index = 0
                 while index < eligible.count {
@@ -287,7 +331,14 @@ public enum CompressionEngine {
                     let batchStarted = Date()
                     logger?.note("batch BEGIN files=\(batch.count) first=\(batch.first ?? "") last=\(batch.last ?? "")")
                     let invocationOutput: Subprocess.Output?
-                    switch executor.invoke(installation.path, baseArgs + ["--"] + batch) {
+                    let arguments = baseArgs + ["--"] + batch
+                    let invocation: CompressorInvocation
+                    if let privateDirectory, let hash = confirmedHash, let invoke = executor.invokePrepared {
+                        invocation = invoke(privateDirectory, installation.path, hash, root, arguments)
+                    } else {
+                        invocation = executor.invoke(installation.path, arguments)
+                    }
+                    switch invocation {
                     case .authorizationCancelled:
                         // This batch never started. Keep the outcome of earlier batches.
                         index -= batch.count
@@ -350,6 +401,7 @@ public enum CompressionEngine {
                 outcome.bytesAfter = eligible.prefix(index).reduce(0) { $0 + physical($1.path) }
                 outcome.duration = Date().timeIntervalSince(started)
                 logger?.end(outcome: outcome)
+                cleanupPrivateCopy()
                 continuation.yield(.finished(outcome))
                 continuation.finish()
             }

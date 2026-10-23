@@ -1,6 +1,20 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "core.engineError.administratorUnsafeDirectory": {
+      "comment": "Elevated targets require a directory chain that only administrators can change. Machine-translated; corrections welcome.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Administrator access is only used for folders that only administrators can change" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "仅对只有管理员才能修改的文件夹使用管理员权限" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Los privilegios de administrador solo se usan en carpetas que únicamente los administradores pueden modificar" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "管理者権限は、管理者だけが変更できるフォルダにのみ使用できます" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "관리자만 변경할 수 있는 폴더에서만 관리자 권한을 사용합니다" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Administratorrechte werden nur für Ordner verwendet, die ausschließlich Administratoren ändern können" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les droits d’administration sont utilisés uniquement pour les dossiers que seuls les administrateurs peuvent modifier" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Os privilégios de administrador são usados apenas em pastas que só administradores podem alterar" } }
+      }
+    },
     "report.title": {
       "comment": "Help menu action and diagnostics sheet title.",
       "extractionState": "manual",

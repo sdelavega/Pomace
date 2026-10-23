@@ -300,6 +300,7 @@ case "engine-verify":
     for await ev in CompressionEngine.run(operation: .compress, paths: allPaths, root: dir,
                                           installation: install, plan: plan, logger: log) {
         switch ev {
+        case .resolved: break
         case .started(let p): print("  start: \(p.filesTotal) eligible")
         case .progress(let p):
             FileHandle.standardError.write(Data("\r  \(p.filesProcessed)/\(p.filesTotal)".utf8))

@@ -61,7 +61,19 @@ When scanning `/Applications`, `/opt/homebrew`, or `/usr/local` (or a folder ins
 of them), enable **Use administrator privileges** before compressing or decompressing
 protected files. Pomace confirms the selected folder, scanned file count, and exact
 compressor path. macOS handles administrator authorization; Pomace never asks for or
-stores your password. Long runs may require authorization again for a later batch.
+stores your password. Long runs may require authorization again for a later batch or cleanup.
+
+Administrator access is only used for folders that only administrators can change.
+Every directory in the path must be root-owned, with no group/world write permission,
+ACLs or symlinked components. Pomace checks this before authorization and again before
+mutation. Root-owned files under user-owned or writable parents are refused, including
+many Homebrew installations; owning the file alone is insufficient. This prevents
+another process running as you from swapping a directory after the safety check.
+
+The confirmation is bound to the compressor's SHA-256. Changed executable bytes are
+refused; elevated batches use a checked root-owned private copy that is removed at the
+end. A custom compressor still receives the administrator access you explicitly grant
+it, so choose only an executable you trust. See ADR-0016 for the cleanup and trust limits.
 
 Only the compressor runs with elevated access. Scans, the app, and scheduled sweeps keep
 running as your normal user. This option does not bypass safety exclusions, macOS privacy

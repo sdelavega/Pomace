@@ -195,6 +195,7 @@ struct CompressorResolutionTests {
                 }) {
             switch event {
             case .failed(let message): failures.append(message)
+            case .resolved: break
             case .started, .progress: started = true
             case .finished(let result): outcome = result
             }

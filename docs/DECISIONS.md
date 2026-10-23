@@ -455,17 +455,41 @@ before using [macOS administrator authorization](https://developer.apple.com/lib
 Only the compressor is elevated. Keep the UI, native scanner, and scheduled sweeps running
 as the normal user; never store passwords, change sudoers, or install a privileged service.
 
-**Constraints.** Pass arguments as argv to a fixed AppleScript that shell-quotes each
-argument. Resolve target paths and reapply the existing safety exclusions before mutation;
-only explicit regular files inside the confirmed root may be passed. Preserve `--verify`
-for compression. A cancelled authorization starts no new batch and keeps prior results.
-Stop still waits for an active batch. Do not retry later batches after invocation errors.
+**Constraints (revised 2026-10-23).** Pass argv through fixed AppleScript quoting. Bind
+confirmation to the executable's SHA-256 as well as its resolved path, for bundled and
+custom compressors alike. Hash before and after the capability probe; changed bytes are
+unusable. At run start, re-resolve and re-hash, refusing changes before authorization.
+The privileged script creates a root-owned mode-700 temporary directory, copies the
+compressor, checks the copy against the confirmed hash and executes only that private
+copy for every batch. Recheck both the source and copy hashes between batches; remove
+the private copy at the end. A custom executable remains an explicit grant of root
+execution, not authenticated or sandboxed code.
 
-**Tradeoffs.** macOS may request authorization again for later batches, particularly in
-long runs. Native scanning still requires normal-user access to the directory. App Store
-and Adobe applications remain excluded. This feature grants the disclosed external
-compressor administrator access for the operation; it does not authenticate or sandbox
-that user-selected executable.
+Before authorization and again as root immediately before every batch, require physical
+canonical containment within the confirmed root, a regular non-symlink target with link
+count one, and a root-owned directory chain with no group/world write permission. Use
+`cd -P`/`pwd -P` on the parent, not an assumed realpath executable. Reject symlinked
+components, ACL-bearing directories and writable ancestors above the selected root too:
+an attacker able to rename the root could otherwise replace the entire tree. All
+components through the filesystem root must pass. Keep the existing SafetyRules and
+resource-fork inspection guard. Only explicit checked file paths reach applesauce, and
+every compress invocation keeps `--verify`.
+
+**Race boundary.** A same-user attacker cannot replace a parent or turn a checked target
+into a directory under this directory-chain requirement. The former proposal to add a
+files-only CLI preflight was insufficient: applesauce's later recursive scanner could
+still see a substituted directory. That approach and its claimed single-file residual
+race are superseded; no wrapper or library patch is made. A trusted administrator or
+an intentionally authorized custom root executable is outside this threat model.
+
+**Tradeoffs.** User-owned Homebrew trees and root-owned files below writable/user-owned
+parents are refused for elevation. ACLs are refused conservatively, including restrictive
+ACLs. Native scanning still requires normal-user access. macOS may ask again for later
+batches or cleanup; cancellation starts no new batch and preserves earlier results.
+Cleanup is attempted before publishing the terminal outcome; if macOS denies it or the
+process is killed, a private root-owned temporary copy may remain. Stop waits for the
+active batch. Invocation errors stop subsequent batches. App Store and Adobe exclusions
+remain in force.
 
 ---
 

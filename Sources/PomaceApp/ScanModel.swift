@@ -31,6 +31,7 @@ final class ScanModel {
     var mode: CompressionMode = .automatic
     var overrides: CompressionSettings?
     var resolution: CompressorResolution
+    var resolveCompressor: @Sendable (String?) -> CompressorResolution = { CompressorTool.resolve(customPath: $0) }
     private let defaults: UserDefaults
     private let sweepLockURL: URL
     var confirmingDecompress = false
@@ -353,8 +354,9 @@ final class ScanModel {
             for await event in CompressionEngine.run(operation: op, paths: paths, root: root,
                                                      installation: install, plan: plan,
                                                      logger: self.log, cancellation: cancellation,
-                                                     executor: run.executor) {
+                                                     executor: run.executor, resolveCompressor: self.resolveCompressor) {
                 switch event {
+                case .resolved(let resolution): self.resolution = resolution
                 case .started(let p), .progress(let p):
                     self.runState = .running(op, p)
                 case .finished(let outcome):
