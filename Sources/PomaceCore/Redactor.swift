@@ -33,7 +33,8 @@ public struct Redactor: Sendable {
         var result = text
         // Decode JSON string tokens individually so escaped Unicode paths are covered,
         // while unrelated crash fields on the same line remain useful to the maintainer.
-        let tokens = try! NSRegularExpression(pattern: #""(?:\\.|[^"\\])*""#)
+        // A quote in a plain log line must not consume tokens on subsequent lines.
+        let tokens = try! NSRegularExpression(pattern: #""(?:\\.|[^"\\\r\n])*""#)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.withoutEscapingSlashes]
         for match in tokens.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
@@ -57,7 +58,7 @@ public struct Redactor: Sendable {
         let homePath = NSRegularExpression.escapedPattern(for: home)
         // Log/crash windows outlive sidebar entries and sweep history. Unknown private
         // paths retain only the first home component; never guess where a filename ends.
-        let unknownHome = try! NSRegularExpression(pattern: homePath + #"/([^/\r\n"']+)/[^\r\n]*"#)
+        let unknownHome = try! NSRegularExpression(pattern: homePath + #"/([^/\r\n]+)/[^\r\n]*"#)
         for match in unknownHome.matches(in: result, range: NSRange(result.startIndex..., in: result)).reversed() {
             guard let range = Range(match.range, in: result),
                   let component = Range(match.range(at: 1), in: result) else { continue }

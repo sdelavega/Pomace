@@ -13,6 +13,40 @@ struct RedactorTests {
         #expect(redactor().redact("/Users/alex/Desktop/a.txt") == "~/Desktop/<path>")
     }
 
+    @Test(arguments: ["Client's Plans", "Client\"s Plans", "計画 Café"])
+    func unknownHomeComponentHidesChildren(component: String) throws {
+        let path = "/Users/alex/\(component)/private child/payroll.txt"
+        #expect(path.contains(component) && path.contains("payroll.txt"))
+        #expect(redactor().redact(path) == "~/\(component)/<path>")
+        let data = try JSONEncoder().encode(["path": path, "reason": "test crash"])
+        let json = try #require(String(data: data, encoding: .utf8))
+        #expect(json.contains(#"\/Users\/alex\/"#))
+        let result = redactor().redact(json)
+        let decoded = try JSONDecoder().decode([String: String].self, from: Data(result.utf8))
+        #expect(decoded["path"] == "~/\(component)/<path>")
+        #expect(decoded["reason"] == "test crash")
+        #expect(!result.contains("private child") && !result.contains("payroll.txt"))
+    }
+
+    @Test(arguments: ["Client's Plans", "Client\"s Plans", "計画 Café"])
+    func unknownVolumeAndTemporaryPathsHideChildren(component: String) throws {
+        for (prefix, expected) in [("/Volumes/", "/Volumes/<volume>/<path>"),
+                                   ("/private/var/folders/", "<temporary folder>"),
+                                   ("/var/folders/", "<temporary folder>")] {
+            let path = prefix + component + "/private child/payroll.txt"
+            #expect(path.contains(component) && path.contains("payroll.txt"))
+            #expect(redactor().redact(path) == expected)
+            let data = try JSONEncoder().encode(["path": path, "reason": "test crash"])
+            let json = try #require(String(data: data, encoding: .utf8))
+            #expect(json.contains(#"\/"#))
+            let result = redactor().redact(json)
+            let decoded = try JSONDecoder().decode([String: String].self, from: Data(result.utf8))
+            #expect(decoded["path"] == expected)
+            #expect(decoded["reason"] == "test crash")
+            for secret in [component, "private child", "payroll.txt"] { #expect(!result.contains(secret)) }
+        }
+    }
+
     @Test func rootContentsHidden() {
         let text = "/Users/alex/Projects/Secret Plans/über/x.mov"
         #expect(text.contains("Secret") && text.contains("über") && text.contains("x.mov"))

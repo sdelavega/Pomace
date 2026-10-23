@@ -36,12 +36,12 @@ struct DiagnosticsContextTests {
         #expect(DiagnosticsFiles.logLines(at: log.url).first?.contains("synthetic alex log") == true)
     }
 
-    @Test(arguments: [false, true]) @MainActor
-    func forgottenRootsHideLogAndCrashContents(evicted: Bool) throws {
+    @Test(arguments: [false, true], ["Documents/Secret Plans", "Client's Plans", "Client\"s Plans"]) @MainActor
+    func forgottenRootsHideLogAndCrashContents(evicted: Bool, folder: String) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let root = "/Users/alex/Documents/Secret Plans"
+        let root = "/Users/alex/" + folder
         let privatePath = root + "/payroll.txt"
         let store = try Store(url: directory.appendingPathComponent("history.sqlite"))
         if evicted {
@@ -62,13 +62,26 @@ struct DiagnosticsContextTests {
         #expect(context.history.count == (evicted ? 20 : 0))
         let lines = DiagnosticsFiles.logLines(at: log.url)
         #expect(lines.contains { $0.contains(privatePath) })
-        let crash = #"{"path":"/Users/alex/Documents/Secret Plans/payroll.txt","external":"/Volumes/Old Disk/Secret Plans/payroll.txt","temporary":"/private/var/folders/ab/secret/T/payroll.txt"}"#
+        let crashData = try JSONEncoder().encode([
+            "path": privatePath, "external": "/Volumes/Old Disk/Secret Plans/payroll.txt",
+            "temporary": "/private/var/folders/ab/secret/T/payroll.txt", "reason": "test crash"
+        ])
+        let crash = try #require(String(data: crashData, encoding: .utf8))
+        let decodedCrash = try JSONDecoder().decode([String: String].self, from: crashData)
+        #expect(decodedCrash["path"] == privatePath)
+        #expect(crash.contains("payroll.txt") && crash.contains(#"\/Users\/alex\/"#))
         let report = DiagnosticsReport.render(DiagnosticsInput(
             appVersion: "test", build: "1", osVersion: "test", architecture: "test",
             compressor: model.resolution, agentRegistered: false, logLines: lines + context.history,
             crashReports: [(name: "Pomace.ips", contents: crash)], scannedRoots: context.roots,
             homeDirectory: URL(fileURLWithPath: "/Users/alex"), userName: "alex", hostName: "alex-mbp"))
-        #expect(report.contains("~/Documents/<path>"))
+        let component = try #require(folder.split(separator: "/").first)
+        let expectedPath = "~/\(component)/<path>"
+        #expect(report.contains("batch first=" + expectedPath))
+        let crashLine = try #require(report.split(separator: "\n").first { $0.hasPrefix("{") })
+        let redactedCrash = try JSONDecoder().decode([String: String].self, from: Data(crashLine.utf8))
+        #expect(redactedCrash["path"] == expectedPath)
+        #expect(redactedCrash["reason"] == "test crash")
         #expect(!report.contains("payroll") && !report.contains("Secret Plans"))
         #expect(!report.contains("Old Disk") && !report.contains("/secret/"))
     }
