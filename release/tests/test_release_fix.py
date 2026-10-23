@@ -176,6 +176,22 @@ class MetadataFixTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("signature", result.stderr.lower())
 
+    def test_openssl_failure_names_required_capability(self):
+        bin_dir = self.root / "unsupported-bin"
+        bin_dir.mkdir()
+        wrapper = bin_dir / "openssl"
+        wrapper.write_text("#!/bin/sh\necho 'fixture unsupported algorithm' >&2\nexit 1\n")
+        wrapper.chmod(0o755)
+        for search_path in (str(bin_dir), str(self.root / "missing-bin")):
+            with self.subTest(path=search_path):
+                result = self.metadata("key", self.key, self.app,
+                                       values={**os.environ, "PATH": search_path})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Ed25519-capable openssl", result.stderr)
+                self.assertIn("openssl@3", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertFalse(self.key.exists())
+
     def test_feed_versions(self):
         self.prepare_feed()
         good = self.check_feed()

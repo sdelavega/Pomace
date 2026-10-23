@@ -29,5 +29,11 @@ jobs:
           cargo install --locked cargo-deny
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
+      - name: Install OpenSSL 3 for disposable Ed25519 signing
+        run: |
+          # Pin the major formula: the system LibreSSL may lack Ed25519.
+          brew install openssl@3
+          echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
+
       - name: Run the gate
         run: scripts/gate.sh

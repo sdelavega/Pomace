@@ -1,6 +1,7 @@
 # Small, dependency-free release metadata and rendering helpers.
 import base64
 import html
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -36,7 +37,8 @@ def cask(version, sha):
 
 
 def manifest(version, commit, sha, dry_run):
-    proof = dict(version=version, commit=commit, dmg_sha256=sha, dry_run=dry_run == "1")
+    proof = dict(version=version, commit=commit, dmg_sha256=sha, dry_run=dry_run == "1",
+                 appcast_sha256=hashlib.sha256(Path("dist/appcast.xml").read_bytes()).hexdigest())
     Path("dist/MANIFEST").write_text(json.dumps(proof, indent=2) + "\n")
 
 
@@ -50,6 +52,8 @@ def verify(version, commit, sha):
         sys.exit("MANIFEST DMG checksum mismatch")
     if proof.get("dry_run") is not False:
         sys.exit("Refusing dry-run or unclassified artifacts")
+    if proof.get("appcast_sha256") != hashlib.sha256(Path("dist/appcast.xml").read_bytes()).hexdigest():
+        sys.exit("MANIFEST appcast checksum mismatch")
 
 
 def notes(source, destination):
@@ -78,10 +82,13 @@ def notes(source, destination):
 def key(destination, app):
     # Sparkle 2.10.0 generate_keys --help documents base64 of a 32-byte seed.
     # Validate the RFC 8410 PKCS#8/SPKI wrappers before extracting raw keys.
-    private = subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-outform", "DER"],
-                             capture_output=True, check=True).stdout
-    public = subprocess.run(["openssl", "pkey", "-inform", "DER", "-pubout", "-outform", "DER"],
-                            input=private, capture_output=True, check=True).stdout
+    try:
+        private = subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-outform", "DER"],
+                                 capture_output=True, check=True).stdout
+        public = subprocess.run(["openssl", "pkey", "-inform", "DER", "-pubout", "-outform", "DER"],
+                                input=private, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        sys.exit("Dry-run signing requires Ed25519-capable openssl on PATH; install Homebrew openssl@3 and prepend its bin directory.")
     private_prefix = bytes.fromhex("302e020100300506032b657004220420")
     public_prefix = bytes.fromhex("302a300506032b6570032100")
     if (len(private) != len(private_prefix) + 32 or not private.startswith(private_prefix)

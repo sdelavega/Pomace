@@ -11,8 +11,11 @@ NOTES="release/$VERSION.md"
 [ -f "$DMG" ] && [ -f dist/MANIFEST ] || fail 'Missing release artifacts'
 SHA="$(shasum -a 256 "$DMG")"
 SHA="${SHA%% *}"
-python3 release/metadata.py verify "$VERSION" "$(git rev-parse HEAD)" "$SHA"
 [ -s dist/appcast.xml ] && [ -s "$NOTES" ] || fail 'Missing appcast or release notes'
+python3 release/metadata.py verify "$VERSION" "$(git rev-parse HEAD)" "$SHA"
+TOOLS="$(pwd)/build/sparkle-tools/bin"
+bash release/release-tools.sh --check "$TOOLS"
+python3 release/metadata.py check-feed "$VERSION" "$DMG" dist/appcast.xml 0 build/Pomace.app "$TOOLS/sign_update"
 [ -n "${POMACE_TAP_DIR:-}" ] || fail 'Set POMACE_TAP_DIR to the tap clone'
 TAP="$POMACE_TAP_DIR"
 PAGES="$(pwd)/dist/.publish-pages-$VERSION"

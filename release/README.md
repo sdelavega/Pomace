@@ -47,7 +47,8 @@ only the current DMG, HTML notes and the feed fetched from `origin/gh-pages`. A 
 remote branch means an empty feed; other fetch errors fail. Deltas are disabled and
 historical items are retained. The DMG and feed signatures are verified against the
 committed public key. Successful output is `dist/Pomace-X.Y.Z.dmg`, `dist/appcast.xml`
-and JSON `dist/MANIFEST` (`version`, `commit`, `dmg_sha256`, `dry_run`).
+and JSON `dist/MANIFEST` (`version`, `commit`, `dmg_sha256`, `appcast_sha256`, `dry_run`).
+The appcast hash binds the exact signed feed bytes that passed release validation.
 
 For a local rehearsal without publishing or accessing the real Sparkle key:
 
@@ -74,8 +75,10 @@ CI runs `scripts/gate.sh` on a GitHub macOS runner with `permissions: contents: 
 It installs Rust stable with both Darwin targets and `cargo-deny`; the Rust tools in
 `~/.cargo/bin` take precedence over Homebrew. Every third-party action is pinned by
 full commit SHA. The gate needs no signing or notarization secrets: CI explicitly
-uses ad-hoc signing, OpenSSL is preinstalled, and the pinned Sparkle 2.10.0 tools are
-downloaded and hash-checked. The gate's dry-run does not publish anything.
+uses ad-hoc signing, explicitly installs the major-pinned Homebrew `openssl@3` formula
+and prepends its bin directory to PATH, and downloads/hash-checks Sparkle 2.10.0 tools.
+`metadata.py` reports the Ed25519-capable OpenSSL requirement clearly if OpenSSL is
+missing or cannot generate the disposable key. The gate's dry-run does not publish anything.
 
 The universal bundle check validates signatures, architectures and updater keys,
 rejects debug hooks, and rejects absolute rpaths outside `/usr/lib/` in the shipped
@@ -104,8 +107,13 @@ release/publish.sh 1.1.0
 ```
 
 The first command prints the plan without running publishing commands. Both validate
-the requested version, HEAD commit and DMG SHA-256 against the manifest first, and
-refuse dry-run artifacts. Review the DMG, feed and notes before invoking real mode.
+the requested version, HEAD commit, DMG SHA-256 and appcast SHA-256 against the manifest
+first, and refuse dry-run artifacts. They also check the pinned Sparkle tool hashes and
+re-run `check-feed` with `build/Pomace.app`: the feed and enclosure signatures, selected
+release/build, download URL, length, deployment floor and release notes must pass before
+any publishing mutation. Keep the matching build bundle and pinned tools alongside the
+release artifacts. A changed feed, missing release, invalid signature or wrong enclosure
+is refused even in fake mode. Review the DMG, feed and notes before invoking real mode.
 Real mode tags and pushes `vX.Y.Z`, creates the GitHub release with DMG and notes,
 commits/pushes the appcast through a detached `gh-pages` worktree, then renders,
 commits and pushes `Casks/pomace.rb` in `POMACE_TAP_DIR`. Every mutation goes through

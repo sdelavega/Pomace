@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import plistlib
+import xml.etree.ElementTree as ET
 import subprocess
 import tempfile
 import unittest
@@ -30,12 +32,68 @@ class ReleaseTests(unittest.TestCase):
         self.dmg = self.dist / "Pomace-1.1.0.dmg"
         self.dmg.write_bytes(b"disposable DMG fixture")
         self.sha = hashlib.sha256(self.dmg.read_bytes()).hexdigest()
-        (self.dist / "appcast.xml").write_text("<rss><channel/></rss>")
+        self.prepare_signed_feed()
         self.tap = self.root / "tap"
         self.tap.mkdir()
         (self.tap / "sentinel").write_text("unchanged")
-        self.proof = dict(version="1.1.0", commit=self.head, dmg_sha256=self.sha, dry_run=False)
+        self.proof = dict(version="1.1.0", commit=self.head, dmg_sha256=self.sha, dry_run=False,
+                          appcast_sha256=hashlib.sha256((self.dist / "appcast.xml").read_bytes()).hexdigest())
         self.write_manifest()
+
+    def prepare_signed_feed(self):
+        prepared = subprocess.run(["bash", str(ROOT / "release/release-tools.sh")], capture_output=True, text=True)
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        tools = self.root / "build/sparkle-tools"
+        tools.mkdir(parents=True)
+        (tools / "bin").symlink_to(ROOT / "build/sparkle-tools/bin", target_is_directory=True)
+        self.signer = tools / "bin/sign_update"
+        self.app = self.root / "build/Pomace.app"
+        (self.app / "Contents").mkdir(parents=True)
+        (self.app / "Contents/Info.plist").write_bytes(plistlib.dumps(dict(
+            CFBundleShortVersionString="1.1.0", CFBundleVersion="10100")))
+        key = self.root / "disposable-key"
+        result = subprocess.run(["python3", str(self.root / "release/metadata.py"), "key", str(key), str(self.app)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        signed = subprocess.run([str(self.signer), "-p", str(self.dmg), "--ed-key-file", str(key)], capture_output=True, text=True)
+        self.assertEqual(signed.returncode, 0, signed.stderr)
+        ns = "{http://www.andymatuschak.org/xml-namespaces/sparkle}"
+        rss = ET.Element("rss", version="2.0")
+        item = ET.SubElement(ET.SubElement(rss, "channel"), "item")
+        for tag, value in ((ns + "version", "10100"), (ns + "shortVersionString", "1.1.0"),
+                           (ns + "minimumSystemVersion", "14.0"), ("description", "Disposable fixture")):
+            ET.SubElement(item, tag).text = value
+        ET.SubElement(item, "enclosure", {"url": "https://github.com/sdelavega/Pomace/releases/download/v1.1.0/Pomace-1.1.0.dmg",
+            "length": str(self.dmg.stat().st_size), ns + "edSignature": signed.stdout.strip()})
+        feed = self.dist / "appcast.xml"
+        ET.ElementTree(rss).write(feed, encoding="utf-8", xml_declaration=True)
+        signed = subprocess.run([str(self.signer), str(feed), "--ed-key-file", str(key)], capture_output=True, text=True)
+        self.assertEqual(signed.returncode, 0, signed.stderr)
+        key.unlink()
+
+    def test_invalid_appcast_refused_before_mutation(self):
+        feed = self.dist / "appcast.xml"
+        original = feed.read_bytes()
+        for kind in ("changed", "missing-release", "signature", "enclosure"):
+            with self.subTest(kind=kind):
+                feed.write_bytes(original)
+                if kind == "changed":
+                    feed.write_bytes(original + b"\n")
+                elif kind == "missing-release":
+                    feed.write_text("<rss><channel/></rss>")
+                elif kind == "signature":
+                    feed.write_bytes(original.replace(b"Disposable fixture", b"Untrusted fixture"))
+                else:
+                    feed.write_bytes(original.replace(b"/v1.1.0/", b"/v1.0.2/"))
+                self.proof["appcast_sha256"] = hashlib.sha256(original if kind == "changed" else feed.read_bytes()).hexdigest()
+                self.write_manifest()
+                self.assertNotEqual(feed.read_bytes(), original)
+                result = self.publish()
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn("git tag", result.stdout)
+                self.assertNotIn("gh release", result.stdout)
+                diagnostic = {"changed": "checksum", "missing-release": "release item", "signature": "signature", "enclosure": "enclosure"}[kind]
+                self.assertIn(diagnostic, result.stderr)
 
     def git(self, *args):
         return subprocess.run(["git", "-C", str(self.root), *args],

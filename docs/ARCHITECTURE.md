@@ -89,8 +89,24 @@ no installed private copy ([ADR-0017](DECISIONS.md#adr-0017-bundle-applesauce)).
 Resolution happens again at each run. If a custom choice becomes unusable, normal
 runs fall back to the checked bundled copy and the UI shows the rejection. If neither
 is usable, scanning remains available and mutation is disabled. For administrator
-runs, the confirmation names the exact compressor; a changed resolved path refuses
-the run rather than substituting a different executable after consent.
+runs, the confirmation binds the resolved path and SHA-256; a changed path or bytes
+refuses the run before authorization. The hash must be stable across capability probing.
+The privileged script copies the binary into a root-owned mode-700 temporary directory,
+checks the confirmed hash, and executes only that copy across batches, rechecking source
+and copy hashes between batches. Cleanup precedes the final outcome; denied cleanup or
+process death may leave the private temporary copy behind.
+
+Administrator targets must pass the same directory-chain preflight without privilege
+and again as root immediately before each batch: physical containment, regular non-symlink
+file, link count one, and root-owned directories without group/world write access or ACLs.
+The check includes root ancestors and rejects symlinked components. User-owned Homebrew
+trees cannot use elevation. `cd -P`/`pwd -P` supplies physical parent paths; the bundled
+wrapper and library stay unchanged. See ADR-0016 for the threat boundary.
+
+The engine emits the actual per-run `CompressorResolution`, including rejection or
+unavailability. `ScanModel` consumes it for UI and reports. Before invocation the engine
+rebuilds argv through `CompressionPolicy` for the fresh capabilities, preserving the
+chosen savings threshold and mandatory verification when an algorithm must fall back.
 
 Every compress argv contains `--verify`. Explicit batches are sorted smallest-first,
 and Stop waits for the active batch to finish safely. Hard links and other unsafe
@@ -122,10 +138,24 @@ finished or refused state cannot still leave the updater observing an active run
 `Updates` wraps Sparkle's `SPUStandardUpdaterController`. Signed appcast and update
 verification use the committed public EdDSA key; the private key stays in the
 maintainer's keychain. Automatic checks default to daily; system profiling is off.
-The app menu and General settings expose manual and automatic checks. Sparkle's
-relaunch delegate postpones while `SweepLock.isHeld()`, polls every five seconds,
-and invokes the relaunch block once the lock is free. Active batches finish before
-relaunch. Agent registration is re-validated after launch.
+The app menu and General settings expose manual and automatic checks. Before allowing
+Sparkle's relaunch handoff, `Updates` acquires an exclusive `SweepLock` and retains it for
+the GUI process lifetime. If a run holds it, poll every five seconds until acquisition
+succeeds, then invoke the install handler with the reservation still held. New GUI runs
+and agent sweeps cannot enter during this handoff. `willInstallUpdateOnQuit` records a
+staged update; the SwiftUI AppKit delegate returns `terminateLater` until it can hold the
+same reservation, then replies to the termination request. Agent registration is
+re-validated after launch.
+
+Sparkle 2.10.0's pinned `SPUUpdaterDelegate.h` says the relaunch-postponement callback is
+not called if the user did not relaunch on the previous update, and may be skipped when
+installation will not relaunch the app. A staged install-on-quit still uses Pomace's
+termination reservation. A path that bypasses both hooks, forced termination, or an
+external installer cannot be postponed by this protocol; an active run is not guaranteed
+to drain there. The reservation ends when the GUI exits and does not span the helper's
+subsequent replacement/relaunch. The locally served rc1→rc2 installation remains a manual
+pre-release check; automated tests exercise the pinned delegate and termination handoff
+with real file locks, without installing or terminating the app.
 
 ## 6. Persistence and permissions
 
@@ -162,9 +192,12 @@ MutationLog file (GUI and agent if separate), and Pomace `.ips` crash reports fr
 last 30 days. MutationLog files are the actual log source; Pomace has no OSLog producer.
 
 `DiagnosticsReport` passes the complete report through `Redactor`: home becomes `~`,
-paths below scanned or watched roots become numbered folders, volume names are hidden,
+paths below known roots become numbered folders, volume names are hidden,
 and usernames, host names and temporary paths are removed, including paths in crash
-JSON. The user previews the redacted report before Copy, Save As… or Open GitHub Issue.
+JSON. The collected log/crash windows can outlive current sidebar roots and the last
+20 sweep records. Unknown home paths therefore retain only their first component
+(`~/Documents/<path>`); unknown volume paths become `/Volumes/<volume>/<path>`.
+This conservative fallback also covers removed manual folders and evicted history roots. The user previews the redacted report before Copy, Save As… or Open GitHub Issue.
 The issue URL has a length budget and adds an attachment note on truncation. No report
 is uploaded automatically.
 
