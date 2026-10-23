@@ -6,7 +6,7 @@
 # certificates in different keychains make --sign by name ambiguous, and codesign then
 # produces a BROKEN signature while reporting success.
 #   security find-identity -v -p codesigning
-set -eu
+set -euo pipefail
 CONFIG="${1:-debug}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 APP="$HERE/build/Pomace.app"
@@ -50,6 +50,21 @@ fi
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents" "$APP/Contents/Helpers" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/Pomace"
+if [ "$CONFIG" = "release" ]; then
+  # SwiftPM embeds build-host toolchain paths in both slices. Strip only those paths
+  # from the distribution copy, before signing; keep system and bundle-relative paths.
+  RPATHS="$(otool -l "$APP/Contents/MacOS/Pomace" | awk '
+    $1 == "cmd" && $2 == "LC_RPATH" { rpath = 1; next }
+    rpath && $1 == "path" { sub(/^ *path /, ""); sub(/ \(offset [0-9]+\)$/, ""); print; rpath = 0 }
+  ' | sort -u)"
+  while IFS= read -r rpath; do
+    case "$rpath" in
+      /Applications/Xcode.app*|/var/run/com.apple.security.cryptexd*)
+        install_name_tool -delete_rpath "$rpath" "$APP/Contents/MacOS/Pomace"
+        ;;
+    esac
+  done <<< "$RPATHS"
+fi
 cp "$HERE/build/applesauce" "$APP/Contents/Helpers/applesauce"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$HERE/Resources/Pomace.icns" "$APP/Contents/Resources/Pomace.icns"

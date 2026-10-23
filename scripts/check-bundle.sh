@@ -37,6 +37,20 @@ check_universal() {
   esac
 }
 
+check_rpaths() {
+  local paths rpath
+  paths="$(otool -l "$1" | awk '
+    $1 == "cmd" && $2 == "LC_RPATH" { rpath = 1; next }
+    rpath && $1 == "path" { sub(/^ *path /, ""); sub(/ \(offset [0-9]+\)$/, ""); print; rpath = 0 }
+  ')" || fail "cannot read rpaths: $1"
+  while IFS= read -r rpath; do
+    case "$rpath" in
+      /usr/lib/*) ;;
+      /*) fail "absolute non-system rpath in $1: $rpath" ;;
+    esac
+  done <<< "$paths"
+}
+
 if [ "$UNIVERSAL" -eq 1 ]; then
   if LC_ALL=C grep -a -q 'PomaceUITestFixture' "$BINARY"; then
     fail "release binary contains PomaceUITestFixture debug hook"
@@ -44,6 +58,13 @@ if [ "$UNIVERSAL" -eq 1 ]; then
   check_universal "$BINARY" "Contents/MacOS/Pomace"
   check_universal "$HELPER" "Contents/Helpers/applesauce"
   check_universal "$FRAMEWORK/Sparkle" "Sparkle.framework/Sparkle"
+  check_rpaths "$BINARY"
+  check_rpaths "$HELPER"
+  check_rpaths "$FRAMEWORK/Sparkle"
+  check_rpaths "$FRAMEWORK/Versions/B/Autoupdate"
+  check_rpaths "$FRAMEWORK/Versions/B/Updater.app/Contents/MacOS/Updater"
+  check_rpaths "$FRAMEWORK/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer"
+  check_rpaths "$FRAMEWORK/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
 fi
 SPARKLE_VERSION="$FRAMEWORK/Versions/B"
 for component in XPCServices/Installer.xpc XPCServices/Downloader.xpc Autoupdate Updater.app; do

@@ -101,7 +101,7 @@ struct SafetyRulesTests {
 
     let rules = SafetyRules()
 
-    func facts(path: String = "/Users/x/file.txt", logical: Int64 = 100_000,
+    func facts(path: String = "/Users/alex/file.txt", logical: Int64 = 100_000,
                physical: Int64 = 102_400, compressed: Bool = false,
                links: UInt16 = 1, regular: Bool = true) -> FileFacts {
         FileFacts(path: path, logicalSize: logical, physicalSize: physical,
@@ -131,13 +131,13 @@ struct SafetyRulesTests {
 
     @Test("VM images are excluded", arguments: ["disk.vmdk", "box.qcow2", "vm.utm", "img.sparsebundle"])
     func vmImages(name: String) {
-        #expect(rules.isExcluded(facts(path: "/Users/x/\(name)")))
+        #expect(rules.isExcluded(facts(path: "/Users/alex/\(name)")))
     }
 
     @Test("cloud-synced paths are excluded", arguments: [
-        "/Users/x/Library/Mobile Documents/a.txt",
-        "/Users/x/Dropbox/a.txt",
-        "/Users/x/Library/CloudStorage/OneDrive/a.txt",
+        "/Users/alex/Library/Mobile Documents/a.txt",
+        "/Users/alex/Dropbox/a.txt",
+        "/Users/alex/Library/CloudStorage/OneDrive/a.txt",
     ])
     func cloudSync(path: String) {
         #expect(rules.isExcluded(facts(path: path)))
@@ -159,9 +159,9 @@ struct SafetyRulesTests {
 
     @Test("already-compressed formats warn but do not exclude")
     func incompressible() {
-        let r = rules.evaluate(facts(path: "/Users/x/photo.jpg"))
+        let r = rules.evaluate(facts(path: "/Users/alex/photo.jpg"))
         #expect(r.contains(.likelyIncompressible("JPEG")))
-        #expect(!rules.isExcluded(facts(path: "/Users/x/photo.jpg")))
+        #expect(!rules.isExcluded(facts(path: "/Users/alex/photo.jpg")))
     }
 
     @Test("network volumes block the whole tree")

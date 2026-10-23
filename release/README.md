@@ -68,6 +68,34 @@ the 1.1.0 notes for the gate's synthetic version. It never runs
 The temporary key is removed on exit. Its manifest is marked `dry_run: true` and is
 refused by publishing; only a fresh real release build can produce shipping proof.
 
+## Gate and release readiness
+
+CI runs `scripts/gate.sh` on a GitHub macOS runner with `permissions: contents: read`.
+It installs Rust stable with both Darwin targets and `cargo-deny`; the Rust tools in
+`~/.cargo/bin` take precedence over Homebrew. Every third-party action is pinned by
+full commit SHA. The gate needs no signing or notarization secrets: CI explicitly
+uses ad-hoc signing, OpenSSL is preinstalled, and the pinned Sparkle 2.10.0 tools are
+downloaded and hash-checked. The gate's dry-run does not publish anything.
+
+The universal bundle check validates signatures, architectures and updater keys,
+rejects debug hooks, and rejects absolute rpaths outside `/usr/lib/` in the shipped
+executables. `build-app.sh release` removes absolute Xcode/cryptexd toolchain rpaths
+before signing, keeping system and bundle-relative paths. The gate later builds a
+debug app for `check-ax`, which skips if AX permission or an unlocked GUI session is
+unavailable. A skip is not evidence that the manual accessibility pass succeeded.
+
+Before a real release, complete the [1.1 release checklist](../docs/ROADMAP.md#11-release-checklist):
+clean-account testing without Homebrew, a locally served Sparkle rc1→rc2 update,
+VoiceOver/keyboard checks (including the pending confirmation AXDefaultButton=Cancel
+and Return/Escape verification), locale screenshots and an Intel Mac run. Give each
+candidate an increasing `POMACE_BUILD`; the normal 1.1.0 build is 10100, following
+1.0.2's build 1. Users of 1.0.2 install 1.1 manually once because 1.0.2 has no updater.
+
+Help → Report a Problem supplies user-initiated diagnostics: recent MutationLog file
+lines and sweep history, plus Pomace crash reports from the last 30 days. The user
+previews the redacted report and chooses whether to share it; there is no automatic
+crash upload. Report collection does not depend on OSLog.
+
 ## Publish after reviewing the artifacts
 
 ```bash
