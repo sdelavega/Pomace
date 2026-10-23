@@ -80,7 +80,17 @@ class BundleRpathTests(unittest.TestCase):
             destination = self.root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
-        self.script('swift', f'echo "{self.products}"')
+        self.script('swift', 'arch=""\nshow=0\n'
+                    'while [ "$#" -gt 0 ]; do\n'
+                    '  case "$1" in --arch) arch="$2"; shift;; --show-bin-path) show=1;; esac\n'
+                    '  shift\ndone\n'
+                    f'products="{self.products}"\n'
+                    'if [ -z "$arch" ]; then\n  echo "$products"\n'
+                    'elif [ "$show" = 1 ]; then\n  echo "$products/$arch"\nelse\n'
+                    '  mkdir -p "$products/$arch"\n'
+                    '  lipo "$products/PomaceApp" -thin "$arch" -output "$products/$arch/PomaceApp"\n'
+                    '  rm -rf "$products/$arch/Pomace_PomaceApp.bundle"\n'
+                    '  cp -R "$products/Pomace_PomaceApp.bundle" "$products/$arch/"\nfi')
         # Capture the app's load commands at signing time, before the build exits.
         self.script('codesign', 'case " $* " in *" --sign "*) ;; *) exit 0 ;; esac\n'
                     'for arg in "$@"; do\n'

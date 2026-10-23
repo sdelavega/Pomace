@@ -17,19 +17,53 @@ cd "$HERE"
 source "$HERE/scripts/lib/rpaths.sh"
 BUILD_VERSION="$(python3 release/metadata.py build-number "$VERSION" "${POMACE_BUILD:-}")"
 BUILD_ARGS=(-c "$CONFIG" --product PomaceApp)
-if [ "$CONFIG" = "release" ]; then
-  BUILD_ARGS+=(--arch arm64 --arch x86_64)
+# CI can explicitly exercise SwiftPM's native system without changing its default.
+if [ -n "${POMACE_SWIFT_BUILD_SYSTEM:-}" ]; then
+  BUILD_ARGS+=(--build-system "$POMACE_SWIFT_BUILD_SYSTEM")
 fi
 
 echo "building ($CONFIG)…"
-swift build "${BUILD_ARGS[@]}"
-BIN="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/PomaceApp"
-PRODUCTS_DIR="$(dirname "$BIN")"
-RESOURCE_BUNDLE="$PRODUCTS_DIR/Pomace_PomaceApp.bundle"
-
-if [ ! -d "$RESOURCE_BUNDLE" ]; then
-  echo "missing processed SwiftPM resource bundle: $RESOURCE_BUNDLE" >&2
-  exit 1
+if [ "$CONFIG" = "release" ]; then
+  # Multiple --arch flags select XCBuild, which cannot run our build-tool plugin.
+  # Single-arch builds compile the catalog before we combine only the executables.
+  BINS=()
+  RESOURCE_BUNDLE=""
+  for arch in arm64 x86_64; do
+    swift build "${BUILD_ARGS[@]}" --arch "$arch"
+    PRODUCTS_DIR="$(swift build "${BUILD_ARGS[@]}" --arch "$arch" --show-bin-path)"
+    ARCH_RESOURCE_BUNDLE="$PRODUCTS_DIR/Pomace_PomaceApp.bundle"
+    if [ ! -d "$ARCH_RESOURCE_BUNDLE" ]; then
+      echo "missing processed SwiftPM resource bundle: $ARCH_RESOURCE_BUNDLE" >&2
+      exit 1
+    fi
+    # Some SwiftPM systems reuse a products directory for successive architectures.
+    # Preserve both outputs before the next build can overwrite either of them.
+    ARCH_STAGE="$HERE/build/release-$arch"
+    rm -rf "$ARCH_STAGE"
+    mkdir -p "$ARCH_STAGE"
+    cp "$PRODUCTS_DIR/PomaceApp" "$ARCH_STAGE/PomaceApp"
+    cp -R "$ARCH_RESOURCE_BUNDLE" "$ARCH_STAGE/"
+    BINS+=("$ARCH_STAGE/PomaceApp")
+    ARCH_RESOURCE_BUNDLE="$ARCH_STAGE/Pomace_PomaceApp.bundle"
+    if [ -z "$RESOURCE_BUNDLE" ]; then
+      RESOURCE_BUNDLE="$ARCH_RESOURCE_BUNDLE"
+    elif ! diff -rq "$RESOURCE_BUNDLE" "$ARCH_RESOURCE_BUNDLE"; then
+      echo "architecture resource bundles differ" >&2
+      exit 1
+    fi
+  done
+  mkdir -p "$HERE/build"
+  BIN="$HERE/build/PomaceApp-universal"
+  lipo -create "${BINS[@]}" -output "$BIN"
+else
+  swift build "${BUILD_ARGS[@]}"
+  BIN="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/PomaceApp"
+  PRODUCTS_DIR="$(dirname "$BIN")"
+  RESOURCE_BUNDLE="$PRODUCTS_DIR/Pomace_PomaceApp.bundle"
+  if [ ! -d "$RESOURCE_BUNDLE" ]; then
+    echo "missing processed SwiftPM resource bundle: $RESOURCE_BUNDLE" >&2
+    exit 1
+  fi
 fi
 
 SPARKLE_SOURCE=""

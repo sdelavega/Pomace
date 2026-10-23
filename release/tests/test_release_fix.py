@@ -19,7 +19,7 @@ class BuildVersionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         shutil.copy(ROOT / "build-app.sh", self.root)
         (self.root / "scripts/lib").mkdir(parents=True)
         shutil.copy(ROOT / "scripts/lib/rpaths.sh", self.root / "scripts/lib")
@@ -32,8 +32,15 @@ class BuildVersionTests(unittest.TestCase):
             (resources / name).write_text("fixture")
         self.products = self.root / "products"
         self.products.mkdir()
-        (self.products / "PomaceApp").write_text("fake executable")
-        (self.products / "Pomace_PomaceApp.bundle").mkdir()
+        for arch in ("host", "arm64", "x86_64"):
+            products = self.products / arch
+            products.mkdir()
+            (products / "PomaceApp").write_text(arch + "\n")
+            bundle = products / "Pomace_PomaceApp.bundle"
+            for locale in ("en", "zh-Hans", "es", "ja", "ko", "de", "fr", "pt-BR"):
+                localized = bundle / (locale + ".lproj")
+                localized.mkdir(parents=True)
+                (localized / "Localizable.stringsdict").write_text("fixture " + locale)
         framework = self.root / ".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-fixture/Sparkle.framework"
         framework.mkdir(parents=True)
         (framework / "sentinel").write_text("fake framework")
@@ -42,9 +49,18 @@ class BuildVersionTests(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         scripts = {
-            "swift": '#!/bin/bash\nfor arg in "$@"; do\n'
-                     + f'  if [ "$arg" = --show-bin-path ]; then echo {shlex.quote(str(self.products))}; fi\n'
-                     + 'done\n',
+            "swift": '#!/bin/bash\nprintf "%s\\n" "$*" >> '
+                     + shlex.quote(str(self.root / "swift-calls")) + '\n'
+                     + 'arch=host\nshow=0\nwhile [ "$#" -gt 0 ]; do\n'
+                     + '  case "$1" in --arch) arch="$2"; shift;; --show-bin-path) show=1;; esac\n'
+                     + '  shift\ndone\n'
+                     + f'products={shlex.quote(str(self.products))}\n'
+                     + 'if [ "$show" = 1 ]; then\n  echo "$products/current"\nelse\n'
+                     + '  rm -rf "$products/current"\n  cp -R "$products/$arch" "$products/current"\nfi\n',
+            "lipo": '#!/bin/bash\nprintf "%s\\n" "$*" > '
+                    + shlex.quote(str(self.root / "lipo-call")) + '\n'
+                    + '[ "$1" = -create ] && [ "$4" = -output ] || exit 92\n'
+                    + 'cat "$2" "$3" > "$5"\n',
             "codesign": '#!/bin/bash\nprintf "%s\\n" "$*" >> '
                         + shlex.quote(str(self.root / "signatures")) + '\n',
             "security": '#!/bin/bash\necho invoked > '
@@ -57,13 +73,69 @@ class BuildVersionTests(unittest.TestCase):
 
     def build(self, version, override=None):
         values = {key: value for key, value in os.environ.items()
-                  if key not in {"POMACE_VERSION", "POMACE_BUILD", "POMACE_SIGN_ADHOC", "POMACE_SIGN_ID"}}
+                  if key not in {"POMACE_VERSION", "POMACE_BUILD", "POMACE_SIGN_ADHOC", "POMACE_SIGN_ID", "POMACE_SWIFT_BUILD_SYSTEM"}}
         values.update(PATH=str(self.bin) + ":" + os.environ["PATH"],
                       POMACE_VERSION=version, POMACE_SIGN_ADHOC="1", POMACE_SIGN_ID="fixture")
         if override is not None:
             values["POMACE_BUILD"] = override
-        return subprocess.run(["bash", "build-app.sh", "release"], cwd=self.root,
+        if getattr(self, "build_system", None):
+            values["POMACE_SWIFT_BUILD_SYSTEM"] = self.build_system
+        return subprocess.run(["bash", "build-app.sh", getattr(self, "config", "release")], cwd=self.root,
                               env=values, text=True, capture_output=True)
+
+    def test_release_builds_each_arch_and_combines_executables(self):
+        for system in (None, "native"):
+            with self.subTest(system=system):
+                self.build_system = system
+                (self.root / "swift-calls").unlink(missing_ok=True)
+                result = self.build("1.1.0")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                calls = (self.root / "swift-calls").read_text().splitlines()
+                expected = []
+                for arch in ("arm64", "x86_64"):
+                    invocation = "build -c release --product PomaceApp"
+                    if system:
+                        invocation += f" --build-system {system}"
+                    invocation += f" --arch {arch}"
+                    expected.extend((invocation, invocation + " --show-bin-path"))
+                self.assertEqual(calls, expected)
+                lipo = shlex.split((self.root / "lipo-call").read_text())
+                self.assertEqual(lipo[:4], ["-create", str(self.root / "build/release-arm64/PomaceApp"),
+                                           str(self.root / "build/release-x86_64/PomaceApp"), "-output"])
+                app = self.root / "build/Pomace.app/Contents"
+                self.assertEqual((app / "MacOS/Pomace").read_text(), "arm64\nx86_64\n")
+                bundle = app / "Resources/Pomace_PomaceApp.bundle"
+                self.assertEqual(len(list(bundle.glob("*.lproj/Localizable.stringsdict"))), 8)
+
+    def test_release_refuses_different_arch_resources(self):
+        bundle = self.products / "x86_64/Pomace_PomaceApp.bundle"
+        resource = bundle / "fr.lproj/Localizable.stringsdict"
+        self.assertTrue(resource.is_file())
+        resource.write_text("different plural resources")
+        result = self.build("1.1.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("architecture resource bundles differ", result.stderr)
+        self.assertFalse((self.root / "build/Pomace.app").exists())
+
+    def test_release_refuses_missing_arch_resource_bundle(self):
+        bundle = self.products / "x86_64/Pomace_PomaceApp.bundle"
+        self.assertTrue(bundle.is_dir())
+        shutil.rmtree(bundle)
+        result = self.build("1.1.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing processed SwiftPM resource bundle", result.stderr)
+        self.assertFalse((self.root / "build/Pomace.app").exists())
+
+    def test_debug_stays_host_only(self):
+        self.config = "debug"
+        result = self.build("1.1.0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = (self.root / "swift-calls").read_text().splitlines()
+        self.assertEqual(calls, ["build -c debug --product PomaceApp",
+                                 "build -c debug --product PomaceApp --show-bin-path"])
+        self.assertFalse((self.root / "lipo-call").exists())
+        executable = self.root / "build/Pomace.app/Contents/MacOS/Pomace"
+        self.assertEqual(executable.read_text(), "host\n")
 
     def test_bundle_build_numbers(self):
         for version, override, expected in (("1.1.0", None, "10100"),
