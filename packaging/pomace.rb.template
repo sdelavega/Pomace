@@ -1,0 +1,23 @@
+cask "pomace" do
+  version "@VERSION@"
+  sha256 "@SHA256@"
+
+  url "https://github.com/sdelavega/Pomace/releases/download/v@VERSION@/Pomace-@VERSION@.dmg"
+  name "Pomace"
+  desc "Transparent filesystem compression for macOS"
+  homepage "https://github.com/sdelavega/Pomace"
+
+  auto_updates true
+  depends_on macos: :sonoma
+
+  app "Pomace.app"
+
+  uninstall launchctl: "com.sdelavega.Pomace.Sweep"
+
+  zap trash: [
+    "~/Library/Application Support/Pomace",
+    "~/Library/Preferences/com.sdelavega.Pomace.plist",
+    "~/Library/Caches/com.sdelavega.Pomace",
+    "~/Library/Saved Application State/com.sdelavega.Pomace.savedState",
+  ]
+end

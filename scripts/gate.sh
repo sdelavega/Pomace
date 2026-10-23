@@ -12,3 +12,5 @@ cargo deny --manifest-path tools/applesauce/Cargo.toml --config tools/applesauce
 Tests/integration/sparse-image.sh
 ./build-app.sh release
 scripts/check-bundle.sh --universal build/Pomace.app
+python3 -m unittest discover -s release/tests
+release/release.sh 0.0.0-dryrun --dry-run
