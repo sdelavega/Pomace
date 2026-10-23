@@ -14,3 +14,6 @@ Tests/integration/sparse-image.sh
 scripts/check-bundle.sh --universal build/Pomace.app
 python3 -m unittest discover -s release/tests
 release/release.sh 0.0.0-dryrun --dry-run
+python3 -m unittest discover -s scripts/tests
+python3 scripts/check-l10n.py lint
+python3 scripts/check-l10n.py catalog --locales en

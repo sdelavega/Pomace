@@ -7,7 +7,7 @@ extension SafetyReason {
         case .systemPath:
             NSLocalizedString("core.safetyReason.systemPath", tableName: "Localizable", bundle: .module, value: "On the sealed system volume, which is read-only", comment: "Safety exclusion")
         case .sparseFile(let allocated, let logical):
-            String(format: NSLocalizedString("core.safetyReason.sparseFile", tableName: "Localizable", bundle: .module, value: "Sparse file — occupies %@ of %@. Compressing it would materialize the empty space and use more disk, not less", comment: "Allocated and logical sizes"), ByteFormat.short(allocated), ByteFormat.short(logical))
+            String(format: NSLocalizedString("core.safetyReason.sparseFile", tableName: "Localizable", bundle: .module, value: "Sparse file — occupies %@ of %@. Compressing it would materialize the empty space and use more disk, not less", comment: "Allocated and logical sizes"), Fmt.bytes(allocated), Fmt.bytes(logical))
         case .existingResourceFork:
             NSLocalizedString("core.safetyReason.existingResourceFork", tableName: "Localizable", bundle: .module, value: "Already has a resource fork, which is where the compressed data would need to go", comment: "Safety exclusion")
         case .liveDatabase(let kind):
@@ -33,16 +33,21 @@ extension SafetyReason {
         case .applicationBundle:
             NSLocalizedString("core.safetyReason.applicationBundle", tableName: "Localizable", bundle: .module, value: "Application bundle — generally safe, and signatures still validate, but worth verifying the app afterwards", comment: "Safety advisory")
         case .hardLinked(let count):
-            if count == 2 {
-                NSLocalizedString("core.safetyReason.hardLinkedOne", tableName: "Localizable", bundle: .module, value: "Shares its data with 1 other file; compressing affects all of them", comment: "One other hard link")
-            } else {
-                String(format: NSLocalizedString("core.safetyReason.hardLinked", tableName: "Localizable", bundle: .module, value: "Shares its data with %ld other files; compressing affects all of them", comment: "Other hard link count"), count - 1)
-            }
+            String(localized: "core.safetyReason.hardLinkedCount", defaultValue: "Shares its data with \(count - 1) other files; compressing affects all of them", bundle: .module, comment: "File table safety reason; count of other paths sharing the same stored data. Compression would affect every link.")
         case .veryLargeFile(let bytes):
-            String(format: NSLocalizedString("core.safetyReason.veryLargeFile", tableName: "Localizable", bundle: .module, value: "%@ — this one file will take a while and can't be interrupted partway", comment: "File size"), ByteFormat.short(bytes))
+            String(format: NSLocalizedString("core.safetyReason.veryLargeFile", tableName: "Localizable", bundle: .module, value: "%@ — this one file will take a while and can't be interrupted partway", comment: "File size"), Fmt.bytes(bytes))
         case .likelyIncompressible(let kind):
             String(format: NSLocalizedString("core.safetyReason.likelyIncompressible", tableName: "Localizable", bundle: .module, value: "%@ is already compressed; there's little or nothing to reclaim", comment: "File format"), kind)
         }
+    }
+}
+
+extension CompressionType {
+    var text: String {
+        if self == .storedInline {
+            return NSLocalizedString("core.compressionType.storedInline", tableName: "Localizable", bundle: .module, value: "none / xattr", comment: "File table state for data stored without compression in an extended attribute. Keep xattr as a technical abbreviation.")
+        }
+        return description // l10n-exempt: Compression algorithm and storage codes
     }
 }
 
@@ -95,7 +100,7 @@ extension JustificationValue {
     var text: String {
         switch self {
         case .compressor(let name): name
-        case .percent(let value): String(format: NSLocalizedString("core.justificationValue.percent", tableName: "Localizable", bundle: .module, value: "%ld%%", comment: "Minimum saving percentage"), value)
+        case .percent(let value): Fmt.percent(Double(value) / 100)
         case .alwaysOn: NSLocalizedString("core.justificationValue.alwaysOn", tableName: "Localizable", bundle: .module, value: "Always on", comment: "Fixed verification value")
         case .skipped: NSLocalizedString("core.justificationValue.skipped", tableName: "Localizable", bundle: .module, value: "Skipped", comment: "Fixed exclusion value")
         }
@@ -165,8 +170,7 @@ extension CompressionFailureMessage {
         case .classified(let reason):
             switch reason {
             case .hardLinked(let count):
-                if count == 1 { return NSLocalizedString("core.failureMessage.hardLinkedOne", tableName: "Localizable", bundle: .module, value: "Shares its data with 1 other file", comment: "One other hard link") }
-                return String(format: NSLocalizedString("core.failureMessage.hardLinked", tableName: "Localizable", bundle: .module, value: "Shares its data with %ld other files", comment: "Other hard link count"), count)
+                return String(localized: "core.failureMessage.hardLinkedCount", defaultValue: "Shares its data with \(count) other files", bundle: .module, comment: "Run failure details; count of other paths sharing the file's data, explaining why it was skipped.")
             case .emptyFile: return NSLocalizedString("core.failureMessage.emptyFile", tableName: "Localizable", bundle: .module, value: "Empty file", comment: "Skip message")
             case .unreadable: return NSLocalizedString("core.failureMessage.unreadable", tableName: "Localizable", bundle: .module, value: "Couldn't be read", comment: "Failure message")
             case .unwritable: return NSLocalizedString("core.failureMessage.unwritable", tableName: "Localizable", bundle: .module, value: "Couldn't be modified", comment: "Failure message")
@@ -216,13 +220,7 @@ extension SweepSchedule {
     var text: String {
         guard enabled else { return NSLocalizedString("core.sweepSchedule.paused", tableName: "Localizable", bundle: .module, value: "Paused", comment: "Disabled schedule") }
         guard cadence != .manual else { return NSLocalizedString("core.sweepSchedule.manual", tableName: "Localizable", bundle: .module, value: "Only when you ask", comment: "Manual schedule") }
-        let hour: String
-        switch preferredHour {
-        case 0: hour = NSLocalizedString("core.sweepSchedule.midnight", tableName: "Localizable", bundle: .module, value: "midnight", comment: "Schedule time")
-        case 12: hour = NSLocalizedString("core.sweepSchedule.noon", tableName: "Localizable", bundle: .module, value: "noon", comment: "Schedule time")
-        case 1..<12: hour = String(format: NSLocalizedString("core.sweepSchedule.am", tableName: "Localizable", bundle: .module, value: "%ld AM", comment: "Morning hour"), preferredHour)
-        default: hour = String(format: NSLocalizedString("core.sweepSchedule.pm", tableName: "Localizable", bundle: .module, value: "%ld PM", comment: "Afternoon hour"), preferredHour - 12)
-        }
+        let hour = Fmt.hour(preferredHour)
         return String(format: NSLocalizedString("core.sweepSchedule.scheduled", tableName: "Localizable", bundle: .module, value: "%@, around %@", comment: "Cadence and preferred time"), cadence.text, hour)
     }
 }
@@ -234,15 +232,15 @@ extension Store.SweepRun {
             let rendered = (try? JSONDecoder().decode(CompressionEngineError.self, from: Data(error.utf8)))?.text ?? error
             return String(format: NSLocalizedString("core.sweepRun.failed", tableName: "Localizable", bundle: .module, value: "Failed — %@", comment: "Persisted failure"), rendered)
         }
-        if cancelled { return String(format: NSLocalizedString("core.sweepRun.cancelled", tableName: "Localizable", bundle: .module, value: "Stopped after %ld files", comment: "Completed file count"), filesCompressed) }
-        if filesCompressed == 0 { return NSLocalizedString("core.sweepRun.unchanged", tableName: "Localizable", bundle: .module, value: "Nothing had changed", comment: "No files changed") }
-        var result: String
-        if filesCompressed == 1 {
-            result = String(format: NSLocalizedString("core.sweepRun.completedOne", tableName: "Localizable", bundle: .module, value: "Compressed 1 file, reclaimed %@", comment: "Reclaimed space"), ByteFormat.short(bytesReclaimed))
-        } else {
-            result = String(format: NSLocalizedString("core.sweepRun.completed", tableName: "Localizable", bundle: .module, value: "Compressed %ld files, reclaimed %@", comment: "File count and reclaimed space"), filesCompressed, ByteFormat.short(bytesReclaimed))
+        if cancelled {
+            return String(localized: "core.sweepRun.cancelledCount", defaultValue: "Stopped after \(filesCompressed) files", bundle: .module, comment: "Sweep history cancelled outcome; completed file count. English historically uses files even for one.")
         }
-        if filesFailed > 0 { result += String(format: NSLocalizedString("core.sweepRun.skipped", tableName: "Localizable", bundle: .module, value: " · %ld skipped", comment: "Skipped count suffix"), filesFailed) }
+        if filesCompressed == 0 { return NSLocalizedString("core.sweepRun.unchanged", tableName: "Localizable", bundle: .module, value: "Nothing had changed", comment: "No files changed") }
+        let reclaimed = Fmt.bytes(bytesReclaimed)
+        var result = String(localized: "core.sweepRun.completedCount", defaultValue: "Compressed \(filesCompressed) files, reclaimed \(reclaimed)", bundle: .module, comment: "Sweep history success; number compressed and formatted space recovered.")
+        if filesFailed > 0 {
+            result += String(localized: "core.sweepRun.skippedCount", defaultValue: " · \(filesFailed) skipped", bundle: .module, comment: "Sweep history suffix; number of files skipped, appended to the successful outcome.")
+        }
         return result
     }
 }
@@ -284,7 +282,7 @@ extension CompressionEngineError {
         switch self {
         case .toolMissing: NSLocalizedString("core.engineError.toolMissing", tableName: "Localizable", bundle: .module, value: "applesauce isn't installed. Pomace can install it for you.", comment: "Legacy missing-tool error")
         case .insufficientFreeSpace(let needed, let available):
-            String(format: NSLocalizedString("core.engineError.insufficientFreeSpace", tableName: "Localizable", bundle: .module, value: "Not enough free space to work safely — %@ available, %@ needed for the temporary replacement file.", comment: "Available and needed space"), ByteFormat.short(available), ByteFormat.short(needed))
+            String(format: NSLocalizedString("core.engineError.insufficientFreeSpace", tableName: "Localizable", bundle: .module, value: "Not enough free space to work safely — %@ available, %@ needed for the temporary replacement file.", comment: "Available and needed space"), Fmt.bytes(available), Fmt.bytes(needed))
         case .nothingToDo: NSLocalizedString("core.engineError.nothingToDo", tableName: "Localizable", bundle: .module, value: "Nothing here needs compressing.", comment: "No eligible files")
         case .administratorUnsupported: NSLocalizedString("core.engineError.administratorUnsupported", tableName: "Localizable", bundle: .module, value: "Administrator access is available only for /Applications, /opt/homebrew, and /usr/local.", comment: "Unsupported elevated root")
         case .compressorUnavailable: NSLocalizedString("core.engineError.compressorUnavailable", tableName: "Localizable", bundle: .module, value: "The compressor is unavailable or lacks required verification support.", comment: "Resolution failed")
@@ -321,11 +319,8 @@ extension SweepService.RegistrationError {
 extension SystemProfile {
     var text: String {
         if isAppleSilicon {
-            if performanceCores == 1 {
-                return NSLocalizedString("core.systemProfile.performanceOne", tableName: "Localizable", bundle: .module, value: "matched to 1 performance core", comment: "Legacy machine profile explanation")
-            }
-            return String(format: NSLocalizedString("core.systemProfile.performance", tableName: "Localizable", bundle: .module, value: "matched to %ld performance cores", comment: "Performance core count"), performanceCores)
+            return String(localized: "core.systemProfile.performanceCount", defaultValue: "matched to \(performanceCores) performance cores", bundle: .module, comment: "Machine policy explanation; number of performance cores used to match concurrency.")
         }
-        return String(format: NSLocalizedString("core.systemProfile.physical", tableName: "Localizable", bundle: .module, value: "matched to %ld physical cores", comment: "Physical core count"), physicalCores)
+        return String(localized: "core.systemProfile.physicalCount", defaultValue: "matched to \(physicalCores) physical cores", bundle: .module, comment: "Machine policy explanation; number of physical cores used to match concurrency. English historically uses cores even for one.")
     }
 }

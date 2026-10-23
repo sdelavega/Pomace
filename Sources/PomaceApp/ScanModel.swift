@@ -60,6 +60,13 @@ final class ScanModel {
         case name = "Name"
         case state = "Compression state"
         var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .potentialSaving: AppStrings.largestFirst
+            case .name: AppStrings.name
+            case .state: AppStrings.compressionState
+            }
+        }
     }
 
     private var scanTask: Task<Void, Never>?
@@ -129,18 +136,16 @@ final class ScanModel {
     }
 
     var nextSweepDescription: String {
-        guard schedule.enabled, schedule.cadence != .manual else { return "No scheduled sweeps" }
+        guard schedule.enabled, schedule.cadence != .manual else { return AppStrings.noScheduledSweeps }
         guard serviceStatus.isActive else { return serviceStatus.text }
         guard let path = selectedPath,
               let last = (try? store?.lastCompletedSweep(path: path)).flatMap({ $0 }),
               let interval = schedule.cadence.interval else {
-            return "Will sweep at the next opportunity"
+            return AppStrings.nextOpportunity
         }
         let next = last.addingTimeInterval(interval)
-        if next <= Date() { return "Due now" }
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .full
-        return "Next sweep \(f.localizedString(for: next, relativeTo: Date()))"
+        if next <= Date() { return AppStrings.dueNow }
+        return AppStrings.nextSweep(next.formatted(.relative(presentation: .numeric, unitsStyle: .wide)))
     }
 
     /// Runs a sweep immediately for the selected folder, through the same runner the agent
@@ -179,14 +184,14 @@ final class ScanModel {
     var toolReady: Bool { resolution.installation?.capabilities.isUsable ?? false }
 
     var toolSummary: String {
-        guard let i = resolution.installation else { return "Compressor unavailable — scanning only" }
+        guard let i = resolution.installation else { return AppStrings.scanningOnly }
         let v = i.capabilities.version.map { "\(CompressorTool.displayName) \($0)" } ?? CompressorTool.displayName
         let source: String
         switch i.source {
-        case .bundled: source = "Bundled"
-        case .custom: source = "Custom"
+        case .bundled: source = AppStrings.bundled
+        case .custom: source = AppStrings.custom
         }
-        return "\(v) — \(source)"
+        return AppStrings.toolSummary(v, source)
     }
 
     func refreshCompressor() {
@@ -254,10 +259,11 @@ final class ScanModel {
         let customWarning: String
         switch run.installation.source {
         case .bundled: customWarning = ""
-        case .custom:
-            customWarning = "\n\nCustom compressor: This is a compressor you chose, not the one bundled with Pomace. It will run with administrator privileges."
+        case .custom: customWarning = AppStrings.customAdministratorWarning
         }
-        return "\(run.operation == .compress ? "Compress" : "Decompress") \(Fmt.count(run.paths.count, "scanned file")) in \(run.root)?\n\nThe compressor at \(run.installation.path) will run as administrator. macOS will ask for authorization; Pomace does not store your password. Safety exclusions still apply.\(customWarning)"
+        return AppStrings.administratorConfirmation(
+            run.operation == .compress ? AppStrings.compress : AppStrings.decompress,
+            run.paths.count, run.root, run.installation.path, customWarning)
     }
 
     func confirmAdministrator() {
@@ -265,7 +271,7 @@ final class ScanModel {
         guard let run = pendingAdministratorRun else { return }
         pendingAdministratorRun = nil
         guard run.root == selectedPath else {
-            runState = .refused("The selected folder changed. Start the operation again.")
+            runState = .refused(AppStrings.folderChanged)
             return
         }
         launch(run)
@@ -282,8 +288,8 @@ final class ScanModel {
         let paths = targetPaths(for: op)
         guard !paths.isEmpty else {
             runState = .refused(op == .compress
-                ? "Nothing here needs compressing."
-                : "Nothing here is compressed.")
+                ? CompressionEngineError.nothingToDo.text
+                : AppStrings.nothingCompressed)
             return
         }
         let run = PreparedRun(operation: op, root: root, installation: install,
@@ -291,7 +297,7 @@ final class ScanModel {
                               executor: useAdministratorPrivileges ? .administrator(prompt: CoreText.administratorPrompt, fileChangedMessage: CoreText.fileChangedMessage) : .standard)
         if useAdministratorPrivileges {
             guard administratorAvailable else {
-                runState = .refused("Administrator access is available only for /Applications, /opt/homebrew, and /usr/local.")
+                runState = .refused(CompressionEngineError.administratorUnsupported.text)
                 return
             }
             pendingAdministratorRun = run
@@ -304,7 +310,7 @@ final class ScanModel {
     private func launch(_ run: PreparedRun) {
         guard !isRunning, !isSweeping else { return }
         guard let lock = SweepLock.acquire(at: sweepLockURL) else {
-            runState = .refused("Another compression run is already active.")
+            runState = .refused(CompressionEngineError.alreadyRunning.text)
             return
         }
         let op = run.operation, root = run.root
@@ -460,7 +466,7 @@ final class ScanModel {
         // Fail fast and legibly rather than showing an empty tree the user can't explain.
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
-            state = .failed("That folder is no longer available. It may have been moved, renamed, or its disk ejected.")
+            state = .failed(AppStrings.folderUnavailable)
             return
         }
         let volume = VolumeContext.probe(path: path)

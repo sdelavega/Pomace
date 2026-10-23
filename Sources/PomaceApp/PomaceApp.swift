@@ -30,22 +30,22 @@ struct PomaceApp: App {
                 }
                 .toolbar {
                     ToolbarItem(placement: .automatic) {
-                        Button("Add Folder", systemImage: "folder.badge.plus") { addFolder() }
-                            .help("Add a folder or application bundle")
+                        Button(AppStrings.addFolder, systemImage: "folder.badge.plus") { addFolder() }
+                            .help(AppStrings.addFolderTooltip)
                     }
                 }
         }
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .appInfo) {
-                Button("About Pomace") { showAbout() }
-                Button("Check for Updates…") { updates.checkForUpdates() }
+                Button(AppStrings.about) { showAbout() }
+                Button(AppStrings.checkUpdates) { updates.checkForUpdates() }
                     .disabled(!updates.canCheckForUpdates)
             }
             CommandGroup(after: .newItem) {
-                Button("Add Folder…") { addFolder() }
+                Button(AppStrings.addFolderMenu) { addFolder() }
                     .keyboardShortcut("o", modifiers: .command)
-                Button("Rescan") { model.rescan() }
+                Button(AppStrings.rescan) { model.rescan() }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(model.selectedPath == nil)
             }
@@ -54,28 +54,28 @@ struct PomaceApp: App {
         Settings {
             TabView {
                 GeneralSettingsView(updates: updates)
-                    .tabItem { Label("General", systemImage: "gearshape") }
+                    .tabItem { Label(AppStrings.general, systemImage: "gearshape") }
                 AdvancedSettingsView(model: model)
-                    .tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
+                    .tabItem { Label(AppStrings.advanced, systemImage: "slider.horizontal.3") }
             }
         }
 
         MenuBarExtra(isInserted: $menuBarEnabled) {
-            Button("Open Pomace", action: bringToFront)
+            Button(AppStrings.openApp, action: bringToFront)
             Divider()
             if let path = model.selectedPath {
                 Text((path as NSString).lastPathComponent)
             } else {
-                Text("No folder selected")
+                Text(AppStrings.noFolderSelected)
             }
-            Button("Rescan") { model.rescan() }
+            Button(AppStrings.rescan) { model.rescan() }
                 .disabled(model.selectedPath == nil)
-            Button("Sweep Now") { model.sweepNow() }
+            Button(AppStrings.sweepNow) { model.sweepNow() }
                 .disabled(model.selectedPath == nil || !model.toolReady || model.isSweeping)
             Divider()
-            Button("Quit Pomace") { NSApp.terminate(nil) }
+            Button(AppStrings.quit) { NSApp.terminate(nil) }
         } label: {
-            Label("Pomace", systemImage: "internaldrive")
+            Label(AppStrings.appName, systemImage: "internaldrive")
         }
         .menuBarExtraStyle(.menu)
     }
@@ -90,8 +90,8 @@ struct PomaceApp: App {
         panel.treatsFilePackagesAsDirectories = true
         panel.showsHiddenFiles = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Scan"
-        panel.message = "Choose a folder or application bundle to scan. Pomace only reads it — nothing is modified."
+        panel.prompt = AppStrings.scan
+        panel.message = AppStrings.scanHelp
         if panel.runModal() == .OK, let url = panel.url {
             model.add(path: url.path)
         }
@@ -99,8 +99,7 @@ struct PomaceApp: App {
 
     private func showAbout() {
         let source = "https://github.com/Dr-Emann/applesauce"
-        let credits = NSMutableAttributedString(string:
-            "applesauce (GPL-3.0)\n\(source)\n\nTranslations are machine-translated — corrections welcome.")
+        let credits = NSMutableAttributedString(string: AppStrings.credits(source))
         credits.addAttribute(.link, value: URL(string: source)!,
                              range: (credits.string as NSString).range(of: source))
         NSApp.orderFrontStandardAboutPanel(options: [NSApplication.AboutPanelOptionKey.credits: credits])

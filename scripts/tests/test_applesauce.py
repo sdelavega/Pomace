@@ -88,9 +88,14 @@ class HelperScriptsTests(unittest.TestCase):
         self.write('Tests/integration/sparse-image.sh', '#!/bin/bash\necho integration >> "$COMMAND_LOG"\n')
         self.write('build-app.sh', '#!/bin/bash\necho "app $*" >> "$COMMAND_LOG"\n')
         self.write('scripts/check-bundle.sh', '#!/bin/bash\necho "bundle $*" >> "$COMMAND_LOG"\n')
+        self.script('python3', 'echo "python $*" >> "$COMMAND_LOG"')
+        self.write('release/release.sh', '#!/bin/bash\necho "release $*" >> "$COMMAND_LOG"\n')
         expected = ['swift', 'build', 'cargo test --manifest-path tools/applesauce/Cargo.toml --locked',
                     'cargo deny --manifest-path tools/applesauce/Cargo.toml --config tools/applesauce/deny.toml check licenses',
-                    'integration', 'app release', 'bundle --universal build/Pomace.app']
+                    'integration', 'app release', 'bundle --universal build/Pomace.app',
+                    'python -m unittest discover -s release/tests', 'release 0.0.0-dryrun --dry-run',
+                    'python -m unittest discover -s scripts/tests',
+                    'python scripts/check-l10n.py lint', 'python scripts/check-l10n.py catalog --locales en']
         result = subprocess.run(['bash', str(destination)], cwd=self.root,
                                 env=self.environment, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)

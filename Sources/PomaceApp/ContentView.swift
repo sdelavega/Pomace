@@ -16,29 +16,26 @@ struct ContentView: View {
                     InspectorView(model: model)
                 }
         }
-        .navigationTitle("Pomace")
+        .navigationTitle(AppStrings.appName)
         .confirmationDialog(
-            "Decompress \(Fmt.count(model.compressedCount, "file"))?",
+            AppStrings.decompressQuestion(model.compressedCount),
             isPresented: $model.confirmingDecompress,
             titleVisibility: .visible
         ) {
-            Button("Decompress \(Fmt.count(model.compressedCount, "file"))", role: .destructive) {
+            Button(AppStrings.decompressAction(model.compressedCount), role: .destructive) {
                 model.confirmDecompress()
             }
-            Button("Cancel", role: .cancel) { model.confirmingDecompress = false }
+            Button(AppStrings.cancel, role: .cancel) { model.confirmingDecompress = false }
         } message: {
             // Returning files to their full on-disk size must never be a one-click surprise.
-            Text("""
-                 This returns those files to their full size on disk. \
-                 Their contents are unchanged, and you can compress them again at any time.
-                 """)
+            Text(AppStrings.decompressExplanation)
         }
         .modifier(AdministratorConfirmation(model: model))
         .sheet(isPresented: $model.showingSettings) {
             AdvancedSettingsView(model: model)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { model.showingSettings = false }
+                        Button(AppStrings.done) { model.showingSettings = false }
                     }
                 }
         }
@@ -88,12 +85,12 @@ private struct Sidebar: View {
             let unscheduled = model.watchedPaths.filter { !model.isScheduled($0) }
 
             if !scheduled.isEmpty {
-                Section("Scheduled") {
+                Section(AppStrings.scheduled) {
                     ForEach(scheduled, id: \.self) { folderRow($0) }
                 }
             }
             if !unscheduled.isEmpty {
-                Section("Not Scheduled") {
+                Section(AppStrings.notScheduled) {
                     ForEach(unscheduled, id: \.self) { folderRow($0) }
                 }
             }
@@ -102,9 +99,9 @@ private struct Sidebar: View {
         .onDrop(of: [.fileURL], isTargeted: $isDropTarget, perform: model.addDroppedFolders)
         .overlay {
             if model.watchedPaths.isEmpty {
-                ContentUnavailableView("No Folders",
+                ContentUnavailableView(AppStrings.noFolders,
                     systemImage: "folder.badge.plus",
-                    description: Text("Add or drop a folder to see what compression would reclaim."))
+                    description: Text(AppStrings.addFolderHelp))
             }
         }
         .overlay {
@@ -133,10 +130,10 @@ private struct Sidebar: View {
         }
         .tag(path)
         .contextMenu {
-            Button("Reveal in Finder") {
+            Button(AppStrings.reveal) {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
             }
-            Button("Remove", role: .destructive) { model.remove(path: path) }
+            Button(AppStrings.remove, role: .destructive) { model.remove(path: path) }
         }
     }
 }
@@ -150,13 +147,13 @@ private struct Detail: View {
         Group {
             switch model.state {
             case .idle:
-                ContentUnavailableView("Nothing Selected",
+                ContentUnavailableView(AppStrings.nothingSelected,
                     systemImage: "internaldrive",
-                    description: Text("Choose a folder in the sidebar, or press ⌘O to add one."))
+                    description: Text(AppStrings.chooseFolder))
 
             case .failed(let message):
                 ContentUnavailableView {
-                    Label("Can't Scan This Folder", systemImage: "exclamationmark.triangle")
+                    Label(AppStrings.cannotScan, systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 }
@@ -167,12 +164,12 @@ private struct Detail: View {
             case .done(let result):
                 VStack(spacing: 0) {
                     if !model.toolReady {
-                        Text("The compressor is unavailable. You can still scan; choose a compressor in Settings → Advanced.")
+                        Text(AppStrings.compressorUnavailable)
                             .font(.caption).foregroundStyle(.secondary)
                             .padding(8)
                     }
                     if model.showingRecentScan {
-                        Text("Showing a recent scan. Rescan to check for changes.")
+                        Text(AppStrings.recentScan)
                             .font(.caption).foregroundStyle(.secondary)
                             .padding(.top, 8)
                     }
@@ -182,25 +179,25 @@ private struct Detail: View {
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
-                Button("Settings", systemImage: "slider.horizontal.3") {
+                Button(AppStrings.settings, systemImage: "slider.horizontal.3") {
                     model.showingSettings = true
                 }
                 .keyboardShortcut(",", modifiers: .command)
-                .help("See what Pomace chose, and why")
+                .help(AppStrings.settingsHelp)
             }
             ToolbarItem(placement: .automatic) {
-                Button("Schedule", systemImage: "calendar.badge.clock") {
+                Button(AppStrings.schedule, systemImage: "calendar.badge.clock") {
                     model.showingInspector.toggle()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .option])
-                .help("Schedule and sweep history")
+                .help(AppStrings.scheduleHelp)
                 .disabled(model.selectedPath == nil)
             }
             ToolbarItem(placement: .primaryAction) {
                 if model.isScanning {
-                    Button("Stop", systemImage: "stop.fill") { model.cancelScan() }
+                    Button(AppStrings.stop, systemImage: "stop.fill") { model.cancelScan() }
                 } else {
-                    Button("Rescan", systemImage: "arrow.clockwise") { model.rescan() }
+                    Button(AppStrings.rescan, systemImage: "arrow.clockwise") { model.rescan() }
                         .disabled(model.selectedPath == nil)
                 }
             }
@@ -230,7 +227,7 @@ private struct ScanningView: View {
                     .truncationMode(.middle)
                     .frame(maxWidth: 420)
             }
-            Button("Stop", action: onCancel)
+            Button(AppStrings.stop, action: onCancel)
                 .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -238,10 +235,10 @@ private struct ScanningView: View {
     }
 
     private var progressText: some View {
-        Text("\(Fmt.count(progress.filesSeen, "file")) examined")
+        Text(AppStrings.examined(progress.filesSeen))
             .font(.title3)
             .monospacedDigit()
-            .accessibilityLabel("Scan progress")
-            .accessibilityValue("\(Fmt.count(progress.filesSeen, "file")) examined")
+            .accessibilityLabel(AppStrings.scanProgress)
+            .accessibilityValue(AppStrings.examined(progress.filesSeen))
     }
 }

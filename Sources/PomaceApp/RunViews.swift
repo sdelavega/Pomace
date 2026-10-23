@@ -6,12 +6,12 @@ struct AdministratorConfirmation: ViewModifier {
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            "Authorize administrator access?",
+            AppStrings.authorizeAdministrator,
             isPresented: $model.confirmingAdministrator,
             titleVisibility: .visible
         ) {
-            Button("Continue as Administrator") { model.confirmAdministrator() }
-            Button("Cancel", role: .cancel) { model.cancelAdministrator() }
+            Button(AppStrings.continueAdministrator) { model.confirmAdministrator() }
+            Button(AppStrings.cancel, role: .cancel) { model.cancelAdministrator() }
         } message: {
             Text(model.administratorConfirmationText)
         }
@@ -32,26 +32,26 @@ struct ActionBar: View {
                 Button {
                     model.startCompress()
                 } label: {
-                    Label("Compress", systemImage: "arrow.down.right.and.arrow.up.left")
+                    Label(AppStrings.compress, systemImage: "arrow.down.right.and.arrow.up.left")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .fixedSize()
                 .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
                 .help(model.toolReady
-                      ? "Compress \(Fmt.count(model.compressibleCount, "eligible file"))"
-                      : "\(CompressorTool.displayName) isn't available")
+                      ? AppStrings.compressEligible(model.compressibleCount)
+                      : AppStrings.toolUnavailable(CompressorTool.displayName))
 
                 Button {
                     model.requestDecompress()
                 } label: {
-                    Label("Decompress", systemImage: "arrow.up.left.and.arrow.down.right")
+                    Label(AppStrings.decompress, systemImage: "arrow.up.left.and.arrow.down.right")
                 }
                 .controlSize(.large)
                 .fixedSize()
                 .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
 
-                Picker("Mode", selection: $model.mode) {
+                Picker(AppStrings.mode, selection: $model.mode) {
                     ForEach(CompressionMode.allCases) { m in
                         Text(m.label).tag(m)
                     }
@@ -66,11 +66,11 @@ struct ActionBar: View {
                 .help(model.mode.text)
             }
             if model.administratorAvailable {
-                Toggle("Use administrator privileges", isOn: $model.useAdministratorPrivileges)
+                Toggle(AppStrings.useAdministrator, isOn: $model.useAdministratorPrivileges)
                     .toggleStyle(.checkbox)
                     .font(.caption)
                     .disabled(model.isRunning || model.isSweeping)
-                    .help("Authorize compression or decompression of protected Homebrew and application files. macOS handles authentication.")
+                    .help(AppStrings.administratorHelp)
             }
         }
     }
@@ -89,25 +89,25 @@ struct RunBanner: View {
         case .running(let op, let progress):
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("\(op.text) — \(Fmt.count(progress.filesProcessed, "file")) of \(progress.filesTotal.formatted())")
+                    Text(AppStrings.runProgress(op.text, progress.filesProcessed, progress.filesTotal))
                         .font(.callout).monospacedDigit()
                     Spacer()
-                    Button(model.isStopping ? "Stopping…" : "Stop") { model.cancelRun() }
+                    Button(model.isStopping ? AppStrings.stopping : AppStrings.stop) { model.cancelRun() }
                         .controlSize(.small)
                         .disabled(model.isStopping)
                 }
                 ProgressView(value: progress.fraction)
                     .progressViewStyle(.linear)
                 if model.isStopping {
-                    Text("Waiting for the active batch to finish safely. No further batches will start.")
+                    Text(AppStrings.stoppingHelp)
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if let p = progress.currentPath {
-                    Text("Current batch starts with: \(p)").font(.caption2).foregroundStyle(.secondary)
+                    Text(AppStrings.currentBatch(p)).font(.caption2).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
                 }
                 if progress.failures > 0 {
-                    Text("\(Fmt.count(progress.failures, "file")) couldn't be processed — details when this finishes")
+                    Text(AppStrings.processingFailures(progress.failures))
                         .font(.caption).foregroundStyle(.orange)
                 }
             }
@@ -142,12 +142,12 @@ private struct OutcomeBanner: View {
                 }
                 Spacer()
                 if !outcome.failures.isEmpty {
-                    Button(showingFailures ? "Hide details" : "Show details") {
+                    Button(showingFailures ? AppStrings.hideDetails : AppStrings.showDetails) {
                         showingFailures.toggle()
                     }
                     .controlSize(.small)
                 }
-                Button("Done", action: onDismiss).controlSize(.small)
+                Button(AppStrings.done, action: onDismiss).controlSize(.small)
             }
 
             if showingFailures {
@@ -191,30 +191,30 @@ private struct OutcomeBanner: View {
 
     private var headline: String {
         if outcome.wasCancelled {
-            return "Stopped after \(Fmt.count(outcome.filesSucceeded, "file"))"
+            return AppStrings.stopped(outcome.filesSucceeded)
         }
         if outcome.operation == .decompress {
-            return "Decompressed \(Fmt.count(outcome.filesSucceeded, "file"))"
+            return AppStrings.decompressed(outcome.filesSucceeded)
         }
-        return "Reclaimed \(ByteFormat.short(outcome.bytesReclaimed))"
+        return AppStrings.reclaimed(Fmt.bytes(outcome.bytesReclaimed))
     }
 
     private var detail: String {
         var parts: [String] = []
         if outcome.operation == .compress {
-            parts.append("\(Fmt.count(outcome.filesSucceeded, "file")) compressed")
+            parts.append(AppStrings.compressed(outcome.filesSucceeded))
         } else {
-            parts.append("\(ByteFormat.short(abs(outcome.bytesReclaimed))) returned to disk")
+            parts.append(AppStrings.returnedToDisk(Fmt.bytes(abs(outcome.bytesReclaimed))))
         }
         if !outcome.realFailures.isEmpty {
-            parts.append("\(Fmt.count(outcome.realFailures.count, "file")) had problems")
+            parts.append(AppStrings.hadProblems(outcome.realFailures.count))
         }
         if !outcome.skipped.isEmpty {
-            parts.append("\(outcome.skipped.count) left alone")
+            parts.append(AppStrings.leftAlone(outcome.skipped.count))
         }
-        parts.append(String(format: "%.1fs", outcome.duration))
+        parts.append(AppStrings.duration(outcome.duration))
         if outcome.wasCancelled {
-            parts.append("files already finished are safely compressed")
+            parts.append(AppStrings.finishedSafely)
         }
         return parts.joined(separator: " · ")
     }

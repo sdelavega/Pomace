@@ -35,7 +35,7 @@ enum Main {
             exit(reportService(SweepService.unregister()))
         }
         if args.contains("--service-status") {
-            print("\(SweepService.status): \(SweepService.status.text)")
+            print("\(SweepService.status): \(SweepService.status.text)") // l10n-exempt: CLI output
             exit(0)
         }
 
@@ -52,10 +52,10 @@ enum Main {
     ) -> Int32 {
         switch result {
         case .success(let status):
-            print("\(status): \(status.text)")
+            print("\(status): \(status.text)") // l10n-exempt: CLI output
             return status.isActive || status == .notRegistered ? 0 : 1
         case .failure(let error):
-            print("failed: \(error.text)")
+            print("failed: \(error.text)") // l10n-exempt: CLI output
             return 1
         }
     }

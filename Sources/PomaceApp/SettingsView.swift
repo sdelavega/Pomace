@@ -7,8 +7,8 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Toggle("Check for updates automatically", isOn: $updates.automaticallyChecksForUpdates)
-            Toggle("Show menu bar item", isOn: $menuBarEnabled)
+            Toggle(AppStrings.automaticUpdates, isOn: $updates.automaticallyChecksForUpdates)
+            Toggle(AppStrings.menuBarItem, isOn: $menuBarEnabled)
         }
         .padding(24)
         .frame(width: 560, height: 360)
@@ -47,11 +47,11 @@ struct AdvancedSettingsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Compression Settings").font(.headline)
-            Text("Pomace chooses these for you. Everything below shows what it picked and why.")
+            Text(AppStrings.compressionSettings).font(.headline)
+            Text(AppStrings.settingsExplanation)
                 .font(.caption).foregroundStyle(.secondary)
 
-            Picker("Mode", selection: $model.mode) {
+            Picker(AppStrings.mode, selection: $model.mode) {
                 ForEach(CompressionMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
@@ -63,7 +63,7 @@ struct AdvancedSettingsView: View {
 
     private var compressorSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Compressor").font(.headline)
+            Text(AppStrings.compressor).font(.headline)
             Text(model.toolSummary).font(.callout)
             if let installation = model.resolution.installation {
                 Text(installation.path).font(.caption).foregroundStyle(.secondary)
@@ -75,8 +75,8 @@ struct AdvancedSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
-                Button("Choose…") { chooseCompressor() }
-                Button("Use Bundled") { model.setCustomCompressor(nil) }
+                Button(AppStrings.chooseCompressor) { chooseCompressor() }
+                Button(AppStrings.useBundled) { model.setCustomCompressor(nil) }
             }
             .disabled(model.isRunning || model.isSweeping || model.confirmingAdministrator)
         }
@@ -89,8 +89,8 @@ struct AdvancedSettingsView: View {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        panel.message = "Choose an applesauce executable. Pomace checks its capabilities before use."
+        panel.prompt = AppStrings.choose
+        panel.message = AppStrings.chooseCompressorHelp
         if panel.runModal() == .OK, let url = panel.url {
             model.setCustomCompressor(url.path)
         }
@@ -99,10 +99,10 @@ struct AdvancedSettingsView: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Toggle("Show menu bar item", isOn: $menuBarEnabled)
+            Toggle(AppStrings.menuBarItem, isOn: $menuBarEnabled)
                 .controlSize(.small)
             if model.overrides != nil {
-                Button("Reset to Automatic") { model.overrides = nil }
+                Button(AppStrings.resetAutomatic) { model.overrides = nil }
                     .controlSize(.small)
             }
         }
@@ -126,13 +126,13 @@ private struct JustificationRow: View {
                         .font(.callout.weight(.medium))
                         .monospacedDigit()
                     if justification.isFixed {
-                        Text("Always")
+                        Text(AppStrings.always)
                             .font(.caption2)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(.quaternary, in: Capsule())
                     }
                     if justification.isOverridden {
-                        Text("Overridden")
+                        Text(AppStrings.overridden)
                             .font(.caption2)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(.tint.opacity(0.2), in: Capsule())

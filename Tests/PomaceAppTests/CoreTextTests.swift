@@ -88,7 +88,7 @@ struct CoreTextTests {
     func engineErrors() throws {
         let expected: [(CompressionEngineError, String)] = [
             (.toolMissing, "applesauce isn't installed. Pomace can install it for you."),
-            (.insufficientFreeSpace(needed: 2000, available: 1000), "Not enough free space to work safely — 1.0 KB available, 2.0 KB needed for the temporary replacement file."),
+            (.insufficientFreeSpace(needed: 2000, available: 1000), "Not enough free space to work safely — \(Fmt.bytes(1000)) available, \(Fmt.bytes(2000)) needed for the temporary replacement file."),
             (.nothingToDo, "Nothing here needs compressing."),
             (.compressorChanged(confirmed: "/old", resolved: "/new"), "The compressor changed after you confirmed administrator access. Confirmed: /old. Resolved: /new. Start the operation again to confirm the new compressor."),
             (.administratorUnsupported, "Administrator access is available only for /Applications, /opt/homebrew, and /usr/local."),
@@ -113,7 +113,9 @@ struct CoreTextTests {
     func displayValues() {
         #expect(JustificationValue.alwaysOn.text == "Always on")
         #expect(JustificationValue.skipped.text == "Skipped")
-        #expect(JustificationValue.percent(5).text == "5%")
+        #expect(JustificationValue.percent(5).text == Fmt.percent(0.05))
+        #expect(CompressionType.storedInline.text == "none / xattr")
+        #expect(CompressionType.lzfseResource.text == "LZFSE / rsrc")
         #expect(JustificationValue.compressor("LZFSE").text == "LZFSE")
         #expect(CompressionMode.allCases.map(\.label) == ["Automatic", "Maximum savings", "Fastest"])
         #expect(CompressionMode.allCases.map(\.text) == [
@@ -132,8 +134,8 @@ struct CoreTextTests {
         #expect(SweepCadence.allCases.map(\.text) == ["Every day", "Every week", "Every month", "Only when I ask"])
         #expect(SweepSchedule(cadence: .daily, preferredHour: 0).text == "Every day, around midnight")
         #expect(SweepSchedule(cadence: .daily, preferredHour: 12).text == "Every day, around noon")
-        #expect(SweepSchedule(cadence: .daily, preferredHour: 15).text == "Every day, around 3 PM")
-        #expect(SweepSchedule(cadence: .daily, preferredHour: 3).text == "Every day, around 3 AM")
+        #expect(SweepSchedule(cadence: .daily, preferredHour: 15).text == "Every day, around \(Fmt.hour(15))")
+        #expect(SweepSchedule(cadence: .daily, preferredHour: 3).text == "Every day, around \(Fmt.hour(3))")
         #expect(SweepSchedule(cadence: .manual).text == "Only when you ask")
         #expect(SweepSchedule(enabled: false).text == "Paused")
         #expect(SystemProfile(performanceCores: 1, efficiencyCores: 0, physicalCores: 1, isAppleSilicon: true).text == "matched to 1 performance core")
@@ -182,7 +184,7 @@ struct CoreTextTests {
         try store.recordSweep(path: path, startedAt: Date(timeIntervalSince1970: 4), duration: 1, error: encoded)
         let runs = try store.sweepHistory(path: path)
         #expect(runs.count == 4)
-        #expect(runs.map(\.text) == ["Failed — " + error.text, "Failed — Fixture compressor error", "Skipped — running on battery", "Compressed 3 files, reclaimed 4.1 KB"])
+        #expect(runs.map(\.text) == ["Failed — " + error.text, "Failed — Fixture compressor error", "Skipped — running on battery", "Compressed 3 files, reclaimed \(Fmt.bytes(4096))"])
     }
 
 }
