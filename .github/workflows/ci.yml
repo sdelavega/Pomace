@@ -12,22 +12,31 @@ jobs:
   test-and-package:
     name: Test and package
     runs-on: macos-latest
+    env:
+      RUSTUP_TOOLCHAIN: stable
+      POMACE_SIGN_ADHOC: '1'
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-      - name: Run unit tests
-        run: swift test
+      - name: Install Rust stable and cargo-deny
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin --target x86_64-apple-darwin
+          cargo install --locked cargo-deny
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Assemble app bundle
-        run: ./build-app.sh debug
+      - name: Install OpenSSL 3 for disposable Ed25519 signing
+        run: |
+          # Pin the major formula: the system LibreSSL may lack Ed25519.
+          brew install openssl@3
+          echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
 
-      - name: Verify bundle signature
-        run: codesign --verify --strict build/Pomace.app
+      - name: Test with the native SwiftPM build system
+        run: swift test --build-system native
 
-      - name: Install Applesauce
-        run: brew install Dr-Emann/homebrew-tap/applesauce
-
-      - name: Run sparse-image integration test
-        run: ./Tests/integration/sparse-image.sh
+      - name: Run the gate
+        run: scripts/gate.sh

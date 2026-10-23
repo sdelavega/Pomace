@@ -101,7 +101,7 @@ struct SafetyRulesTests {
 
     let rules = SafetyRules()
 
-    func facts(path: String = "/Users/x/file.txt", logical: Int64 = 100_000,
+    func facts(path: String = "/Users/alex/file.txt", logical: Int64 = 100_000,
                physical: Int64 = 102_400, compressed: Bool = false,
                links: UInt16 = 1, regular: Bool = true) -> FileFacts {
         FileFacts(path: path, logicalSize: logical, physicalSize: physical,
@@ -131,13 +131,13 @@ struct SafetyRulesTests {
 
     @Test("VM images are excluded", arguments: ["disk.vmdk", "box.qcow2", "vm.utm", "img.sparsebundle"])
     func vmImages(name: String) {
-        #expect(rules.isExcluded(facts(path: "/Users/x/\(name)")))
+        #expect(rules.isExcluded(facts(path: "/Users/alex/\(name)")))
     }
 
     @Test("cloud-synced paths are excluded", arguments: [
-        "/Users/x/Library/Mobile Documents/a.txt",
-        "/Users/x/Dropbox/a.txt",
-        "/Users/x/Library/CloudStorage/OneDrive/a.txt",
+        "/Users/alex/Library/Mobile Documents/a.txt",
+        "/Users/alex/Dropbox/a.txt",
+        "/Users/alex/Library/CloudStorage/OneDrive/a.txt",
     ])
     func cloudSync(path: String) {
         #expect(rules.isExcluded(facts(path: path)))
@@ -159,9 +159,9 @@ struct SafetyRulesTests {
 
     @Test("already-compressed formats warn but do not exclude")
     func incompressible() {
-        let r = rules.evaluate(facts(path: "/Users/x/photo.jpg"))
+        let r = rules.evaluate(facts(path: "/Users/alex/photo.jpg"))
         #expect(r.contains(.likelyIncompressible("JPEG")))
-        #expect(!rules.isExcluded(facts(path: "/Users/x/photo.jpg")))
+        #expect(!rules.isExcluded(facts(path: "/Users/alex/photo.jpg")))
     }
 
     @Test("network volumes block the whole tree")
@@ -181,27 +181,6 @@ struct SafetyRulesTests {
         // Probing every file added a getxattr per file and turned a 0.35s walk into minutes.
         let r = rules.evaluate(facts(), depth: .fast)
         #expect(!r.contains(.existingResourceFork))
-    }
-
-    @Test("every reason explains itself in prose for the UI")
-    func explanationsArePresentable() {
-        let all: [SafetyReason] = [
-            .systemPath, .sparseFile(allocatedBytes: 0, logicalBytes: 1024),
-            .existingResourceFork, .liveDatabase("SQLite database"), .virtualMachineImage,
-            .cloudSyncedDirectory("Dropbox"), .timeMachineVolume,
-            .unsupportedFilesystem("exfat"), .networkVolume, .zeroLength, .notRegularFile,
-            .appStoreApplication, .adobeApplication,
-            .applicationBundle, .hardLinked(linkCount: 2),
-            .veryLargeFile(bytes: 5_000_000_000), .likelyIncompressible("JPEG"),
-        ]
-        for reason in all {
-            #expect(!reason.explanation.isEmpty)
-            // Reads as a sentence: starts with a capital or a figure ("4.7 GB — …").
-            let first = reason.explanation.first!
-            #expect(first.isUppercase || first.isNumber,
-                    "not sentence-cased: \(reason.explanation)")
-            #expect(!reason.explanation.hasSuffix("."), "UI strings carry no trailing period")
-        }
     }
 
     @Test("Adobe application bundles are hard exclusions")
@@ -331,13 +310,6 @@ struct SweepScheduleTests {
         #expect(!SweepSchedule(cadence: .daily, enabled: false).isDue(lastRun: nil, now: Date()))
     }
 
-    @Test("summaries read as English")
-    func summaries() {
-        #expect(SweepSchedule(cadence: .daily, preferredHour: 0).summary.contains("midnight"))
-        #expect(SweepSchedule(cadence: .daily, preferredHour: 12).summary.contains("noon"))
-        #expect(SweepSchedule(cadence: .daily, preferredHour: 15).summary.contains("3 PM"))
-        #expect(SweepSchedule(cadence: .weekly, enabled: false).summary == "Paused")
-    }
 }
 
 @Suite("sweep preconditions")
@@ -376,13 +348,6 @@ struct SweepPreconditionTests {
                                          timeMachineRunning: false) == nil)
     }
 
-    @Test("every deferral explains itself")
-    func deferralsExplained() {
-        for d in [SweepDeferral.onBattery, .lowPowerMode, .thermalPressure,
-                  .timeMachineRunning, .volumeUnavailable, .alreadyRunning] {
-            #expect(d.explanation.hasPrefix("Skipped"))
-        }
-    }
 }
 
 @Suite("tool version parsing")
@@ -418,7 +383,7 @@ struct ToolVersionTests {
         let noVerify = ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: false,
                                         supportsLevel: true, supportsMinimumRatio: true, rawUsage: "")
         #expect(!noVerify.isUsable)
-        #expect(noVerify.missingCapabilities.contains { $0.contains("verification") })
+        #expect(noVerify.missingCapabilities.contains(.verify))
 
         let ok = ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
                                   supportsLevel: true, supportsMinimumRatio: true, rawUsage: "")
@@ -457,14 +422,14 @@ struct CompressionPolicyTests {
     func measuredCompressorWins() {
         let plan = CompressionPolicy.plan(mode: .automatic, measuredCompressor: "zlib")
         #expect(plan.settings.compressor == "zlib")
-        #expect(plan.justifications.first { $0.id == "compressor" }?.reason.contains("measured") == true)
+        #expect(plan.justifications.first { $0.id == "compressor" }?.reason == .measuredBest)
     }
 
     @Test("maximum savings warns about its cost")
     func maximumSavingsWarns() {
         let plan = CompressionPolicy.plan(mode: .maximumSavings)
         #expect(!plan.warnings.isEmpty)
-        #expect(plan.warnings.joined().lowercased().contains("slow"))
+        #expect(plan.warnings == [.zlibSlowerReads])
     }
 
     @Test("falls back when the tool lacks the chosen compressor")
@@ -493,7 +458,7 @@ struct CompressionPolicyTests {
         let plan = CompressionPolicy.plan()
         let fixed = Set(plan.justifications.filter(\.isFixed).map(\.id))
         #expect(fixed == ["verify", "hardlinks", "sparse"])
-        for j in plan.justifications { #expect(!j.reason.isEmpty, "\(j.label) has no reason") }
+        #expect(plan.justifications.filter(\.isFixed).map(\.reason) == [.verificationAlwaysOn, .hardLinksRefused, .sparseWouldGrow])
     }
 
     @Test("no thread flag is emitted — applesauce has none")

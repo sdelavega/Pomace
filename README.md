@@ -13,6 +13,9 @@ Compressed files continue to open normally in Finder and every other app. There 
 archive to mount, extract, or manage: macOS transparently expands the data when it is
 read.
 
+**Languages:** English, 简体中文, Español, 日本語, 한국어, Deutsch, Français, and Português (Brasil).
+Translations are machine-made; [corrections are welcome](docs/TRANSLATING.md).
+
 ![Pomace scan overview](docs/images/scan-overview.png)
 
 ## What Pomace Does
@@ -52,25 +55,70 @@ Pomace is deliberately cautious:
 
 Read the [safety rules](docs/SAFETY.md) before using Pomace on data you cannot replace.
 
+### Protected Homebrew and application files
+
+When scanning `/Applications`, `/opt/homebrew`, or `/usr/local` (or a folder inside one
+of them), enable **Use administrator privileges** before compressing or decompressing
+protected files. Pomace confirms the selected folder, scanned file count, and exact
+compressor path. macOS handles administrator authorization; Pomace never asks for or
+stores your password. Long runs may require authorization again for a later batch or cleanup.
+
+Administrator access is only used for folders that only administrators can change.
+Every directory in the path must be root-owned, with no group/world write permission,
+ACLs or symlinked components. Pomace checks this before authorization and again before
+mutation. Root-owned files under user-owned or writable parents are refused, including
+many Homebrew installations; owning the file alone is insufficient. This prevents
+another process running as you from swapping a directory after the safety check.
+
+The confirmation is bound to the compressor's SHA-256. Changed executable bytes are
+refused; elevated batches use a checked root-owned private copy that is removed at the
+end. A custom compressor still receives the administrator access you explicitly grant
+it, so choose only an executable you trust. See ADR-0016 for the cleanup and trust limits.
+
+Only the compressor runs with elevated access. Scans, the app, and scheduled sweeps keep
+running as your normal user. This option does not bypass safety exclusions, macOS privacy
+controls, or a read-only volume. Mac App Store and Adobe applications remain excluded.
+Stop lets the active batch finish safely; cancel the macOS authorization dialog to stop
+before that batch starts.
+
 ## Requirements
 
 - macOS 14 Sonoma or later
 - Apple silicon or Intel Mac
 - APFS or HFS+ volume
-- [`applesauce`](https://github.com/Dr-Emann/applesauce) for mutation; Pomace can offer a
-  Homebrew installation when it is not already available
 
-Pomace will still scan and explain a directory without changing it until the compressor is
-available. Standard macOS privacy controls apply to locations such as Desktop, Documents,
+Pomace includes a pinned [`applesauce`](https://github.com/Dr-Emann/applesauce) compressor;
+Homebrew and a separate compressor installation are not required. Settings → Advanced →
+Compressor shows its source, version and path. Choose… selects a custom applesauce executable;
+Use Bundled clears that override. Pomace checks the chosen executable before every run and
+falls back to its checked bundled copy if the custom choice becomes unusable, with the
+reason shown in Advanced. If neither is usable, Pomace still scans and explains files
+while compression and decompression stay disabled. Standard macOS privacy controls apply to locations such as Desktop, Documents,
 Downloads, external volumes, and network shares.
 
 ## Install and Build
 
-Pomace is currently an early preview. Notarized `.zip` downloads will be published on the
-[GitHub Releases page](https://github.com/sdelavega/Pomace/releases). Unzip the release and
-move `Pomace.app` to Applications.
+Download the notarized `.dmg` from the
+[GitHub Releases page](https://github.com/sdelavega/Pomace/releases), open it, and drag
+`Pomace.app` to Applications. The 1.1 app is universal: it runs on Apple silicon and
+Intel Macs, removing 1.0.2's Apple-silicon-only limitation.
 
-To build from source:
+Or install with Homebrew:
+
+```bash
+brew install --cask sdelavega/tap/pomace
+```
+
+Starting with 1.1, Sparkle checks for updates automatically. Use Pomace → Check for
+Updates… or change automatic checks in Settings → General. Updates wait for active
+compression and decompression runs to finish before relaunching. Users of 1.0.2 need
+to install 1.1 manually once; subsequent updates use the built-in updater.
+
+To build from source, install Swift 6 with the macOS SDK, Rust stable with the
+`aarch64-apple-darwin` and `x86_64-apple-darwin` targets, and `cargo-deny` for the full
+gate (`cargo install --locked cargo-deny`). Keep `~/.cargo/bin` ahead of Homebrew on
+PATH and use `RUSTUP_TOOLCHAIN=stable`. The first build downloads the pinned Sparkle
+and Cargo dependencies. Then:
 
 ```bash
 swift test
@@ -84,10 +132,13 @@ notarization are documented in [release/README.md](release/README.md).
 
 ## Project Status
 
-Pomace has its scan engine, verified mutation flow, watched-folder sweeps, persisted
-history, native UI, CI, and release tooling. The remaining release work includes a
-notarized public build, updates, crash-reporting policy, and accessibility review. See the
-[roadmap](docs/ROADMAP.md) for the honest checklist.
+Pomace 1.1 implements the bundled compressor, universal app, Sparkle updates,
+notarized DMG pipeline, eight interface languages, accessibility improvements, and
+Help → Report a Problem. Diagnostics are user-initiated: review a redacted report,
+then copy, save, or open a GitHub issue; nothing is uploaded automatically. CI runs
+the same gate as local development, including a release dry-run without secrets.
+The 1.1 release still needs the clean-account, local-update, VoiceOver/keyboard,
+locale-screenshot and Intel Mac checks listed in the [roadmap](docs/ROADMAP.md).
 
 ## Technical Notes
 
@@ -104,5 +155,8 @@ notarized public build, updates, crash-reporting policy, and accessibility revie
 ## License
 
 Pomace is available under the [GNU General Public License, version 3 or later](LICENSE).
-`applesauce` is also GPL-3.0 and remains separate software that Pomace invokes through a
-process boundary.
+The bundled `applesauce` compressor is GPL-3.0 and runs as a separate process.
+Its source is available at [Dr-Emann/applesauce](https://github.com/Dr-Emann/applesauce);
+Pomace's pinned wrapper, dependency lockfile and build instructions are in
+[tools/applesauce](tools/applesauce/README.md). The About panel includes the credit and
+source link.

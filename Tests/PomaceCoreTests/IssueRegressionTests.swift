@@ -84,6 +84,10 @@ struct CompressionCancellationTests {
         // A release barrier proves that cancellation leaves the active process intact.
         try """
         #!/bin/sh
+        case "$*" in
+            --version) echo 'applesauce 0.5.30'; exit 0 ;;
+            'compress --help') echo 'lzfse --verify --minimum-compression-ratio'; exit 0 ;;
+        esac
         printf 'call\\n' >> "$0.calls"
         touch "$0.started"
         attempts=0
@@ -101,7 +105,7 @@ struct CompressionCancellationTests {
             try Data(repeating: 65, count: 4096).write(to: file)
             paths.append(file.path)
         }
-        let installation = ToolInstallation(source: .userConfigured(binary.path), capabilities:
+        let installation = ToolInstallation(source: .custom(binary.path), capabilities:
             ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
                              supportsLevel: false, supportsMinimumRatio: true, rawUsage: ""))
         let cancellation = CompressionCancellation()

@@ -1,25 +1,16 @@
 import Foundation
+import Security
+import CryptoKit
 
 /// Where the compressor binary came from. Surfaced in the UI, because "which binary is
 /// about to touch my files?" deserves an answer.
 public enum ToolSource: Sendable, Equatable {
-    case userConfigured(String)
-    case homebrew(String)
-    case privateCopy(String)
-    case searchPath(String)
+    case bundled(String)
+    case custom(String)
 
     public var path: String {
         switch self {
-        case .userConfigured(let p), .homebrew(let p), .privateCopy(let p), .searchPath(let p): p
-        }
-    }
-
-    public var description: String {
-        switch self {
-        case .userConfigured: "a location you chose"
-        case .homebrew: "Homebrew"
-        case .privateCopy: "Pomace's own copy"
-        case .searchPath: "your PATH"
+        case .bundled(let p), .custom(let p): p
         }
     }
 }
@@ -47,6 +38,20 @@ public struct ToolVersion: Sendable, Comparable, CustomStringConvertible {
     }
 }
 
+public enum ToolCapability: Sendable, Equatable {
+    case lzfse, verify, minimumRatio
+}
+
+public enum CustomCompressorRejection: Sendable, Equatable {
+    case notFound, notExecutable, notRegularFile, relativePath
+    case missingCapabilities([ToolCapability])
+}
+
+public struct CompressorResolution: Sendable {
+    public let installation: ToolInstallation?
+    public let customRejection: CustomCompressorRejection?
+}
+
 public struct ToolCapabilities: Sendable {
     public let version: ToolVersion?
     public let compressors: Set<String>
@@ -72,11 +77,11 @@ public struct ToolCapabilities: Sendable {
         compressors.contains("lzfse") && supportsVerify
     }
 
-    public var missingCapabilities: [String] {
-        var out: [String] = []
-        if !compressors.contains("lzfse") { out.append("LZFSE compression") }
-        if !supportsVerify { out.append("post-compression verification (--verify)") }
-        if !supportsMinimumRatio { out.append("minimum compression ratio (-r)") }
+    public var missingCapabilities: [ToolCapability] {
+        var out: [ToolCapability] = []
+        if !compressors.contains("lzfse") { out.append(.lzfse) }
+        if !supportsVerify { out.append(.verify) }
+        if !supportsMinimumRatio { out.append(.minimumRatio) }
         return out
     }
 }
@@ -85,63 +90,107 @@ public struct ToolInstallation: Sendable {
     public let source: ToolSource
     public let capabilities: ToolCapabilities
     public var path: String { source.path }
+    public let sha256: String?
+
+    public init(source: ToolSource, capabilities: ToolCapabilities) {
+        self.init(source: source, capabilities: capabilities, sha256: CompressorTool.sha256(at: source.path))
+    }
+
+    init(source: ToolSource, capabilities: ToolCapabilities, sha256: String?) {
+        self.source = source
+        self.capabilities = capabilities
+        self.sha256 = sha256
+    }
 }
 
-/// Locates and probes `applesauce`.
+/// Resolves and probes `applesauce`.
 ///
 /// See ADR-0015 for why applesauce rather than afsctool.
 public enum CompressorTool {
 
+    public static func sha256(at path: String) -> String? {
+        guard let stream = InputStream(fileAtPath: path) else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var hash = SHA256()
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { return nil }
+            if count == 0 { break }
+            hash.update(data: Data(buffer.prefix(count)))
+        }
+        return hash.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
     public static let executableName = "applesauce"
     public static let displayName = "applesauce"
+    public static let customPathDefaultsKey = "compressorCustomPath"
 
-    public static var privateBinaryURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Pomace/bin/\(executableName)")
+    public static var bundledURL: URL? {
+        let bundle = Bundle.main.bundleURL
+        guard bundle.pathExtension == "app" else { return nil }
+        return bundle.appendingPathComponent("Contents/Helpers/\(executableName)")
     }
 
-    static let wellKnownPaths = [
-        "/opt/homebrew/bin/\(executableName)",
-        "/usr/local/bin/\(executableName)",
-    ]
-
-    public static func locate(userConfigured: String? = nil) -> ToolSource? {
-        let fm = FileManager.default
-        if let p = userConfigured, fm.isExecutableFile(atPath: p) { return .userConfigured(p) }
-        for p in wellKnownPaths where fm.isExecutableFile(atPath: p) { return .homebrew(p) }
-        let priv = privateBinaryURL.path
-        if fm.isExecutableFile(atPath: priv) { return .privateCopy(priv) }
-        if let p = searchPath() { return .searchPath(p) }
-        return nil
-    }
-
-    static func searchPath() -> String? {
-        guard let path = ProcessInfo.processInfo.environment["PATH"] else { return nil }
-        for dir in path.split(separator: ":") {
-            let candidate = "\(dir)/\(executableName)"
-            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
-        }
-        return nil
+    public static func hasValidSignature(_ url: URL) -> Bool {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(url as CFURL, SecCSFlags(), &code) == errSecSuccess,
+              let code else { return false }
+        return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), nil) == errSecSuccess
     }
 
     /// Reads what the binary can do from its own help, rather than inferring from a version.
     public static func probe(_ source: ToolSource) -> ToolInstallation {
+        let hash = sha256(at: source.path)
         let version = Subprocess.capture(source.path, ["--version"]).combined
         let help = Subprocess.capture(source.path, ["compress", "--help"]).combined
+        let stable = hash != nil && sha256(at: source.path) == hash
         var compressors: Set<String> = []
         for name in ["lzfse", "zlib", "lzvn"] where help.contains(name) { compressors.insert(name) }
         let caps = ToolCapabilities(
             version: ToolVersion(banner: version),
             compressors: compressors,
-            supportsVerify: help.contains("--verify"),
+            supportsVerify: stable && help.contains("--verify"),
             supportsLevel: help.contains("--level"),
             supportsMinimumRatio: help.contains("--minimum-compression-ratio"),
             rawUsage: help)
-        return ToolInstallation(source: source, capabilities: caps)
+        return ToolInstallation(source: source, capabilities: caps, sha256: stable ? hash : nil)
     }
 
-    public static func discover(userConfigured: String? = nil) -> ToolInstallation? {
-        locate(userConfigured: userConfigured).map(probe)
+    public static func resolve(customPath: String?, bundledURL: URL? = CompressorTool.bundledURL,
+                               signatureIsValid: (URL) -> Bool = CompressorTool.hasValidSignature) -> CompressorResolution {
+        let fm = FileManager.default
+        var rejection: CustomCompressorRejection?
+        if let customPath {
+            if !customPath.hasPrefix("/") {
+                rejection = .relativePath
+            } else {
+                let url = URL(fileURLWithPath: customPath).resolvingSymlinksInPath()
+                if !fm.fileExists(atPath: url.path) {
+                    rejection = .notFound
+                } else if (try? fm.attributesOfItem(atPath: url.path)[.type]) as? FileAttributeType != .typeRegular {
+                    rejection = .notRegularFile
+                } else if !fm.isExecutableFile(atPath: url.path) {
+                    rejection = .notExecutable
+                } else {
+                    let installation = probe(.custom(url.path))
+                    if installation.capabilities.isUsable {
+                        return CompressorResolution(installation: installation, customRejection: nil)
+                    }
+                    rejection = .missingCapabilities(installation.capabilities.missingCapabilities)
+                }
+            }
+        }
+        if let bundledURL, fm.fileExists(atPath: bundledURL.path),
+           (try? fm.attributesOfItem(atPath: bundledURL.path)[.type]) as? FileAttributeType == .typeRegular,
+           fm.isExecutableFile(atPath: bundledURL.path), signatureIsValid(bundledURL) {
+            let installation = probe(.bundled(bundledURL.path))
+            if installation.capabilities.isUsable {
+                return CompressorResolution(installation: installation, customRejection: rejection)
+            }
+        }
+        return CompressorResolution(installation: nil, customRejection: rejection)
     }
 }
 
@@ -171,7 +220,7 @@ public enum Subprocess {
         let stdout = CapturedData()
         let readers = DispatchGroup()
         readers.enter()
-        DispatchQueue.global(qos: .utility).async {
+        Thread.detachNewThread {
             stdout.store(o.fileHandleForReading.readDataToEndOfFile())
             readers.leave()
         }
@@ -182,46 +231,5 @@ public enum Subprocess {
         return Output(stdout: String(decoding: od, as: UTF8.self),
                       stderr: String(decoding: ed, as: UTF8.self),
                       code: p.terminationStatus)
-    }
-}
-
-/// Installs applesauce on the user's behalf.
-///
-/// Never bundled or redistributed — it is GPL-3.0, exactly as afsctool was, so ADR-0003 is
-/// unchanged by the pivot. It ships from a Homebrew *tap* rather than core, so the install
-/// command names the tap explicitly.
-public enum ToolInstaller {
-
-    public static let homebrewFormula = "Dr-Emann/homebrew-tap/applesauce"
-
-    public enum InstallResult: Sendable {
-        case success(String)
-        case failure(String)
-    }
-
-    static let brewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
-
-    public static var homebrewPath: String? {
-        brewPaths.first { FileManager.default.isExecutableFile(atPath: $0) }
-    }
-
-    public static var homebrewAvailable: Bool { homebrewPath != nil }
-
-    public static func installViaHomebrew() async -> InstallResult {
-        guard let brew = homebrewPath else { return .failure("Homebrew isn't installed.") }
-        return await withCheckedContinuation { continuation in
-            Task.detached {
-                let out = Subprocess.capture(brew, ["install", homebrewFormula])
-                if out.succeeded || CompressorTool.locate() != nil {
-                    continuation.resume(returning: .success(out.combined))
-                } else {
-                    let detail = out.combined
-                        .split(separator: "\n")
-                        .last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                        .map(String.init) ?? "Homebrew reported an error."
-                    continuation.resume(returning: .failure(detail))
-                }
-            }
-        }
     }
 }

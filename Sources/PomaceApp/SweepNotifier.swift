@@ -12,11 +12,11 @@ enum SweepNotifier {
             let content = UNMutableNotificationContent()
             if reports.count == 1, let r = reports.first {
                 let name = (r.path as NSString).lastPathComponent
-                content.title = "Pomace couldn't finish sweeping \(name)"
-                content.body = r.error ?? "\(r.filesFailed) file\(r.filesFailed == 1 ? "" : "s") were skipped."
+                content.title = AppStrings.sweepFailed(name)
+                content.body = r.error?.text ?? AppStrings.notificationSkipped(r.filesFailed)
             } else {
-                content.title = "Pomace had trouble with \(reports.count) folders"
-                content.body = "Open Pomace to see which files were skipped and why."
+                content.title = AppStrings.foldersFailed(reports.count)
+                content.body = AppStrings.notificationHelp
             }
             content.sound = nil
             let request = UNNotificationRequest(identifier: UUID().uuidString,

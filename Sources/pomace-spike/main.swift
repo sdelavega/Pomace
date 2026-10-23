@@ -45,7 +45,13 @@ func run(_ launch: String, _ argv: [String]) -> (out: String, err: String, code:
     return (String(decoding: od, as: UTF8.self), String(decoding: ed, as: UTF8.self), p.terminationStatus)
 }
 
-let toolPath = CompressorTool.locate()?.path ?? CompressorTool.executableName
+var toolPath: String {
+    guard let installation = CompressorTool.resolve(
+        customPath: ProcessInfo.processInfo.environment["POMACE_COMPRESSOR"], bundledURL: nil).installation else {
+        print("\(CompressorTool.displayName) not found"); exit(1)
+    }
+    return installation.path
+}
 
 func sha256(_ path: String) -> String? {
     guard let fh = FileHandle(forReadingAtPath: path) else { return nil }
@@ -120,7 +126,7 @@ case "walk":
 
 case "crosscheck":
     guard let dir = positional.first else { print("need dir"); exit(2) }
-    guard let install = CompressorTool.discover() else { print("tool not found"); exit(1) }
+    guard let install = CompressorTool.resolve(customPath: UserDefaults.standard.string(forKey: CompressorTool.customPathDefaultsKey)).installation else { print("tool not found"); exit(1) }
     var files: [FileFacts] = []
     _ = DirectoryWalker.walkFTS(dir) { if $0.isRegularFile { files.append($0) } }
     var agree = 0, disagree = 0, toolZero = 0
@@ -232,7 +238,7 @@ case "scan":
                     for e in excluded {
                         print("  \(e.name)")
                         for reason in e.reasons where reason.isHardExclusion {
-                            print("     \(reason.explanation)")
+                            print("     \(String(describing: reason))")
                         }
                     }
                 }
@@ -243,24 +249,29 @@ case "scan":
 case "engine-verify":
     guard let dir = positional.first else { print("need dir"); exit(2) }
     let mode = CompressionMode(rawValue: flag("--mode") ?? "Automatic") ?? .automatic
-    guard let install = CompressorTool.discover() else {
+    guard let install = CompressorTool.resolve(customPath: ProcessInfo.processInfo.environment["POMACE_COMPRESSOR"], bundledURL: nil).installation else {
         print("\(CompressorTool.displayName) not found"); exit(1)
     }
-    print("\(CompressorTool.displayName): \(install.path) (\(install.source.description))")
+    let source: String
+    switch install.source {
+    case .bundled: source = "bundled"
+    case .custom: source = "a location you chose"
+    }
+    print("\(CompressorTool.displayName): \(install.path) (\(source))")
     print("  version: \(install.capabilities.version?.description ?? "?")")
     print("  compressors: \(install.capabilities.compressors.sorted().joined(separator: ", "))")
     print("  usable: \(install.capabilities.isUsable)")
     if !install.capabilities.missingCapabilities.isEmpty {
-        print("  missing: \(install.capabilities.missingCapabilities.joined(separator: ", "))")
+        print("  missing: \(install.capabilities.missingCapabilities.map { String(describing: $0) }.joined(separator: ", "))")
     }
 
     let plan = CompressionPolicy.plan(mode: mode)
     print("\nplan (\(mode.rawValue)):")
     for j in plan.justifications {
-        print("  \(j.label.padding(toLength: 14, withPad: " ", startingAt: 0)) \(j.value.padding(toLength: 18, withPad: " ", startingAt: 0)) \(j.reason)\(j.isFixed ? "  [fixed]" : "")")
+        print("  \(j.id.padding(toLength: 14, withPad: " ", startingAt: 0)) \(String(describing: j.value).padding(toLength: 18, withPad: " ", startingAt: 0)) \(String(describing: j.reason))\(j.isFixed ? "  [fixed]" : "")")
     }
     print("  argv: \(plan.arguments.joined(separator: " "))")
-    for w in plan.warnings { print("  ! \(w)") }
+    for w in plan.warnings { print("  ! \(String(describing: w))") }
 
     var failures: [String] = []
     func check(_ ok: Bool, _ label: String) {
@@ -289,13 +300,14 @@ case "engine-verify":
     for await ev in CompressionEngine.run(operation: .compress, paths: allPaths, root: dir,
                                           installation: install, plan: plan, logger: log) {
         switch ev {
+        case .resolved: break
         case .started(let p): print("  start: \(p.filesTotal) eligible")
         case .progress(let p):
             FileHandle.standardError.write(Data("\r  \(p.filesProcessed)/\(p.filesTotal)".utf8))
         case .finished(let o): compressOutcome = o
         case .failed(let m):
-            print("  engine refused: \(m)")
-            engineRefused = m
+            print("  engine refused: \(String(describing: m))")
+            engineRefused = String(describing: m)
         }
     }
     print("")
@@ -308,11 +320,11 @@ case "engine-verify":
                      o.filesAttempted, o.filesSucceeded, o.realFailures.count, o.skipped.count,
                      ByteFormat.short(o.bytesReclaimed), o.duration))
         for f in o.realFailures.prefix(5) {
-            print("    PROBLEM \((f.path as NSString).lastPathComponent): \(f.message)")
-            print("            -> \(f.remedy)")
+            print("    PROBLEM \((f.path as NSString).lastPathComponent): \(String(describing: f.message))")
+            print("            -> \(String(describing: f.remedy))")
         }
         for f in o.skipped.prefix(5) {
-            print("    skipped \((f.path as NSString).lastPathComponent): \(f.message)")
+            print("    skipped \((f.path as NSString).lastPathComponent): \(String(describing: f.message))")
         }
         check(o.realFailures.isEmpty, "no real failures (\(o.realFailures.count))")
         check(o.filesSucceeded > 0, "engine compressed at least one file")
@@ -339,7 +351,7 @@ case "engine-verify":
             print(String(format: "  attempted=%d succeeded=%d in %.2fs",
                          o.filesAttempted, o.filesSucceeded, o.duration))
         }
-        if case .failed(let m) = ev { print("  engine refused: \(m)") }
+        if case .failed(let m) = ev { print("  engine refused: \(String(describing: m))") }
     }
     let afterD = snapshot(dir)
     var mismatch2 = 0, stillCompressed = 0

@@ -12,14 +12,8 @@ import SQLite3
 /// them should be designed alongside the code that reads them back.
 public final class Store: @unchecked Sendable {
 
-    public enum StoreError: Error, CustomStringConvertible {
+    public enum StoreError: Error {
         case open(String), sql(String)
-        public var description: String {
-            switch self {
-            case .open(let m): "could not open store: \(m)"
-            case .sql(let m): "sql error: \(m)"
-            }
-        }
     }
 
     private var db: OpaquePointer?
@@ -196,16 +190,6 @@ public final class Store: @unchecked Sendable {
         public let error: String?
         public let cancelled: Bool
 
-        /// One line for the history list.
-        public var summary: String {
-            if let d = deferral { return d.explanation }
-            if let e = error { return "Failed — \(e)" }
-            if cancelled { return "Stopped after \(filesCompressed) files" }
-            if filesCompressed == 0 { return "Nothing had changed" }
-            var s = "Compressed \(filesCompressed) file\(filesCompressed == 1 ? "" : "s"), reclaimed \(ByteFormat.short(bytesReclaimed))"
-            if filesFailed > 0 { s += " · \(filesFailed) skipped" }
-            return s
-        }
     }
 
     @discardableResult
@@ -229,14 +213,14 @@ public final class Store: @unchecked Sendable {
         }
     }
 
-    public func sweepHistory(path: String, limit: Int = 20) throws -> [SweepRun] {
+    public func sweepHistory(path: String? = nil, limit: Int = 20) throws -> [SweepRun] {
         try queue.sync {
             var out: [SweepRun] = []
             try query("""
                 SELECT id, path, started_at, duration, files_compressed, files_failed,
                        bytes_reclaimed, deferral, error, cancelled
-                FROM sweep_run WHERE path = ? ORDER BY started_at DESC LIMIT ?;
-                """, [.text(path), .int(Int64(limit))]) { stmt in
+                FROM sweep_run WHERE (? IS NULL OR path = ?) ORDER BY started_at DESC LIMIT ?;
+                """, [path.map(Value.text) ?? .null, path.map(Value.text) ?? .null, .int(Int64(limit))]) { stmt in
                 func text(_ i: Int32) -> String? {
                     guard let c = sqlite3_column_text(stmt, i) else { return nil }
                     return String(cString: c)

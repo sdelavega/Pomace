@@ -6,7 +6,7 @@ public struct SweepReport: Sendable {
     public var filesCompressed = 0
     public var filesFailed = 0
     public var bytesReclaimed: Int64 = 0
-    public var error: String?
+    public var error: CompressionEngineError?
     public var duration: TimeInterval = 0
     public var wasIncremental = false
     public var candidatesConsidered = 0
@@ -27,43 +27,29 @@ public struct SweepRunner: Sendable {
     let log: MutationLog
     let rules: SafetyRules
 
-    public init(store: Store, log: MutationLog = MutationLog(), rules: SafetyRules = SafetyRules()) {
+    public init(store: Store, log: MutationLog = MutationLog(), rules: SafetyRules = SafetyRules(),
+                lockURL: URL = SweepLock.defaultURL,
+                checkPreconditions: @escaping @Sendable (String) -> SweepDeferral? = { SweepPreconditions.check(root: $0) }) {
         self.store = store
         self.log = log
         self.rules = rules
+        self.lockURL = lockURL
+        self.checkPreconditions = checkPreconditions
     }
 
-    /// Only one sweep may run at a time across every process — the GUI and the launchd agent
-    /// are separate processes against the same files.
-    static var lockURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Pomace/sweep.lock")
-    }
-
-    static func acquireLock() -> FileHandle? {
-        let url = lockURL
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                 withIntermediateDirectories: true)
-        if !FileManager.default.fileExists(atPath: url.path) {
-            FileManager.default.createFile(atPath: url.path, contents: nil)
-        }
-        guard let handle = try? FileHandle(forWritingTo: url) else { return nil }
-        guard flock(handle.fileDescriptor, LOCK_EX | LOCK_NB) == 0 else {
-            try? handle.close()
-            return nil
-        }
-        return handle
-    }
+    private let lockURL: URL
+    private let checkPreconditions: @Sendable (String) -> SweepDeferral?
 
     /// Sweeps every directory that is due. Returns one report per directory considered.
     public func sweepAll(now: Date = Date(), force: Bool = false) async -> [SweepReport] {
-        guard let lock = Self.acquireLock() else {
+        guard let lock = SweepLock.acquire(at: lockURL) else {
             log.note("sweep skipped — another sweep holds the lock")
             return []
         }
-        defer { flock(lock.fileDescriptor, LOCK_UN); try? lock.close() }
+        defer { lock.release() }
 
-        guard let installation = CompressorTool.discover(), installation.capabilities.isUsable else {
+        guard let installation = CompressorTool.resolve(
+            customPath: UserDefaults.standard.string(forKey: CompressorTool.customPathDefaultsKey)).installation else {
             log.note("sweep skipped — \(CompressorTool.displayName) unavailable")
             return []
         }
@@ -74,7 +60,7 @@ public struct SweepRunner: Sendable {
         for dir in directories {
             let lastRun = try? store.lastCompletedSweep(path: dir.path)
             guard force || dir.schedule.isDue(lastRun: lastRun ?? nil, now: now) else { continue }
-            reports.append(await sweep(dir, installation: installation, lastRun: lastRun ?? nil, now: now))
+            reports.append(await sweepUnlocked(dir, installation: installation, lastRun: lastRun ?? nil, now: now))
         }
         return reports
     }
@@ -84,10 +70,23 @@ public struct SweepRunner: Sendable {
                       lastRun: Date?,
                       now: Date = Date()) async -> SweepReport {
 
+        guard let lock = SweepLock.acquire(at: lockURL) else {
+            var report = SweepReport(path: dir.path)
+            report.error = .alreadyRunning
+            return report
+        }
+        defer { lock.release() }
+        return await sweepUnlocked(dir, installation: installation, lastRun: lastRun, now: now)
+    }
+
+    private func sweepUnlocked(_ dir: Store.WatchedDirectory,
+                               installation: ToolInstallation,
+                               lastRun: Date?,
+                               now: Date) async -> SweepReport {
         var report = SweepReport(path: dir.path)
         let started = Date()
 
-        if let deferral = SweepPreconditions.check(root: dir.path) {
+        if let deferral = checkPreconditions(dir.path) {
             report.deferral = deferral
             report.duration = Date().timeIntervalSince(started)
             log.note("deferred \(dir.path): \(deferral.rawValue)")
@@ -153,7 +152,7 @@ public struct SweepRunner: Sendable {
                                    filesCompressed: report.filesCompressed,
                                    filesFailed: report.filesFailed,
                                    bytesReclaimed: report.bytesReclaimed,
-                                   error: report.error)
+                                   error: report.error.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) })
         return report
     }
 }

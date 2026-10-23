@@ -30,8 +30,23 @@ final class ScanModel {
     var sortOrder: SortOrder = .potentialSaving
     var mode: CompressionMode = .automatic
     var overrides: CompressionSettings?
-    var installation: ToolInstallation?
+    var resolution: CompressorResolution
+    var resolveCompressor: @Sendable (String?) -> CompressorResolution = { CompressorTool.resolve(customPath: $0) }
+    private let defaults: UserDefaults
+    private let sweepLockURL: URL
     var confirmingDecompress = false
+    var confirmingAdministrator = false
+    var useAdministratorPrivileges = false
+    private struct PreparedRun {
+        let operation: CompressionOperation
+        let root: String
+        let installation: ToolInstallation
+        let paths: [String]
+        let plan: CompressionPlan
+        let executor: CompressionExecutor
+    }
+    private var pendingAdministratorRun: PreparedRun?
+    var showingReportProblem = false
     var showingSettings = false
     var showingInspector = false
     var showingOnboarding = false
@@ -47,6 +62,13 @@ final class ScanModel {
         case name = "Name"
         case state = "Compression state"
         var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .potentialSaving: AppStrings.largestFirst
+            case .name: AppStrings.name
+            case .state: AppStrings.compressionState
+            }
+        }
     }
 
     private var scanTask: Task<Void, Never>?
@@ -59,17 +81,41 @@ final class ScanModel {
     let log: MutationLog
 
     init(store: Store? = try? Store(),
-         installation: ToolInstallation? = CompressorTool.discover(),
-         log: MutationLog = MutationLog()) {
+         resolution: CompressorResolution? = nil,
+         defaults: UserDefaults = .standard,
+         log: MutationLog = MutationLog(),
+         sweepLockURL: URL = SweepLock.defaultURL) {
         // A broken store must not stop the app from scanning — it only costs us history.
         self.store = store
         self.log = log
+        self.defaults = defaults
+        self.sweepLockURL = sweepLockURL
         let watched = (try? store?.watched()) .flatMap { $0 } ?? []
         watchedPaths = watched.map(\.path)
         schedulesByPath = Dictionary(uniqueKeysWithValues: watched.map { ($0.path, $0.schedule) })
-        self.installation = installation
+        self.resolution = resolution ?? CompressorTool.resolve(customPath: defaults.string(forKey: CompressorTool.customPathDefaultsKey))
         serviceStatus = SweepService.status
         showingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
+    }
+
+    #if DEBUG
+    private var isUITestFixture = false
+
+    func prepareUITestFixture(_ path: String) {
+        isUITestFixture = true
+        watchedPaths = [path]
+        selectedPath = path
+        showingOnboarding = false
+        showingInspector = true
+        showExcluded = true
+        scan(path)
+    }
+    #endif
+
+    func diagnosticsContext() -> (roots: [URL], history: [String]) {
+        let runs = (try? store?.sweepHistory(limit: 20)) ?? []
+        let paths = Set(watchedPaths + [selectedPath].compactMap { $0 } + runs.map(\.path))
+        return (paths.sorted().map { URL(fileURLWithPath: $0) }, runs.map(CoreText.diagnosticsHistory))
     }
 
     // MARK: - Scheduling
@@ -84,7 +130,7 @@ final class ScanModel {
         switch result {
         case .success(let status): serviceStatus = status
         case .failure(let error):
-            serviceError = error.description
+            serviceError = error.text
             serviceStatus = SweepService.status
         }
     }
@@ -112,25 +158,26 @@ final class ScanModel {
     }
 
     var nextSweepDescription: String {
-        guard schedule.enabled, schedule.cadence != .manual else { return "No scheduled sweeps" }
-        guard serviceStatus.isActive else { return serviceStatus.explanation }
+        guard schedule.enabled, schedule.cadence != .manual else { return AppStrings.noScheduledSweeps }
+        guard serviceStatus.isActive else { return serviceStatus.text }
         guard let path = selectedPath,
               let last = (try? store?.lastCompletedSweep(path: path)).flatMap({ $0 }),
               let interval = schedule.cadence.interval else {
-            return "Will sweep at the next opportunity"
+            return AppStrings.nextOpportunity
         }
         let next = last.addingTimeInterval(interval)
-        if next <= Date() { return "Due now" }
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .full
-        return "Next sweep \(f.localizedString(for: next, relativeTo: Date()))"
+        if next <= Date() { return AppStrings.dueNow }
+        return AppStrings.nextSweep(next.formatted(.relative(presentation: .numeric, unitsStyle: .wide)))
     }
 
     /// Runs a sweep immediately for the selected folder, through the same runner the agent
     /// uses — so "Sweep Now" exercises the scheduled path rather than a parallel one.
     func sweepNow() {
+        #if DEBUG
+        guard !isUITestFixture else { return }
+        #endif
         guard !isRunning, !isSweeping,
-              let path = selectedPath, let store, let install = installation else { return }
+              let path = selectedPath, let store, let install = resolution.installation else { return }
         scanCache.invalidate(path)
         isSweeping = true
         Task { [weak self] in
@@ -143,9 +190,9 @@ final class ScanModel {
             self.isSweeping = false
             self.loadSchedule(for: path)
             if let deferral = report.deferral {
-                self.runState = .refused(deferral.explanation)
+                self.runState = .refused(deferral.text)
             } else if let error = report.error {
-                self.runState = .refused(error)
+                self.runState = .refused(error.text)
             } else {
                 var outcome = CompressionOutcome()
                 outcome.filesSucceeded = report.filesCompressed
@@ -159,15 +206,35 @@ final class ScanModel {
 
     // MARK: - Compressor
 
-    var toolReady: Bool { installation?.capabilities.isUsable ?? false }
+    var toolReady: Bool { resolution.installation?.capabilities.isUsable ?? false }
 
     var toolSummary: String {
-        guard let i = installation else { return "\(CompressorTool.displayName) isn't installed" }
+        guard let i = resolution.installation else { return AppStrings.scanningOnly }
         let v = i.capabilities.version.map { "\(CompressorTool.displayName) \($0)" } ?? CompressorTool.displayName
-        return "\(v) — from \(i.source.description)"
+        let source: String
+        switch i.source {
+        case .bundled: source = AppStrings.bundled
+        case .custom: source = AppStrings.custom
+        }
+        return AppStrings.toolSummary(v, source)
     }
 
-    func refreshInstallation() { installation = CompressorTool.discover() }
+    func refreshCompressor() {
+        resolution = CompressorTool.resolve(customPath: defaults.string(forKey: CompressorTool.customPathDefaultsKey))
+    }
+
+    func setCustomCompressor(_ path: String?) {
+        if let path {
+            defaults.set(path, forKey: CompressorTool.customPathDefaultsKey)
+        } else {
+            defaults.removeObject(forKey: CompressorTool.customPathDefaultsKey)
+        }
+        refreshCompressor()
+    }
+
+    var customCompressorRejectionText: String? {
+        resolution.rejectionText
+    }
 
     func dismissOnboarding() {
         UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
@@ -183,7 +250,7 @@ final class ScanModel {
             mode: mode,
             conditions: RuntimeConditions.current(volumePath: selectedPath),
             overrides: overrides,
-            capabilities: installation?.capabilities)
+            capabilities: resolution.installation?.capabilities)
     }
 
     /// Every path the user's current view would act on. Built from the scan, then
@@ -208,38 +275,100 @@ final class ScanModel {
         start(.decompress)
     }
 
+    var administratorAvailable: Bool {
+        selectedPath.map { AdministratorAccess.supports(root: $0) } ?? false
+    }
+
+    var administratorConfirmationText: String {
+        guard let run = pendingAdministratorRun else { return "" }
+        let customWarning: String
+        switch run.installation.source {
+        case .bundled: customWarning = ""
+        case .custom: customWarning = AppStrings.customAdministratorWarning
+        }
+        return AppStrings.administratorConfirmation(
+            run.operation == .compress ? AppStrings.compress : AppStrings.decompress,
+            run.paths.count, run.root, run.installation.path, customWarning)
+    }
+
+    func confirmAdministrator() {
+        confirmingAdministrator = false
+        guard let run = pendingAdministratorRun else { return }
+        pendingAdministratorRun = nil
+        guard run.root == selectedPath else {
+            runState = .refused(AppStrings.folderChanged)
+            return
+        }
+        launch(run)
+    }
+
+    func cancelAdministrator() {
+        confirmingAdministrator = false
+        pendingAdministratorRun = nil
+    }
+
     private func start(_ op: CompressionOperation) {
+        #if DEBUG
+        guard !isUITestFixture else { return }
+        #endif
         guard !isRunning, !isSweeping,
-              let root = selectedPath, let install = installation else { return }
+              let root = selectedPath, let install = resolution.installation else { return }
         let paths = targetPaths(for: op)
         guard !paths.isEmpty else {
             runState = .refused(op == .compress
-                ? "Nothing here needs compressing."
-                : "Nothing here is compressed.")
+                ? CompressionEngineError.nothingToDo.text
+                : AppStrings.nothingCompressed)
             return
         }
-        let plan = self.plan
+        let run = PreparedRun(operation: op, root: root, installation: install,
+                              paths: paths, plan: self.plan,
+                              executor: useAdministratorPrivileges ? .administrator(prompt: CoreText.administratorPrompt, fileChangedMessage: CoreText.fileChangedMessage) : .standard)
+        if useAdministratorPrivileges {
+            guard administratorAvailable else {
+                runState = .refused(CompressionEngineError.administratorUnsupported.text)
+                return
+            }
+            pendingAdministratorRun = run
+            confirmingAdministrator = true
+            return
+        }
+        launch(run)
+    }
+
+    private func launch(_ run: PreparedRun) {
+        guard !isRunning, !isSweeping else { return }
+        guard let lock = SweepLock.acquire(at: sweepLockURL) else {
+            runState = .refused(CompressionEngineError.alreadyRunning.text)
+            return
+        }
+        let op = run.operation, root = run.root
+        let install = run.installation, paths = run.paths, plan = run.plan
         let cancellation = CompressionCancellation()
         runCancellation = cancellation
         isStopping = false
         scanCache.invalidate(root)
         runState = .running(op, CompressionProgress())
         runTask = Task { [weak self] in
+            defer { lock.release() }
             guard let self else { return }
             for await event in CompressionEngine.run(operation: op, paths: paths, root: root,
                                                      installation: install, plan: plan,
-                                                     logger: self.log, cancellation: cancellation) {
-                if Task.isCancelled { return }
+                                                     logger: self.log, cancellation: cancellation,
+                                                     executor: run.executor, resolveCompressor: self.resolveCompressor) {
                 switch event {
+                case .resolved(let resolution): self.resolution = resolution
                 case .started(let p), .progress(let p):
                     self.runState = .running(op, p)
                 case .finished(let outcome):
+                    // A terminal state must mean Sparkle and another run can acquire the lock.
+                    lock.release()
                     self.runState = .finished(outcome)
                     // Post-run truth: re-scan natively rather than trusting the compressor's
                     // summary, so before and after come from the same code path.
                     self.refreshAfterMutation(root)
                 case .failed(let message):
-                    self.runState = .refused(message)
+                    lock.release()
+                    self.runState = .refused(message.text)
                 }
             }
             if self.runCancellation === cancellation {
@@ -288,6 +417,8 @@ final class ScanModel {
             schedulesByPath[path] = SweepSchedule(cadence: .manual)
         }
         selectedPath = path
+        useAdministratorPrivileges = false
+        cancelAdministrator()
         loadSchedule(for: path)
         scan(path)
     }
@@ -303,6 +434,8 @@ final class ScanModel {
     func select(_ path: String) {
         guard selectedPath != path else { return }
         selectedPath = path
+        useAdministratorPrivileges = false
+        cancelAdministrator()
         cancelScan()
         state = .idle
         loadSchedule(for: path)
@@ -326,7 +459,7 @@ final class ScanModel {
     }
 
     func scheduleSummary(for path: String) -> String {
-        schedule(for: path).summary
+        schedule(for: path).text
     }
 
     @discardableResult
@@ -362,12 +495,12 @@ final class ScanModel {
         // Fail fast and legibly rather than showing an empty tree the user can't explain.
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
-            state = .failed("That folder is no longer available. It may have been moved, renamed, or its disk ejected.")
+            state = .failed(AppStrings.folderUnavailable)
             return
         }
         let volume = VolumeContext.probe(path: path)
         if let blocked = volume.blockingReason {
-            state = .failed(blocked.explanation)
+            state = .failed(blocked.text)
             return
         }
 

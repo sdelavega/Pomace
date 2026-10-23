@@ -6,6 +6,7 @@ import Foundation
 /// it — so it is written eagerly, flushed per line, and never buffered across a run.
 public final class MutationLog: @unchecked Sendable {
 
+    public let url: URL
     private let handle: FileHandle?
     private let lock = NSLock()
     private let formatter: ISO8601DateFormatter = {
@@ -23,6 +24,7 @@ public final class MutationLog: @unchecked Sendable {
 
     public init(url: URL? = nil) {
         let target = url ?? Self.defaultURL
+        self.url = target
         if !FileManager.default.fileExists(atPath: target.path) {
             FileManager.default.createFile(atPath: target.path, contents: nil)
         }

@@ -2,7 +2,6 @@ import Foundation
 
 public enum CompressionOperation: String, Sendable {
     case compress, decompress
-    public var verb: String { self == .compress ? "Compressing" : "Decompressing" }
 }
 
 public struct CompressionProgress: Sendable {
@@ -17,6 +16,17 @@ public struct CompressionProgress: Sendable {
     }
 }
 
+public enum SkipRemedy: Sendable, Equatable {
+    case hardLinked(otherFiles: Int), emptyFile, unreadable, unwritable, insufficientSaving
+    case decompressionFailed, fileMissing, diskFull, resourceFork, readOnly, unchanged
+}
+
+public enum CompressionFailureMessage: Sendable, Equatable {
+    case classified(SkipRemedy)
+    case toolOutput(String)
+    case compressorError
+}
+
 public struct CompressionFailure: Sendable, Identifiable {
     /// Whether this needs the user's attention, or is the tool correctly declining.
     ///
@@ -28,13 +38,19 @@ public struct CompressionFailure: Sendable, Identifiable {
 
     public let id = UUID()
     public let path: String
-    public let message: String
-    /// Plain-language next step. An error the user can't act on is only half-reported.
-    public let remedy: String
+    public let message: CompressionFailureMessage
+    public let remedy: SkipRemedy
     public var kind: Kind = .skipped
 
-    public init(path: String, message: String, remedy: String, kind: Kind = .skipped) {
-        self.path = path; self.message = message; self.remedy = remedy; self.kind = kind
+    public init(path: String, message: CompressionFailureMessage? = nil, remedy: SkipRemedy, kind: Kind? = nil) {
+        self.path = path; self.message = message ?? .classified(remedy); self.remedy = remedy
+        if let kind { self.kind = kind }
+        else {
+            switch remedy {
+            case .hardLinked, .emptyFile, .insufficientSaving: self.kind = .skipped
+            default: self.kind = .failed
+            }
+        }
     }
 }
 
@@ -58,28 +74,25 @@ public struct CompressionOutcome: Sendable {
 }
 
 public enum CompressionEvent: Sendable {
+    case resolved(CompressorResolution)
     case started(CompressionProgress)
     case progress(CompressionProgress)
     case finished(CompressionOutcome)
-    case failed(String)
+    case failed(CompressionEngineError)
 }
 
-public enum CompressionEngineError: Error, CustomStringConvertible {
+public enum CompressionEngineError: Error, Sendable, Equatable, Codable {
     case toolMissing
     case insufficientFreeSpace(needed: Int64, available: Int64)
     case nothingToDo
-
-    public var description: String {
-        switch self {
-        case .toolMissing:
-            "\(CompressorTool.displayName) isn't installed. Pomace can install it for you."
-        case .insufficientFreeSpace(let needed, let available):
-            "Not enough free space to work safely — \(ByteFormat.short(available)) available, "
-            + "\(ByteFormat.short(needed)) needed for the temporary replacement file."
-        case .nothingToDo:
-            "Nothing here needs compressing."
-        }
-    }
+    case compressorChanged(confirmed: String, resolved: String)
+    case administratorUnsupported
+    case administratorUnsafeDirectory
+    case compressorUnavailable
+    case readOnlyVolume
+    case safetyMetadataUnreadable(path: String)
+    case verificationRequired
+    case alreadyRunning
 }
 
 /// Requests a safe stop without cancelling the consumer of the final outcome.
@@ -114,7 +127,11 @@ public enum CompressionEngine {
                            plan: CompressionPlan,
                            rules: SafetyRules = SafetyRules(),
                            logger: MutationLog? = nil,
-                           cancellation: CompressionCancellation? = nil) -> AsyncStream<CompressionEvent> {
+                           cancellation: CompressionCancellation? = nil,
+                           executor: CompressionExecutor = .standard,
+                           resolveCompressor: @escaping @Sendable (String?) -> CompressorResolution = {
+                               CompressorTool.resolve(customPath: $0)
+                           }) -> AsyncStream<CompressionEvent> {
 
         AsyncStream { continuation in
             let task = Task.detached(priority: .userInitiated) {
@@ -124,16 +141,59 @@ public enum CompressionEngine {
                 outcome.settings = plan.settings
 
                 // --- preconditions ---
+                if executor.isAdministrator && !AdministratorAccess.supports(root: root) {
+                    continuation.yield(.failed(.administratorUnsupported))
+                    continuation.finish(); return
+                }
+                let customPath: String?
+                switch installation.source {
+                case .custom(let path): customPath = path
+                case .bundled: customPath = nil
+                }
+                let confirmedPath = installation.path
+                let confirmedHash = installation.sha256
+                let resolution = resolveCompressor(customPath)
+                continuation.yield(.resolved(resolution))
+                guard let installation = resolution.installation, installation.capabilities.isUsable else {
+                    continuation.yield(.failed(.compressorUnavailable))
+                    continuation.finish(); return
+                }
+                // Elevated execution must use the exact compressor named in the confirmation.
+                if executor.isAdministrator && (installation.path != confirmedPath || confirmedHash == nil
+                    || installation.sha256 != confirmedHash || CompressorTool.sha256(at: installation.path) != confirmedHash) {
+                    continuation.yield(.failed(CompressionEngineError.compressorChanged(
+                        confirmed: confirmedPath, resolved: installation.path)))
+                    continuation.finish(); return
+                }
+                if executor.isAdministrator && !AdministratorAccess.validates(paths: paths, root: root) {
+                    continuation.yield(.failed(.administratorUnsafeDirectory))
+                    continuation.finish(); return
+                }
                 let required = requiredFreeSpace(at: root)
                 if let free = freeSpace(at: root), free < required {
                     continuation.yield(.failed(
                         CompressionEngineError.insufficientFreeSpace(
-                            needed: required, available: free).description))
+                            needed: required, available: free)))
                     continuation.finish(); return
                 }
 
+                guard operation == .decompress || plan.arguments.contains("--verify") else {
+                    continuation.yield(.failed(.verificationRequired))
+                    continuation.finish(); return
+                }
+                var settings = plan.settings
+                if !installation.capabilities.compressors.contains(settings.compressor) {
+                    settings.compressor = "lzfse"
+                }
+                let plan = CompressionPolicy.plan(overrides: settings, capabilities: installation.capabilities)
+                outcome.settings = plan.settings
+
                 // --- re-evaluate safety at mutation time (SAFETY.md rule 10) ---
                 let volume = VolumeContext.probe(path: root)
+                guard !volume.isReadOnly else {
+                    continuation.yield(.failed(.readOnlyVolume))
+                    continuation.finish(); return
+                }
                 // applesauce refuses any file with more than one link, so hard-linked files
                 // simply cannot be compressed. Pomace filters them here so they are reported
                 // as a named exclusion rather than silently counted as attempted-and-failed.
@@ -144,9 +204,23 @@ public enum CompressionEngine {
                 var skippedLinks = 0
 
                 var eligible: [(path: String, size: Int64, physicalBefore: Int64)] = []
-                for p in paths {
+                for requestedPath in paths {
+                    let p = executor.isAdministrator
+                        ? URL(fileURLWithPath: requestedPath).resolvingSymlinksInPath().standardized.path
+                        : requestedPath
                     if Task.isCancelled || cancellation?.isRequested == true { break }
                     guard let f = FileInspector.inspect(p) else { continue }
+                    if executor.isAdministrator {
+                        // Never elevate a path outside the confirmed folder or hand a
+                        // directory/symlink to a tool that can recursively walk it.
+                        guard AdministratorAccess.permits(path: p, root: root), f.isRegularFile,
+                              !rules.isExcluded(f, volume: volume, depth: .thorough) else { continue }
+                        if operation == .compress, !f.isCompressed,
+                           !AdministratorAccess.canInspectResourceFork(at: p) {
+                            continuation.yield(.failed(.safetyMetadataUnreadable(path: p)))
+                            continuation.finish(); return
+                        }
+                    }
                     if f.linkCount > 1 {
                         skippedLinks += 1
                         continue
@@ -170,7 +244,7 @@ public enum CompressionEngine {
                 }
 
                 guard !eligible.isEmpty else {
-                    continuation.yield(.failed(CompressionEngineError.nothingToDo.description))
+                    continuation.yield(.failed(CompressionEngineError.nothingToDo))
                     continuation.finish(); return
                 }
 
@@ -187,6 +261,7 @@ public enum CompressionEngine {
                 continuation.yield(.started(progress))
                 logger?.begin(operation: operation, root: root, fileCount: eligible.count,
                               arguments: plan.arguments)
+                logger?.note(executor.isAdministrator ? "access=administrator (interactive)" : "access=current user")
                 if skippedLinks > 0 {
                     logger?.note("skipped \(skippedLinks) hard-linked path(s) — \(CompressorTool.displayName) cannot compress them")
                 }
@@ -197,8 +272,33 @@ public enum CompressionEngine {
 
                 // applesauce verifies only when asked. Reaching the filesystem without this
                 // flag would mean compressing without ever checking the result reads back.
-                assert(operation == .decompress || baseArgs.contains("--verify"),
-                       "compress argv must always carry --verify")
+                guard operation == .decompress || baseArgs.contains("--verify") else {
+                    continuation.yield(.failed(.verificationRequired))
+                    continuation.finish(); return
+                }
+
+                var privateDirectory: String?
+                func cleanupPrivateCopy() {
+                    if let directory = privateDirectory {
+                        executor.cleanup?(directory)
+                        privateDirectory = nil
+                    }
+                }
+                defer { cleanupPrivateCopy() }
+                if let prepare = executor.prepare, let hash = confirmedHash {
+                    switch prepare(installation.path, hash) {
+                    case .authorizationCancelled:
+                        outcome.wasCancelled = true
+                        continuation.yield(.finished(outcome))
+                        continuation.finish(); return
+                    case .completed(let output):
+                        guard output.succeeded else {
+                            continuation.yield(.failed(.compressorChanged(confirmed: confirmedPath, resolved: installation.path)))
+                            continuation.finish(); return
+                        }
+                        privateDirectory = output.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                }
 
                 // --- batches ---
                 var index = 0
@@ -211,8 +311,16 @@ public enum CompressionEngine {
                     var bytes = 0
                     while index < eligible.count, batch.count < batchSize,
                           bytes < maxArgumentBytes {
-                        batch.append(eligible[index].path)
-                        bytes += eligible[index].path.utf8.count + 1
+                        let path = eligible[index].path
+                        batch.append(path)
+                        if executor.isAdministrator {
+                            // The shell checks repeat each quoted path twice in addition
+                            // to argv. Account for quoting expansion in the command budget.
+                            let quoteExpansion = path.utf8.reduce(0) { $0 + ($1 == 39 ? 4 : 0) }
+                            bytes += 3 * (path.utf8.count + quoteExpansion + 2) + 180
+                        } else {
+                            bytes += path.utf8.count + 1
+                        }
                         index += 1
                     }
 
@@ -222,7 +330,24 @@ public enum CompressionEngine {
                     continuation.yield(.progress(progress))
                     let batchStarted = Date()
                     logger?.note("batch BEGIN files=\(batch.count) first=\(batch.first ?? "") last=\(batch.last ?? "")")
-                    let result = Subprocess.capture(installation.path, baseArgs + batch)
+                    let invocationOutput: Subprocess.Output?
+                    let arguments = baseArgs + ["--"] + batch
+                    let invocation: CompressorInvocation
+                    if let privateDirectory, let hash = confirmedHash, let invoke = executor.invokePrepared {
+                        invocation = invoke(privateDirectory, installation.path, hash, root, arguments)
+                    } else {
+                        invocation = executor.invoke(installation.path, arguments)
+                    }
+                    switch invocation {
+                    case .authorizationCancelled:
+                        // This batch never started. Keep the outcome of earlier batches.
+                        index -= batch.count
+                        outcome.wasCancelled = true
+                        logger?.note("administrator authorization cancelled — no further batches")
+                        invocationOutput = nil
+                    case .completed(let output): invocationOutput = output
+                    }
+                    guard let result = invocationOutput else { break }
                     logger?.note("batch END exit=\(result.code) duration=\(Date().timeIntervalSince(batchStarted))s")
                     outcome.filesAttempted += batch.count
 
@@ -232,23 +357,27 @@ public enum CompressionEngine {
                     // more trustworthy source anyway (ADR-0002).
                     for p in batch {
                         guard let after = FileInspector.inspect(p) else {
-                            let f = CompressionFailure(
-                                path: p,
-                                message: "The file is no longer there",
-                                remedy: "It was moved or deleted while Pomace was working. Nothing was changed.",
-                                kind: .failed)
+                            let f = CompressionFailure(path: p, remedy: .fileMissing, kind: .failed)
                             outcome.failures.append(f)
-                            logger?.failure(path: p, message: f.message)
+                            logger?.failure(path: p, message: String(describing: f.message))
                             continue
                         }
                         let wanted = operation == .compress
                         if after.isCompressed == wanted {
                             outcome.filesSucceeded += 1
                         } else {
-                            let f = classifySkip(path: p, operation: operation,
-                                                 output: result.combined)
+                            let f: CompressionFailure
+                            if !result.succeeded {
+                                var failure = describeFailure(path: p, output: result.combined)
+                                failure.kind = .failed
+                                f = failure
+                            } else {
+                                f = CompressionFailure(path: p, remedy: classifySkip(
+                                    path: p, operation: operation, output: result.combined,
+                                    isAdministrator: executor.isAdministrator))
+                            }
                             outcome.failures.append(f)
-                            logger?.failure(path: p, message: f.message)
+                            logger?.failure(path: p, message: String(describing: f.message))
                         }
                     }
 
@@ -257,6 +386,9 @@ public enum CompressionEngine {
                     progress.currentPath = nil
                     progress.bytesProcessed = eligible.prefix(index).reduce(0) { $0 + $1.size }
                     continuation.yield(.progress(progress))
+                    // An authorization or invocation error should not prompt again for
+                    // every subsequent batch. Report it and retain completed work.
+                    if !result.succeeded { break }
                 }
 
                 // A request during the final batch must also be acknowledged.
@@ -269,6 +401,7 @@ public enum CompressionEngine {
                 outcome.bytesAfter = eligible.prefix(index).reduce(0) { $0 + physical($1.path) }
                 outcome.duration = Date().timeIntervalSince(started)
                 logger?.end(outcome: outcome)
+                cleanupPrivateCopy()
                 continuation.yield(.finished(outcome))
                 continuation.finish()
             }
@@ -314,63 +447,41 @@ public enum CompressionEngine {
     /// declining for a good reason, and calling that a failure would train users to ignore
     /// the list.
     static func classifySkip(path: String, operation: CompressionOperation,
-                             output: String) -> CompressionFailure {
+                             output: String, isAdministrator: Bool = false) -> SkipRemedy {
         if operation == .compress {
             if let f = FileInspector.inspect(path) {
-                if f.linkCount > 1 {
-                    return CompressionFailure(
-                        path: path,
-                        message: "Shares its data with \(f.linkCount - 1) other file\(f.linkCount == 2 ? "" : "s")",
-                        remedy: "\(CompressorTool.displayName) can't compress hard-linked files. Nothing was changed.",
-                        kind: .skipped)
-                }
-                if f.logicalSize == 0 {
-                    return CompressionFailure(path: path, message: "Empty file",
-                                              remedy: "There was nothing to compress.", kind: .skipped)
-                }
+                if f.linkCount > 1 { return .hardLinked(otherFiles: Int(f.linkCount - 1)) }
+                if f.logicalSize == 0 { return .emptyFile }
             }
-            if access(path, R_OK) != 0 {
-                return CompressionFailure(
-                    path: path,
-                    message: "Couldn't be read",
-                    remedy: "Check the file's permissions, or grant Pomace Full Disk Access. Nothing was changed.",
-                    kind: .failed)
+            if !isAdministrator && access(path, R_OK) != 0 { return .unreadable }
+            if !isAdministrator && (access(path, W_OK) != 0
+                || access((path as NSString).deletingLastPathComponent, W_OK) != 0) {
+                return .unwritable
             }
-            if access(path, W_OK) != 0 {
-                return CompressionFailure(
-                    path: path, message: "Couldn't be modified",
-                    remedy: "The file is read-only or on a read-only volume. Nothing was changed.",
-                    kind: .failed)
-            }
-            return CompressionFailure(
-                path: path,
-                message: "Wouldn't compress enough to be worth it",
-                remedy: "Left as it was — compressing it would have saved little or nothing.",
-                kind: .skipped)
+            return .insufficientSaving
         }
-        return CompressionFailure(path: path, message: "Couldn't be decompressed",
-                                  remedy: "The file was left exactly as it was.", kind: .failed)
+        return .decompressionFailed
     }
 
     /// Retained for the low-level error paths that still surface tool output.
     static func describeFailure(path: String, output: String) -> CompressionFailure {
         let lower = output.lowercased()
-        let remedy: String
+        let remedy: SkipRemedy
         if lower.contains("permission") || lower.contains("denied") {
-            remedy = "Check that you have permission to modify this file, or grant Pomace Full Disk Access."
+            remedy = .unreadable
         } else if lower.contains("no space") || lower.contains("disk full") {
-            remedy = "Free up disk space and try again."
+            remedy = .diskFull
         } else if lower.contains("resource fork") {
-            remedy = "This file already uses its resource fork, so it can't be compressed. It will be skipped."
+            remedy = .resourceFork
         } else if lower.contains("read-only") {
-            remedy = "This file is on a read-only volume."
+            remedy = .readOnly
         } else {
-            remedy = "Left unchanged. The file itself was not modified."
+            remedy = .unchanged
         }
         let message = output
             .split(separator: "\n")
             .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .map(String.init) ?? "The compressor reported an error"
-        return CompressionFailure(path: path, message: message, remedy: remedy)
+            .map { CompressionFailureMessage.toolOutput(String($0)) } ?? .compressorError
+        return CompressionFailure(path: path, message: message, remedy: remedy, kind: .skipped)
     }
 }

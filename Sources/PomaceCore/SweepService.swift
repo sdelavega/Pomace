@@ -21,20 +21,7 @@ public enum SweepService {
         case requiresApproval
         case notFound
         case unavailable(String)
-
-        /// Shown verbatim in the UI. The user can disable a login item behind our back, and
-        /// pretending otherwise would be a lie about whether their folders are being swept.
-        public var explanation: String {
-            switch self {
-            case .notRegistered: "Scheduled sweeps are off"
-            case .enabled: "Scheduled sweeps are on"
-            case .requiresApproval:
-                "Waiting for your approval in System Settings › General › Login Items"
-            case .notFound:
-                "Pomace can't register its background helper. Move Pomace to your Applications folder and try again."
-            case .unavailable(let reason): reason
-            }
-        }
+        case unknown
 
         public var isActive: Bool { self == .enabled }
     }
@@ -46,7 +33,7 @@ public enum SweepService {
         case .enabled: return .enabled
         case .requiresApproval: return .requiresApproval
         case .notFound: return .notFound
-        @unknown default: return .unavailable("Unknown state")
+        @unknown default: return .unknown
         }
     }
 

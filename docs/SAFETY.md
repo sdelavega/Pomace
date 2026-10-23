@@ -1,6 +1,6 @@
 # Pomace — Safety Rules
 
-**Status:** Draft · **Last updated:** 2026-08-26
+**Status:** Draft · **Last updated:** 2026-10-01
 
 **Read this before writing any code that mutates files.** Pomace's entire value depends on
 users trusting it with directories they care about. One data-loss report ends the project.
@@ -79,6 +79,44 @@ Presented with a clear explanation and an explicit opt-in.
 ## 4. Operational rules
 
 These are requirements on Pomace's own implementation:
+
+- **Resolve and check the compressor before every run.** Use the bundled applesauce by
+  default; its executable, code signature and capabilities must pass validation. A custom
+  override is accepted only from an absolute path resolving to a regular executable file
+  with usable capabilities, including LZFSE and `--verify`. If it is deleted, replaced
+  with an unusable executable or otherwise fails validation, fall back to the checked
+  bundled copy and show the rejection reason in Settings → Advanced → Compressor.
+  Never run a compressor that failed its capability check. If neither source is usable,
+  allow scanning but disable mutation. Use Bundled clears the saved custom path.
+  Administrator confirmation names the resolved executable and explicitly warns that a
+  custom compressor is user-chosen, is not bundled with Pomace, and will run with
+  administrator privileges. Capability probing does not authenticate or sandbox it.
+  Resolution records a SHA-256 stable across the capability probe. Elevated runs refuse
+  changed paths or bytes before authorization. The privileged script makes a root-owned
+  mode-700 temporary directory, copies the confirmed executable there, checks the copy's
+  hash, and runs only that private copy across batches. Both source and copy hashes are
+  rechecked between batches; cleanup runs before the terminal outcome. Denied cleanup or
+  process death can leave the private copy behind, still inaccessible to ordinary users.
+  Standard runs report their fresh resolution to the UI and rebuild argv for its capabilities.
+
+- **Administrator access is interactive and scoped.** The user must opt in and confirm
+  the folder, file count, and compressor path. Only the compressor is elevated, using
+  macOS authorization; Pomace never handles passwords or changes sudoers. Allowed roots
+  are `/Applications`, `/opt/homebrew`, and `/usr/local`, including subdirectories.
+  Before authorization and as root immediately before each batch, check physical path
+  containment using `cd -P`/`pwd -P`, regular non-symlink targets, and link count one.
+  Require every directory from the target's parent through the confirmed root and its
+  ancestors to be root-owned, without group/world write permission or ACLs. Reject
+  symlinked components. User-owned Homebrew trees and root-owned files under user-owned
+  parents therefore cannot use elevation. Keep all existing safety exclusions and refuse
+  compression if native inspection cannot determine whether an uncompressed file has a
+  resource fork. These directory checks prevent same-user parent/directory substitution;
+  a CLI preflight alone could not bound applesauce's later recursive scanner. No files-only
+  wrapper/library change is made and the previously proposed substitution residual is
+  superseded. Trusted administrators and an explicitly authorized custom root executable
+  remain outside this boundary. Scheduled sweeps
+  do not request elevation. Cancelling authorization starts no further batches and
+  preserves the outcome of earlier work.
 
 1. **Always pass `--verify`.** applesauce verifies only when asked — the inverse of
    afsctool, where verification was on unless you passed `-n`. A build of the tool without

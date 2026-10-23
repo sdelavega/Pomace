@@ -5,6 +5,7 @@ import PomaceCore
 struct ResultView: View {
     @Bindable var model: ScanModel
     let result: ScanResult
+    let focus: FocusState<MainFocusRegion?>.Binding
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,6 +18,9 @@ struct ResultView: View {
             .padding(.bottom, 14)
             Divider()
             FileTable(model: model, result: result)
+                .focused(focus, equals: .table)
+                .focusSection()
+                .accessibilityLabel(AppStrings.fileList)
             Divider()
             StatusBar(model: model, result: result)
         }
@@ -43,19 +47,29 @@ private struct SummaryHeader: View {
 
             CoverageBar(result: result)
 
-            HStack(spacing: 22) {
-                Stat("Eligible", Fmt.count(result.progress.eligibleFiles, "file"),
-                     ByteFormat.short(result.progress.eligibleLogicalBytes))
-                Stat("Already compressed", Fmt.count(result.progress.compressedFiles, "file"),
-                     ByteFormat.short(result.reclaimedBytes) + " reclaimed")
-                Stat("Excluded", Fmt.count(result.progress.excludedFiles, "file"),
-                     "for safety")
-                Stat("On disk", ByteFormat.short(result.progress.physicalBytes),
-                     "of " + ByteFormat.short(result.progress.logicalBytes) + " logical")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 22) { statistics }
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                    GridItem(.flexible(), alignment: .leading)],
+                          alignment: .leading, spacing: 12) {
+                    statistics
+                }
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
+    }
+
+    @ViewBuilder
+    private var statistics: some View {
+        Stat(AppStrings.eligible, AppStrings.files(result.progress.eligibleFiles),
+             Fmt.bytes(result.progress.eligibleLogicalBytes))
+        Stat(AppStrings.alreadyCompressed, AppStrings.files(result.progress.compressedFiles),
+             AppStrings.reclaimedDetail(Fmt.bytes(result.reclaimedBytes)))
+        Stat(AppStrings.excluded, AppStrings.files(result.progress.excludedFiles),
+             AppStrings.forSafety)
+        Stat(AppStrings.onDisk, Fmt.bytes(result.progress.physicalBytes),
+             AppStrings.logicalSize(Fmt.bytes(result.progress.logicalBytes)))
     }
 
     /// Deliberately does NOT promise a figure. Estimating real savings needs sampling, which
@@ -63,21 +77,21 @@ private struct SummaryHeader: View {
     /// the user's trust permanently.
     private var headline: String {
         if result.progress.eligibleFiles == 0 {
-            return "Nothing left to compress here"
+            return AppStrings.nothingToCompress
         }
-        return "\(Fmt.count(result.progress.eligibleFiles, "file")) could be compressed"
+        return AppStrings.couldCompress(result.progress.eligibleFiles)
     }
 
     private var subhead: String {
-        var parts = ["\(ByteFormat.short(result.progress.eligibleLogicalBytes)) of eligible data"]
+        var parts = [AppStrings.eligibleData(Fmt.bytes(result.progress.eligibleLogicalBytes))]
         if result.progress.compressedFiles > 0 {
-            parts.append("\(Fmt.percent(result.compressionCoverage)) of this folder is already compressed")
+            parts.append(AppStrings.folderCompressed(Fmt.percent(result.compressionCoverage)))
         }
         return parts.joined(separator: " · ")
     }
 }
 
-private struct CoverageBar: View {
+struct CoverageBar: View {
     let result: ScanResult
 
     var body: some View {
@@ -96,8 +110,13 @@ private struct CoverageBar: View {
         }
         .frame(height: 6)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Compression coverage")
-        .accessibilityValue("\(Fmt.percent(result.compressionCoverage)) compressed, \(Fmt.count(result.progress.eligibleFiles, "file")) eligible, \(Fmt.count(result.progress.excludedFiles, "file")) excluded for safety")
+        .accessibilityLabel(AppStrings.compressionCoverage)
+        .accessibilityValue(Self.accessibilityValueText(fraction: result.compressionCoverage,
+                                                       saved: result.reclaimedBytes))
+    }
+
+    static func accessibilityValueText(fraction: Double, saved: Int64) -> String {
+        AppStrings.coverageSaved(Fmt.percent(fraction), Fmt.bytes(saved))
     }
 
     @ViewBuilder
@@ -125,10 +144,11 @@ private struct Stat: View {
 private struct FileTable: View {
     @Bindable var model: ScanModel
     let result: ScanResult
+    @State private var selection: Set<String> = []
 
     var body: some View {
-        Table(model.visibleEntries) {
-            TableColumn("Name") { entry in
+        Table(model.visibleEntries, selection: $selection) {
+            TableColumn(AppStrings.name) { entry in
                 HStack(spacing: 6) {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: entry.path))
                         .resizable().frame(width: 14, height: 14)
@@ -138,19 +158,19 @@ private struct FileTable: View {
             }
             .width(min: 150, ideal: 220)
 
-            TableColumn("Size") { entry in
-                Text(ByteFormat.short(entry.logicalSize))
+            TableColumn(AppStrings.size) { entry in
+                Text(Fmt.bytes(entry.logicalSize))
                     .monospacedDigit().foregroundStyle(.secondary)
             }
-            .width(90)
+            .width(min: 90, ideal: 130, max: 200)
 
-            TableColumn("On disk") { entry in
-                Text(ByteFormat.short(entry.physicalSize))
+            TableColumn(AppStrings.onDisk) { entry in
+                Text(Fmt.bytes(entry.physicalSize))
                     .monospacedDigit().foregroundStyle(.secondary)
             }
-            .width(90)
+            .width(min: 90, ideal: 130, max: 200)
 
-            TableColumn("State") { entry in
+            TableColumn(AppStrings.state) { entry in
                 StateCell(entry: entry)
             }
             .width(min: 200, ideal: 320)
@@ -159,34 +179,70 @@ private struct FileTable: View {
     }
 }
 
+enum FileRowState {
+    case excluded(SafetyReason)
+    case compressed(CompressionType?)
+    case warning(SafetyReason)
+    case notCompressed
+
+    init(entry: ScanEntry) {
+        if let reason = entry.reasons.first(where: { $0.isHardExclusion }) {
+            self = .excluded(reason)
+        } else if entry.isCompressed {
+            self = .compressed(entry.type)
+        } else if let warning = entry.reasons.first {
+            self = .warning(warning)
+        } else {
+            self = .notCompressed
+        }
+    }
+
+    var accessibilityLabelText: String {
+        switch self {
+        case .excluded(let reason): AppStrings.accessibilityDetail(AppStrings.excluded, reason.text)
+        case .compressed(let type): type.map { AppStrings.accessibilityDetail(AppStrings.compressedState, $0.text) } ?? AppStrings.compressedState
+        case .warning(let reason): AppStrings.accessibilityDetail(AppStrings.state, reason.text)
+        case .notCompressed: AppStrings.notCompressed
+        }
+    }
+}
+
 private struct StateCell: View {
     let entry: ScanEntry
 
     var body: some View {
-        if let reason = entry.reasons.first(where: { $0.isHardExclusion }) {
+        badge
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(FileRowState(entry: entry).accessibilityLabelText)
+    }
+
+    @ViewBuilder
+    private var badge: some View {
+        switch FileRowState(entry: entry) {
+        case .excluded(let reason):
             Label {
-                Text(reason.explanation).lineLimit(1).truncationMode(.tail)
-                    .help(reason.explanation)   // full text on hover; the short form elides
+                Text(reason.text).lineLimit(1).truncationMode(.tail)
+                    .help(reason.text)   // full text on hover; the short form elides
             } icon: {
                 Image(systemName: "minus.circle").foregroundStyle(.secondary)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-        } else if entry.isCompressed {
-            Label(entry.type?.description ?? "Compressed", systemImage: "checkmark.circle.fill")
+        case .compressed(let type):
+            Label(type?.text ?? AppStrings.compressedState, systemImage: "checkmark.circle.fill")
                 .font(.caption)
                 .foregroundStyle(.tint)
-        } else if let warning = entry.reasons.first {
+        case .warning(let warning):
             Label {
-                Text(warning.explanation).lineLimit(1).truncationMode(.tail)
-                    .help(warning.explanation)
+                Text(warning.text).lineLimit(1).truncationMode(.tail)
+                    .help(warning.text)
             } icon: {
                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-        } else {
-            Text("Not compressed").font(.caption).foregroundStyle(.secondary)
+        case .notCompressed:
+            Text(AppStrings.notCompressed).font(.caption).foregroundStyle(.secondary)
         }
     }
 }
@@ -199,12 +255,12 @@ private struct StatusBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Toggle("Show excluded", isOn: $model.showExcluded)
+            Toggle(AppStrings.showExcluded, isOn: $model.showExcluded)
                 .toggleStyle(.checkbox)
                 .controlSize(.small)
 
-            Picker("Sort", selection: $model.sortOrder) {
-                ForEach(ScanModel.SortOrder.allCases) { Text($0.rawValue).tag($0) }
+            Picker(AppStrings.sort, selection: $model.sortOrder) {
+                ForEach(ScanModel.SortOrder.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.menu)
             .controlSize(.small)
@@ -214,16 +270,15 @@ private struct StatusBar: View {
             Spacer()
 
             if result.entriesTruncated {
-                Label("Showing first \(ScanEngine.maxRetainedEntries.formatted()) files — totals cover everything",
-                      systemImage: "info.circle")
+                Label(AppStrings.truncatedFiles(ScanEngine.maxRetainedEntries), systemImage: "info.circle")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if result.hardLinkDuplicates > 0 {
-                Text("\(Fmt.count(result.hardLinkDuplicates, "hard link")) counted once")
+                Text(AppStrings.hardLinksCountedOnce(result.hardLinkDuplicates))
                     .font(.caption).foregroundStyle(.secondary)
-                    .help("These paths share storage with another file, so their bytes are counted only once.")
+                    .help(AppStrings.hardLinkHelp)
             }
-            Text(String(format: "Scanned in %.1fs", result.duration))
+            Text(AppStrings.scannedIn(result.duration))
                 .font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
         .padding(.horizontal, 16)

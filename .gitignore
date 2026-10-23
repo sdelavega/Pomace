@@ -32,6 +32,8 @@ ExportOptions.plist
 .env
 
 # Local scratch
+/.superpowers/
+tools/applesauce/target/
 scratch/
 dist/
 *.sparseimage

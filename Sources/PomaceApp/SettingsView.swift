@@ -1,6 +1,20 @@
 import SwiftUI
 import PomaceCore
 
+struct GeneralSettingsView: View {
+    @ObservedObject var updates: Updates
+    @AppStorage("menuBarEnabled") private var menuBarEnabled = false
+
+    var body: some View {
+        Form {
+            Toggle(AppStrings.automaticUpdates, isOn: $updates.automaticallyChecksForUpdates)
+            Toggle(AppStrings.menuBarItem, isOn: $menuBarEnabled)
+        }
+        .padding(24)
+        .frame(minWidth: 560, minHeight: 360)
+    }
+}
+
 /// Settings → Advanced, on the Xcode build-settings model (ADR-0009).
 ///
 /// The pane's primary job is DIAGNOSTIC. Seeing what Pomace decided and why is what makes
@@ -16,6 +30,8 @@ struct AdvancedSettingsView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    compressorSection
+                    Divider()
                     ForEach(model.plan.justifications) { j in
                         JustificationRow(justification: j)
                         Divider()
@@ -31,34 +47,62 @@ struct AdvancedSettingsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Compression Settings").font(.headline)
-            Text("Pomace chooses these for you. Everything below shows what it picked and why.")
+            Text(AppStrings.compressionSettings).font(.headline)
+            Text(AppStrings.settingsExplanation)
                 .font(.caption).foregroundStyle(.secondary)
 
-            Picker("Mode", selection: $model.mode) {
-                ForEach(CompressionMode.allCases) { Text($0.rawValue).tag($0) }
+            Picker(AppStrings.mode, selection: $model.mode) {
+                ForEach(CompressionMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            Text(model.mode.explanation).font(.caption).foregroundStyle(.secondary)
+            Text(model.mode.text).font(.caption).foregroundStyle(.secondary)
         }
         .padding(16)
     }
 
+    private var compressorSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(AppStrings.compressor).font(.headline)
+            Text(model.toolSummary).font(.callout)
+            if let installation = model.resolution.installation {
+                Text(installation.path).font(.caption).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let rejection = model.customCompressorRejectionText {
+                Text(rejection).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                Button(AppStrings.chooseCompressor) { chooseCompressor() }
+                Button(AppStrings.useBundled) { model.setCustomCompressor(nil) }
+            }
+            .disabled(model.isRunning || model.isSweeping || model.confirmingAdministrator)
+        }
+        .padding(16)
+        .onAppear { model.refreshCompressor() }
+    }
+
+    private func chooseCompressor() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = AppStrings.choose
+        panel.message = AppStrings.chooseCompressorHelp
+        if panel.runModal() == .OK, let url = panel.url {
+            model.setCustomCompressor(url.path)
+        }
+    }
+
     private var footer: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(model.toolSummary).font(.caption)
-                if let i = model.installation {
-                    Text(i.path).font(.caption2).foregroundStyle(.tertiary)
-                        .lineLimit(1).truncationMode(.middle)
-                }
-            }
             Spacer()
-            Toggle("Show menu bar item", isOn: $menuBarEnabled)
+            Toggle(AppStrings.menuBarItem, isOn: $menuBarEnabled)
                 .controlSize(.small)
             if model.overrides != nil {
-                Button("Reset to Automatic") { model.overrides = nil }
+                Button(AppStrings.resetAutomatic) { model.overrides = nil }
                     .controlSize(.small)
             }
         }
@@ -78,23 +122,23 @@ private struct JustificationRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(justification.value)
+                    Text(justification.value.text)
                         .font(.callout.weight(.medium))
                         .monospacedDigit()
                     if justification.isFixed {
-                        Text("Always")
+                        Text(AppStrings.always)
                             .font(.caption2)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(.quaternary, in: Capsule())
                     }
                     if justification.isOverridden {
-                        Text("Overridden")
+                        Text(AppStrings.overridden)
                             .font(.caption2)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(.tint.opacity(0.2), in: Capsule())
                     }
                 }
-                Text(justification.reason)
+                Text(justification.reason.text)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -103,78 +147,5 @@ private struct JustificationRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
-    }
-}
-
-/// Shown when the compressor is missing. The license disclosure is not optional — Pomace is about
-/// to install third-party GPL software on the user's behalf (ADR-0003).
-struct InstallToolView: View {
-    @Bindable var model: ScanModel
-    @State private var installing = false
-    @State private var message: String?
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "shippingbox").font(.system(size: 36)).foregroundStyle(.secondary)
-            Text("Pomace needs \(CompressorTool.displayName)").font(.headline)
-            Text("""
-                 \(CompressorTool.displayName) is the tool that actually applies compression. \
-                 Pomace can install it for you with Homebrew, or you can install it yourself.
-                 """)
-                .font(.callout)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: 420)
-
-            GroupBox {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("About to install").font(.caption.weight(.medium))
-                    Text("applesauce, by Zachary Dremann")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("Licensed GPL-3.0 — separate software, not part of Pomace")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("Installed via: brew install \(ToolInstaller.homebrewFormula)")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxWidth: 420)
-
-            if let message {
-                Text(message).font(.caption).foregroundStyle(.secondary)
-                    .frame(maxWidth: 420)
-            }
-
-            HStack {
-                Button("Install with Homebrew") { install() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(installing || !ToolInstaller.homebrewAvailable)
-                Button("Check Again") { model.refreshInstallation() }
-                    .disabled(installing)
-            }
-            if !ToolInstaller.homebrewAvailable {
-                Text("Homebrew isn't installed, so Pomace can't install \(CompressorTool.displayName) automatically.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            if installing { ProgressView().controlSize(.small) }
-        }
-        .padding(28)
-    }
-
-    private func install() {
-        installing = true
-        message = "Installing…"
-        Task {
-            let result = await ToolInstaller.installViaHomebrew()
-            installing = false
-            switch result {
-            case .success:
-                model.refreshInstallation()
-                message = model.toolReady ? nil : "Installed, but Pomace still can't find it."
-            case .failure(let error):
-                message = error
-            }
-        }
     }
 }
