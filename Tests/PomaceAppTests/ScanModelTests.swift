@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import PomaceCore
 @testable import PomaceApp
@@ -231,8 +232,17 @@ struct ScanModelTests {
         #expect(model.isRunning)
         #expect(SweepLock.isHeld(at: directory.appendingPathComponent("sweep.lock")))
         model.select(other.path)
-        try Data().write(to: URL(fileURLWithPath: binary.path + ".release"))
-        try await waitUntil { !model.isRunning && !model.isStopping && model.result != nil }
+        let lockURL = directory.appendingPathComponent("sweep.lock")
+        try await confirmation("Stop completes after releasing the sweep lock") { stopped in
+            withObservationTracking {
+                _ = model.isStopping
+            } onChange: {
+                #expect(!SweepLock.isHeld(at: lockURL))
+                stopped()
+            }
+            try Data().write(to: URL(fileURLWithPath: binary.path + ".release"))
+            try await waitUntil { !model.isRunning && !model.isStopping && model.result != nil }
+        }
         guard case .finished(let outcome) = model.runState else {
             Issue.record("Stop did not deliver a finished outcome")
             return

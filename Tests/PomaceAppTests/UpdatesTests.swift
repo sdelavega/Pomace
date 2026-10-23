@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 import Sparkle
 @testable import PomaceCore
@@ -64,9 +65,17 @@ struct UpdatesTests {
         }
         #expect(model.isRunning)
         #expect(SweepLock.isHeld(at: url))
-        for _ in 0..<100 {
-            if !model.isRunning { break }
-            try await Task.sleep(for: .milliseconds(20))
+        try await confirmation("Refusal is published after releasing the sweep lock") { refused in
+            withObservationTracking {
+                _ = model.runState
+            } onChange: {
+                #expect(!SweepLock.isHeld(at: url))
+                refused()
+            }
+            for _ in 0..<100 {
+                if !model.isRunning { break }
+                try await Task.sleep(for: .milliseconds(20))
+            }
         }
         guard case .refused(let error) = model.runState else {
             Issue.record("The missing compressor did not fail the run")

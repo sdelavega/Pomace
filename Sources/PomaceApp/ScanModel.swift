@@ -325,11 +325,14 @@ final class ScanModel {
                 case .started(let p), .progress(let p):
                     self.runState = .running(op, p)
                 case .finished(let outcome):
+                    // A terminal state must mean Sparkle and another run can acquire the lock.
+                    lock.release()
                     self.runState = .finished(outcome)
                     // Post-run truth: re-scan natively rather than trusting the compressor's
                     // summary, so before and after come from the same code path.
                     self.refreshAfterMutation(root)
                 case .failed(let message):
+                    lock.release()
                     self.runState = .refused(message.text)
                 }
             }
