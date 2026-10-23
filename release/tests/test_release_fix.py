@@ -21,6 +21,8 @@ class BuildVersionTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         shutil.copy(ROOT / "build-app.sh", self.root)
+        (self.root / "scripts/lib").mkdir(parents=True)
+        shutil.copy(ROOT / "scripts/lib/rpaths.sh", self.root / "scripts/lib")
         shutil.copytree(ROOT / "release", self.root / "release")
         resources = self.root / "Resources"
         resources.mkdir()

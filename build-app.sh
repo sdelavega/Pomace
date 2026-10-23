@@ -14,6 +14,7 @@ IDENTITY="${POMACE_SIGN_ID:-85E7645225011373853E0C0F50CF9967974BB7BE}"
 VERSION="${POMACE_VERSION:-}"
 
 cd "$HERE"
+source "$HERE/scripts/lib/rpaths.sh"
 BUILD_VERSION="$(python3 release/metadata.py build-number "$VERSION" "${POMACE_BUILD:-}")"
 BUILD_ARGS=(-c "$CONFIG" --product PomaceApp)
 if [ "$CONFIG" = "release" ]; then
@@ -53,13 +54,10 @@ cp "$BIN" "$APP/Contents/MacOS/Pomace"
 if [ "$CONFIG" = "release" ]; then
   # SwiftPM embeds build-host toolchain paths in both slices. Strip only those paths
   # from the distribution copy, before signing; keep system and bundle-relative paths.
-  RPATHS="$(otool -l "$APP/Contents/MacOS/Pomace" | awk '
-    $1 == "cmd" && $2 == "LC_RPATH" { rpath = 1; next }
-    rpath && $1 == "path" { sub(/^ *path /, ""); sub(/ \(offset [0-9]+\)$/, ""); print; rpath = 0 }
-  ' | sort -u)"
+  RPATHS="$(macho_rpaths "$APP/Contents/MacOS/Pomace" | sort -u)"
   while IFS= read -r rpath; do
     case "$rpath" in
-      /Applications/Xcode.app*|/var/run/com.apple.security.cryptexd*)
+      /Applications/Xcode.app*|/var/run/com.apple.security.cryptexd*|/Library/Developer/CommandLineTools/*)
         install_name_tool -delete_rpath "$rpath" "$APP/Contents/MacOS/Pomace"
         ;;
     esac

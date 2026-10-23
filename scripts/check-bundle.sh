@@ -1,6 +1,8 @@
 #!/bin/bash
 # Validate the assembled app before it is shipped or used by later gates.
 set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/lib/rpaths.sh"
 
 fail() {
   echo "bundle check failed: $*" >&2
@@ -39,10 +41,7 @@ check_universal() {
 
 check_rpaths() {
   local paths rpath
-  paths="$(otool -l "$1" | awk '
-    $1 == "cmd" && $2 == "LC_RPATH" { rpath = 1; next }
-    rpath && $1 == "path" { sub(/^ *path /, ""); sub(/ \(offset [0-9]+\)$/, ""); print; rpath = 0 }
-  ')" || fail "cannot read rpaths: $1"
+  paths="$(macho_rpaths "$1")" || fail "cannot read rpaths: $1"
   while IFS= read -r rpath; do
     case "$rpath" in
       /usr/lib/*) ;;

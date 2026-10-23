@@ -43,8 +43,8 @@ the existing measurements are not general performance claims.
 ## M2 — Compress and decompress
 
 - [x] Compressor version detection and capability check (applesauce since ADR-0015)
-- [x] Bundled universal applesauce and checked custom override, replacing Homebrew
-      discovery and the install flow ([ADR-0017](DECISIONS.md#adr-0017-bundle-applesauce))
+- [x] Install flow — Homebrew tap with the licence disclosure (1.1 replaced it with the
+      bundled universal compressor and checked custom override; [ADR-0017](DECISIONS.md#adr-0017-bundle-applesauce))
 - [x] Auto-tuning policy engine ([DEFAULTS.md §2](DEFAULTS.md#2-policy)) with per-flag
       justification strings
 - [x] Settings → Advanced pane: computed values, reasons, revert and compressor selection

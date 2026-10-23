@@ -10,7 +10,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWED = ['/usr/lib/swift', '@loader_path', '@executable_path/../Frameworks']
 TOOLCHAIN = ['/Applications/Xcode.app/Contents/Developer/Toolchains/Test Toolchain/usr/lib/swift',
-             '/var/run/com.apple.security.cryptexd/mnt/Test/usr/lib/swift']
+             '/var/run/com.apple.security.cryptexd/mnt/Test/usr/lib/swift',
+             '/Library/Developer/CommandLineTools/usr/lib/swift']
 
 
 def run(*args, **kwargs):
@@ -67,7 +68,8 @@ class BundleRpathTests(unittest.TestCase):
                 run('install_name_tool', '-delete_rpath', path, str(destination))
         (self.root / 'build').mkdir()
         shutil.copy2(framework / 'Sparkle', self.root / 'build/applesauce')
-        for relative in ['build-app.sh', 'scripts/check-bundle.sh', 'release/metadata.py',
+        for relative in ['build-app.sh', 'scripts/check-bundle.sh', 'scripts/lib/rpaths.sh',
+                         'release/metadata.py',
                          'Resources/Info.plist', 'Resources/Pomace.icns',
                          'Resources/com.sdelavega.Pomace.Sweep.plist']:
             source = ROOT / relative
