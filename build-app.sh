@@ -42,6 +42,15 @@ if [ "$CONFIG" = "release" ]; then
     rm -rf "$ARCH_STAGE"
     mkdir -p "$ARCH_STAGE"
     cp "$PRODUCTS_DIR/PomaceApp" "$ARCH_STAGE/PomaceApp"
+    # Delete per slice: install_name_tool fails on a fat binary if a path is absent
+    # from any architecture. Keep only system Swift and bundle-relative rpaths.
+    RPATHS="$(macho_rpaths "$ARCH_STAGE/PomaceApp" | sort -u)"
+    while IFS= read -r rpath; do
+      case "$rpath" in
+        /usr/lib/swift) ;;
+        /*) install_name_tool -delete_rpath "$rpath" "$ARCH_STAGE/PomaceApp" ;;
+      esac
+    done <<< "$RPATHS"
     cp -R "$ARCH_RESOURCE_BUNDLE" "$ARCH_STAGE/"
     BINS+=("$ARCH_STAGE/PomaceApp")
     ARCH_RESOURCE_BUNDLE="$ARCH_STAGE/Pomace_PomaceApp.bundle"
@@ -85,18 +94,6 @@ fi
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents" "$APP/Contents/Helpers" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/Pomace"
-if [ "$CONFIG" = "release" ]; then
-  # SwiftPM embeds build-host toolchain paths in both slices. Strip only those paths
-  # from the distribution copy, before signing; keep system and bundle-relative paths.
-  RPATHS="$(macho_rpaths "$APP/Contents/MacOS/Pomace" | sort -u)"
-  while IFS= read -r rpath; do
-    case "$rpath" in
-      /Applications/Xcode.app*|/var/run/com.apple.security.cryptexd*|/Library/Developer/CommandLineTools/*)
-        install_name_tool -delete_rpath "$rpath" "$APP/Contents/MacOS/Pomace"
-        ;;
-    esac
-  done <<< "$RPATHS"
-fi
 cp "$HERE/build/applesauce" "$APP/Contents/Helpers/applesauce"
 cp "$HERE/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$HERE/Resources/Pomace.icns" "$APP/Contents/Resources/Pomace.icns"

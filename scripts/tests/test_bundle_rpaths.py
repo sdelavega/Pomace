@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOWED = ['/usr/lib/swift', '@loader_path', '@executable_path/../Frameworks']
 TOOLCHAIN = ['/Applications/Xcode.app/Contents/Developer/Toolchains/Test Toolchain/usr/lib/swift',
              '/var/run/com.apple.security.cryptexd/mnt/Test/usr/lib/swift',
-             '/Library/Developer/CommandLineTools/usr/lib/swift']
+             '/Library/Developer/CommandLineTools/usr/lib/swift',
+             '/Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-6.2/macosx',
+             '/opt/host/lib']
 
 
 def run(*args, **kwargs):
@@ -125,6 +127,26 @@ class BundleRpathTests(unittest.TestCase):
             self.assertIn(f'path {path} (offset ', at_signing)
         # The SwiftPM product is shared build output and must remain untouched.
         self.assertEqual(set(rpaths(self.products / 'PomaceApp')), set(ALLOWED + TOOLCHAIN))
+
+    def test_release_removes_rpaths_present_in_only_one_architecture(self):
+        product = self.products / 'PomaceApp'
+        slices = []
+        for arch in ['arm64', 'x86_64']:
+            binary = self.root / arch
+            run('lipo', str(product), '-thin', arch, '-output', str(binary))
+            if arch == 'x86_64':
+                run('install_name_tool', '-delete_rpath', '/opt/host/lib', str(binary))
+            self.assertEqual('/opt/host/lib' in rpaths(binary), arch == 'arm64')
+            slices.append(str(binary))
+        run('lipo', '-create', *slices, '-output', str(product))
+        self.build('release')
+        result = self.app / 'Contents/MacOS/Pomace'
+        self.assertEqual(set(run('lipo', '-archs', str(result)).stdout.split()),
+                         {'arm64', 'x86_64'})
+        for arch in ['arm64', 'x86_64']:
+            binary = self.root / f'clean-{arch}'
+            run('lipo', str(result), '-thin', arch, '-output', str(binary))
+            self.assertEqual(set(rpaths(binary)), set(ALLOWED))
 
     def test_bundle_requires_plural_rules_in_every_locale(self):
         # Native SwiftPM uses a flat bundle; swift-build uses Contents/Resources.
