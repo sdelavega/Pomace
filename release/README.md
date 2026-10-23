@@ -33,6 +33,13 @@ Applications shortcut, signs and notarizes it using `Pomace Notary`, staples and
 validates it, then assesses the DMG and mounted app with Gatekeeper. Mounts are inside
 an ignored temporary directory and are detached on exit.
 
+`build-app.sh` sets CFBundleVersion from `POMACE_VERSION` as
+`major * 10000 + minor * 100 + patch`; every component must be 0–99. For example,
+1.1.0 becomes 10100. `POMACE_BUILD` overrides the numeric build for release-candidate
+update tests. A non-x.y.z version such as 0.0.0-dryrun defaults to build 1. Feed
+validation requires the item's build and marketing versions to match the bundle,
+and verifies the DMG and feed signatures using that bundle's public key.
+
 Sparkle 2.10.0 is downloaded to `build/sparkle-tools/`. All three executable hashes
 must match `release/sparkle-tools.sha256` before use; cached mismatches fail rather
 than being silently replaced. Appcast generation uses a fresh directory containing
@@ -51,8 +58,12 @@ release/release.sh 0.0.0-dryrun --dry-run
 Dry-run skips the clean-tree check and gate (the gate itself calls it), Developer ID
 signing, notarization, stapling and Gatekeeper assessment. It uses ad-hoc signatures,
 a mode-0600 temporary random Ed25519 seed and an empty feed, producing exactly one
-item. Dry-run requires Python's `cryptography` package to derive the temporary public
-key, which replaces the public key only in the staged DMG app before ad-hoc signing. It uses the 1.1.0 notes for the gate's synthetic version. It never runs
+item. Dry-run requires an `openssl` with Ed25519 support on PATH (for example,
+Homebrew OpenSSL); macOS's older system LibreSSL may lack it. No third-party Python
+packages are needed. OpenSSL generates a temporary keypair; only the staged DMG app
+gets its public key before ad-hoc signing. `POMACE_SIGN_ADHOC=1` explicitly selects
+ad-hoc signing in build-app.sh and skips signing-identity lookup. The dry run uses
+the 1.1.0 notes for the gate's synthetic version. It never runs
 `generate_keys`, reads the login keychain's Sparkle key, or fetches the published feed.
 The temporary key is removed on exit. Its manifest is marked `dry_run: true` and is
 refused by publishing; only a fresh real release build can produce shipping proof.

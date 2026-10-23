@@ -34,10 +34,9 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-if [ "$DRY_RUN" = 1 ]; then
-  # R1: the gate calls this path, so no clean-tree check or recursive gate.
-  IDENTITY=POMACE_DRY_RUN_NO_IDENTITY
-else
+IDENTITY="${POMACE_SIGN_ID:-}"
+# R1: the gate calls dry-run, so it skips the clean-tree check and recursive gate.
+if [ "$DRY_RUN" != 1 ]; then
   [ -z "$(git status --porcelain)" ] || fail 'Release requires a clean tree'
   scripts/gate.sh
   IDENTITY="${POMACE_SIGN_ID:?Set POMACE_SIGN_ID to the Developer ID certificate SHA-1}"
@@ -51,7 +50,7 @@ if not re.fullmatch(r"[A-Fa-f0-9]{40}", sys.argv[2]) or len(matches) != 1:
 IDENTITY_CHECK
 fi
 prepare_tools
-POMACE_VERSION="$VERSION" POMACE_SIGN_ID="$IDENTITY" ./build-app.sh release
+POMACE_VERSION="$VERSION" POMACE_SIGN_ID="$IDENTITY" POMACE_SIGN_ADHOC="$DRY_RUN" ./build-app.sh release
 scripts/check-bundle.sh --universal build/Pomace.app
 mkdir -p "$WORK/image" "$WORK/feed"
 ditto build/Pomace.app "$WORK/image/Pomace.app"
@@ -88,23 +87,8 @@ python3 release/metadata.py notes "$NOTES" "$WORK/feed/Pomace-$VERSION.html"
 "$TOOLS/generate_appcast" "${KEY_ARGS[@]}" --download-url-prefix \
   "https://github.com/sdelavega/Pomace/releases/download/v$VERSION/" \
   --embed-release-notes --maximum-deltas 0 --maximum-versions 0 "$WORK/feed"
-SIGNATURE="$(python3 release/metadata.py check-feed "$VERSION" "$DMG" "$WORK/feed/appcast.xml" "$DRY_RUN")"
-if [ "$DRY_RUN" = 1 ]; then
-  VERIFY_ARGS=(--ed-key-file "$WORK/ed-key")
-else
-  # The legacy verification input contains only inert padding and the public key.
-  python3 - "$WORK/verify-key" <<'PUBLIC_KEY'
-import base64, pathlib, plistlib, sys
-with open("Resources/Info.plist", "rb") as stream:
-    public = base64.b64decode(plistlib.load(stream)["SUPublicEDKey"], validate=True)
-if len(public) != 32:
-    sys.exit("Invalid Sparkle public key")
-pathlib.Path(sys.argv[1]).write_bytes(base64.b64encode(bytes(64) + public))
-PUBLIC_KEY
-  VERIFY_ARGS=(--ed-key-file "$WORK/verify-key")
-fi
-"$TOOLS/sign_update" --verify "$DMG" "$SIGNATURE" "${VERIFY_ARGS[@]}"
-"$TOOLS/sign_update" --verify "$WORK/feed/appcast.xml" "${VERIFY_ARGS[@]}"
+python3 release/metadata.py check-feed "$VERSION" "$DMG" "$WORK/feed/appcast.xml" "$DRY_RUN" \
+  "$WORK/image/Pomace.app" "$TOOLS/sign_update"
 cp "$WORK/feed/appcast.xml" dist/appcast.xml
 SHA="$(shasum -a 256 "$DMG")"
 python3 release/metadata.py manifest "$VERSION" "$(git rev-parse HEAD)" "${SHA%% *}" "$DRY_RUN"

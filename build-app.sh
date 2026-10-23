@@ -14,6 +14,7 @@ IDENTITY="${POMACE_SIGN_ID:-85E7645225011373853E0C0F50CF9967974BB7BE}"
 VERSION="${POMACE_VERSION:-}"
 
 cd "$HERE"
+BUILD_VERSION="$(python3 release/metadata.py build-number "$VERSION" "${POMACE_BUILD:-}")"
 BUILD_ARGS=(-c "$CONFIG" --product PomaceApp)
 if [ "$CONFIG" = "release" ]; then
   BUILD_ARGS+=(--arch arm64 --arch x86_64)
@@ -60,13 +61,16 @@ ditto "$SPARKLE_SOURCE" "$FRAMEWORK"
 if [ -n "$VERSION" ]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 fi
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_VERSION" "$APP/Contents/Info.plist"
 # The scheduled-sweep agent ships inside the bundle so it is covered by the signature and
 # removed cleanly when the app is deleted (ADR-0005).
 cp "$HERE/Resources/com.sdelavega.Pomace.Sweep.plist" "$APP/Contents/Library/LaunchAgents/"
 
 SIGN_ARGS=(--force --options runtime --sign -)
 APP_SIGN_ARGS=(--force --sign -)
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+if [ "${POMACE_SIGN_ADHOC:-0}" = 1 ]; then
+  SIGNING_DESCRIPTION="ad-hoc signed (requested)"
+elif security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
   SIGN_ARGS=(--force --options runtime --timestamp --sign "$IDENTITY")
   APP_SIGN_ARGS=("${SIGN_ARGS[@]}" --entitlements "$HERE/Resources/Pomace.entitlements")
   SIGNING_DESCRIPTION="signed with Developer ID"
