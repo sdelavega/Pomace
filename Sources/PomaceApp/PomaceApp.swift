@@ -75,6 +75,14 @@ struct PomaceApp: App {
                 .keyboardShortcut(".", modifiers: .command)
                 .disabled((!model.isRunning && !model.isScanning) || model.isStopping)
             }
+            #if DEBUG
+            if Main.uiTestFixturePath != nil {
+                CommandMenu(AppStrings.state) {
+                    Button(AppStrings.decompress) { model.requestDecompress() }
+                    Button(AppStrings.authorizeAdministrator) { model.confirmingAdministrator = true }
+                }
+            }
+            #endif
         }
 
         Settings {

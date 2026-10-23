@@ -16,6 +16,31 @@ struct AccessibilityTextTests {
         #expect(value == "42% compressed, \(bytes) saved")
     }
 
+    @Test("sidebar sections and spoken rows share the same ordered groups")
+    func sidebarGroupingKeepsLabelsAligned() {
+        let paths = ["/Users/alex/Manual", "/Users/alex/Daily", "/Users/alex/Weekly"]
+        let groups = SidebarGroup.grouped(paths, isScheduled: { $0 != paths[0] })
+        #expect(groups.count == 2)
+        #expect(groups.map(\.isScheduled) == [true, false])
+        #expect(groups.map(\.paths) == [[paths[1], paths[2]], [paths[0]]])
+        #expect(groups.map(\.title) == [AppStrings.scheduled, AppStrings.notScheduled])
+        let labels = groups.flatMap { $0.accessibilityLabels(scheduleSummary: { _ in AppStrings.noScheduledSweeps }) }
+        #expect(labels == [AppStrings.scheduled,
+                           AppStrings.accessibilityDetail("Daily", AppStrings.noScheduledSweeps),
+                           AppStrings.accessibilityDetail("Weekly", AppStrings.noScheduledSweeps),
+                           AppStrings.notScheduled,
+                           AppStrings.accessibilityDetail("Manual", AppStrings.noScheduledSweeps)])
+        #expect(SidebarGroup.grouped([], isScheduled: { _ in true }).isEmpty)
+        let scheduled = SidebarGroup.grouped(paths, isScheduled: { _ in true })
+        #expect(scheduled.count == 1)
+        #expect(scheduled.first?.isScheduled == true)
+        #expect(scheduled.first?.paths == paths)
+        let manual = SidebarGroup.grouped(paths, isScheduled: { _ in false })
+        #expect(manual.count == 1)
+        #expect(manual.first?.isScheduled == false)
+        #expect(manual.first?.paths == paths)
+    }
+
     @Test("debug fixture scans without persisting or starting a run")
     @MainActor
     func fixtureIsReadOnly() async throws {

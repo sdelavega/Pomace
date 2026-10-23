@@ -12,7 +12,6 @@ struct AdministratorConfirmation: ViewModifier {
         ) {
             Button(AppStrings.continueAdministrator) { model.confirmAdministrator() }
             Button(AppStrings.cancel, role: .cancel) { model.cancelAdministrator() }
-                .keyboardShortcut(.cancelAction)
                 .keyboardShortcut(.defaultAction)
         } message: {
             Text(model.administratorConfirmationText)
