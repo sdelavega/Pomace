@@ -36,6 +36,43 @@ struct DiagnosticsContextTests {
         #expect(DiagnosticsFiles.logLines(at: log.url).first?.contains("synthetic alex log") == true)
     }
 
+    @Test(arguments: [false, true]) @MainActor
+    func forgottenRootsHideLogAndCrashContents(evicted: Bool) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let root = "/Users/alex/Documents/Secret Plans"
+        let privatePath = root + "/payroll.txt"
+        let store = try Store(url: directory.appendingPathComponent("history.sqlite"))
+        if evicted {
+            for n in 0..<21 {
+                try store.recordSweep(path: n == 0 ? root : "/Users/alex/Current", startedAt: Date(timeIntervalSince1970: Double(n)),
+                                      duration: 1, filesCompressed: 1, filesFailed: 0, bytesReclaimed: 1,
+                                      deferral: nil, error: nil, cancelled: false)
+            }
+        }
+        let log = MutationLog(url: directory.appendingPathComponent("mutations.log"))
+        log.note("batch first=\(privatePath)")
+        let model = ScanModel(store: store, log: log)
+        model.watchedPaths = [root]
+        model.watchedPaths.removeAll()
+        model.selectedPath = nil
+        let context = model.diagnosticsContext()
+        #expect(!context.roots.map(\.path).contains(root))
+        #expect(context.history.count == (evicted ? 20 : 0))
+        let lines = DiagnosticsFiles.logLines(at: log.url)
+        #expect(lines.contains { $0.contains(privatePath) })
+        let crash = #"{"path":"/Users/alex/Documents/Secret Plans/payroll.txt","external":"/Volumes/Old Disk/Secret Plans/payroll.txt","temporary":"/private/var/folders/ab/secret/T/payroll.txt"}"#
+        let report = DiagnosticsReport.render(DiagnosticsInput(
+            appVersion: "test", build: "1", osVersion: "test", architecture: "test",
+            compressor: model.resolution, agentRegistered: false, logLines: lines + context.history,
+            crashReports: [(name: "Pomace.ips", contents: crash)], scannedRoots: context.roots,
+            homeDirectory: URL(fileURLWithPath: "/Users/alex"), userName: "alex", hostName: "alex-mbp"))
+        #expect(report.contains("~/Documents/<path>"))
+        #expect(!report.contains("payroll") && !report.contains("Secret Plans"))
+        #expect(!report.contains("Old Disk") && !report.contains("/secret/"))
+    }
+
     @Test func historyRendererKeepsDiagnosticFieldsInEnglish() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

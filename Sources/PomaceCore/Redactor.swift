@@ -55,8 +55,17 @@ public struct Redactor: Sendable {
                                in: result, with: root.label)
         }
         let homePath = NSRegularExpression.escapedPattern(for: home)
+        // Log/crash windows outlive sidebar entries and sweep history. Unknown private
+        // paths retain only the first home component; never guess where a filename ends.
+        let unknownHome = try! NSRegularExpression(pattern: homePath + #"/([^/\r\n"']+)/[^\r\n]*"#)
+        for match in unknownHome.matches(in: result, range: NSRange(result.startIndex..., in: result)).reversed() {
+            guard let range = Range(match.range, in: result),
+                  let component = Range(match.range(at: 1), in: result) else { continue }
+            let label = "~/" + result[component] + "/<path>"
+            result.replaceSubrange(range, with: label)
+        }
         result = replacing(homePath + #"(?=/|[\s"',;)}\]]|$)"#, in: result, with: "~")
-        result = replacing(#"/Volumes/(?!<volume>(?:"|\r|\n|$))[^\r\n]+"#, in: result, with: "/Volumes/<volume>")
+        result = replacing(#"/Volumes/(?!<volume>)[^\r\n]+"#, in: result, with: "/Volumes/<volume>/<path>")
         result = replacing(#"/(?:private/)?var/folders/[^\r\n]+"#, in: result, with: "<temporary folder>")
         // Match the host first: a host such as alex-mbp contains the whole word alex.
         let names = [(hostName, "<host>"), (userName, "<user>")].filter { !$0.0.isEmpty }

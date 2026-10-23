@@ -10,7 +10,7 @@ struct RedactorTests {
     }
 
     @Test func homeBecomesTilde() {
-        #expect(redactor().redact("/Users/alex/Desktop/a.txt") == "~/Desktop/a.txt")
+        #expect(redactor().redact("/Users/alex/Desktop/a.txt") == "~/Desktop/<path>")
     }
 
     @Test func rootContentsHidden() {
@@ -54,7 +54,7 @@ struct RedactorTests {
         for kind in ["Applications", "Homebrew", "external volume", "user folder"] { #expect(result.contains(kind)) }
         for n in 1...5 { #expect(result.contains("<folder-\(n)>")) }
         #expect(!result.contains("private name") && !result.contains("über.txt"))
-        #expect(redactor(["/Users/alex/Plans"]).redact("/Users/alex/Plans2/file") == "~/Plans2/file")
+        #expect(redactor(["/Users/alex/Plans"]).redact("/Users/alex/Plans2/file") == "~/Plans2/<path>")
     }
 
     @Test func overlappingRootsKeepTheirIdentity() {
