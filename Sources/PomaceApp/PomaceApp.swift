@@ -102,6 +102,9 @@ struct PomaceApp: App {
         let credits = NSMutableAttributedString(string: AppStrings.credits(source))
         credits.addAttribute(.link, value: URL(string: source)!,
                              range: (credits.string as NSString).range(of: source))
+        let translating = "https://github.com/sdelavega/Pomace/blob/main/docs/TRANSLATING.md"
+        credits.addAttribute(.link, value: URL(string: translating)!,
+                             range: (credits.string as NSString).range(of: translating))
         NSApp.orderFrontStandardAboutPanel(options: [NSApplication.AboutPanelOptionKey.credits: credits])
     }
 

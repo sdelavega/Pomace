@@ -95,7 +95,7 @@ class HelperScriptsTests(unittest.TestCase):
                     'integration', 'app release', 'bundle --universal build/Pomace.app',
                     'python -m unittest discover -s release/tests', 'release 0.0.0-dryrun --dry-run',
                     'python -m unittest discover -s scripts/tests',
-                    'python scripts/check-l10n.py lint', 'python scripts/check-l10n.py catalog --locales en']
+                    'python scripts/check-l10n.py lint', 'python scripts/check-l10n.py catalog --locales en zh-Hans es ja ko de fr pt-BR']
         result = subprocess.run(['bash', str(destination)], cwd=self.root,
                                 env=self.environment, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)

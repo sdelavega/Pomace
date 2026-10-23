@@ -83,7 +83,7 @@ enum AppStrings {
     static let scanHelp = text("app.scan_help", defaultValue: "Choose a folder or application bundle to scan. Pomace only reads it — nothing is modified.", comment: "Folder chooser explanation; scanning does not change files.")
 
     static func credits(_ source: String) -> String {
-        String(format: text("app.credits", defaultValue: "applesauce (GPL-3.0)\n%@\n\nTranslations are machine-translated — corrections welcome.", comment: "About panel credits; placeholder is the compressor source link, followed by the machine translation disclosure."), source)
+        String(format: text("app.credits", defaultValue: "applesauce (GPL-3.0)\n%@\n\nTranslations are machine-translated — corrections welcome.\nhttps://github.com/sdelavega/Pomace/blob/main/docs/TRANSLATING.md", comment: "About panel credits; placeholder is the compressor source link, followed by the machine translation disclosure and correction guide."), source)
     }
 
     static let authorizeAdministrator = text("run.authorize", defaultValue: "Authorize administrator access?", comment: "Elevated run confirmation title; asks before requesting macOS authentication.")

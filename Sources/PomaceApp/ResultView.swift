@@ -43,19 +43,29 @@ private struct SummaryHeader: View {
 
             CoverageBar(result: result)
 
-            HStack(spacing: 22) {
-                Stat(AppStrings.eligible, AppStrings.files(result.progress.eligibleFiles),
-                     Fmt.bytes(result.progress.eligibleLogicalBytes))
-                Stat(AppStrings.alreadyCompressed, AppStrings.files(result.progress.compressedFiles),
-                     AppStrings.reclaimedDetail(Fmt.bytes(result.reclaimedBytes)))
-                Stat(AppStrings.excluded, AppStrings.files(result.progress.excludedFiles),
-                     AppStrings.forSafety)
-                Stat(AppStrings.onDisk, Fmt.bytes(result.progress.physicalBytes),
-                     AppStrings.logicalSize(Fmt.bytes(result.progress.logicalBytes)))
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 22) { statistics }
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                    GridItem(.flexible(), alignment: .leading)],
+                          alignment: .leading, spacing: 12) {
+                    statistics
+                }
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
+    }
+
+    @ViewBuilder
+    private var statistics: some View {
+        Stat(AppStrings.eligible, AppStrings.files(result.progress.eligibleFiles),
+             Fmt.bytes(result.progress.eligibleLogicalBytes))
+        Stat(AppStrings.alreadyCompressed, AppStrings.files(result.progress.compressedFiles),
+             AppStrings.reclaimedDetail(Fmt.bytes(result.reclaimedBytes)))
+        Stat(AppStrings.excluded, AppStrings.files(result.progress.excludedFiles),
+             AppStrings.forSafety)
+        Stat(AppStrings.onDisk, Fmt.bytes(result.progress.physicalBytes),
+             AppStrings.logicalSize(Fmt.bytes(result.progress.logicalBytes)))
     }
 
     /// Deliberately does NOT promise a figure. Estimating real savings needs sampling, which
@@ -144,13 +154,13 @@ private struct FileTable: View {
                 Text(Fmt.bytes(entry.logicalSize))
                     .monospacedDigit().foregroundStyle(.secondary)
             }
-            .width(90)
+            .width(min: 90, ideal: 130, max: 200)
 
             TableColumn(AppStrings.onDisk) { entry in
                 Text(Fmt.bytes(entry.physicalSize))
                     .monospacedDigit().foregroundStyle(.secondary)
             }
-            .width(90)
+            .width(min: 90, ideal: 130, max: 200)
 
             TableColumn(AppStrings.state) { entry in
                 StateCell(entry: entry)

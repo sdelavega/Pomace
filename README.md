@@ -13,6 +13,9 @@ Compressed files continue to open normally in Finder and every other app. There 
 archive to mount, extract, or manage: macOS transparently expands the data when it is
 read.
 
+**Languages:** English, 简体中文, Español, 日本語, 한국어, Deutsch, Français, and Português (Brasil).
+Translations are machine-made; [corrections are welcome](docs/TRANSLATING.md).
+
 ![Pomace scan overview](docs/images/scan-overview.png)
 
 ## What Pomace Does

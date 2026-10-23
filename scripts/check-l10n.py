@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 # Checks app literals and catalog coverage without requiring Xcode extraction.
 import argparse
+from collections import Counter
 import json
 from pathlib import Path
 import re
 import sys
 
 
-LITERAL_CALL = re.compile(r'(?<![\w])(?:Text|Button|Label|Toggle|Section|\.help|\.navigationTitle|\.accessibilityLabel)\s*\(\s*"')
+LITERAL_CALL = re.compile(r'(?<![\w])(?:Text|Button|Label|Toggle|Section|Picker|TableColumn|ContentUnavailableView|\.help|\.navigationTitle|\.accessibilityLabel)\s*\(\s*"')
 KEY_CALL = re.compile(r'(?:\bNSLocalizedString|\bLocalizedStringKey|\bAppStrings\.text|\btext)\s*\(\s*"([^"\\]+)"|\b(?:Text|String)\s*\(\s*(?:localized:\s*)?"([^"\\]+)"')
+
+# Cardinal categories used by the eight supported locales (CLDR).
+PLURAL_CATEGORIES = {
+    'en': {'one', 'other'}, 'zh-Hans': {'other'}, 'es': {'one', 'many', 'other'},
+    'ja': {'other'}, 'ko': {'other'}, 'de': {'one', 'other'},
+    'fr': {'one', 'many', 'other'}, 'pt-BR': {'one', 'many', 'other'},
+}
+FORMAT_SPECIFIER = re.compile(r'%%|%(?:\d+\$)?[-+#0 ]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:hh|ll|[hljztL])?[@diuoxXfFeEgGaAcCsSp]')
+PANEL_ASSIGNMENT = re.compile(r'\b(\w+)\.(?:prompt|message)\s*=\s*"')
 
 
 def string_end(source, start):
@@ -88,11 +98,25 @@ def source_calls(source, pattern):
             i += 1
 
 
+def panel_assignments(source):
+    code = code_only(source)
+    panels = set(re.findall(r'\b(?:let|var)\s+(\w+)\s*(?::\s*NS(?:Open|Save)Panel\s*)?=\s*NS(?:Open|Save)Panel\s*\(', code))
+    i = 0
+    while i < len(code):
+        match = PANEL_ASSIGNMENT.match(code, i)
+        if match and match.group(1) in panels:
+            yield match, ''
+        if code[i] == '"':
+            i = string_end(code, i)
+        else:
+            i += 1
+
+
 def lint(root):
     errors = []
     for path in sorted((root / 'Sources/PomaceApp').rglob('*.swift')):
         source = path.read_text()
-        for match, call in source_calls(source, LITERAL_CALL):
+        for match, call in [*source_calls(source, LITERAL_CALL), *panel_assignments(source)]:
             line = source.count('\n', 0, match.start()) + 1
             original = source.splitlines()[line - 1]
             if re.search(r'//\s*l10n-exempt:\s*\S', original):
@@ -100,31 +124,61 @@ def lint(root):
             if re.search(r'\bbundle:\s*\.module\b', call):
                 continue
             # Text punctuation and symbols carry no words for a translator.
-            if match.group().lstrip().startswith('Text') and not source[match.end():match.end() + 1].isalpha():
-                continue
+            if match.group().lstrip().startswith('Text'):
+                start = match.end() - 1
+                delimiter = '"""' if source.startswith('"""', start) else '"'
+                literal = source[start + len(delimiter):string_end(source, start) - len(delimiter)]
+                if not any(character.isalpha() for character in literal):
+                    continue
             errors.append(f'{path.relative_to(root)}:{line}: localize user-visible literal')
     return errors
 
 
-def has_english(node):
-    if 'stringUnit' in node:
-        value = node['stringUnit'].get('value')
-        return isinstance(value, str) and bool(value)
-    if 'variations' in node:
-        variants = node['variations'].get('plural', {})
-        return 'other' in variants and all(has_english(v) for v in variants.values())
-    if 'substitutions' in node:
-        return bool(node['substitutions']) and all(has_english(v) for v in node['substitutions'].values())
-    return False
+def specifiers(value):
+    return Counter(token for token in FORMAT_SPECIFIER.findall(value) if token != '%%')
+
+
+def check_translation(node, source, locale, label):
+    errors = []
+    if 'variations' in source:
+        source_variants = source['variations'].get('plural', {})
+        variants = node.get('variations', {}).get('plural', {})
+        for category in sorted(PLURAL_CATEGORIES[locale] - variants.keys()):
+            errors.append(f'{label}: missing {locale} plural category {category}')
+        for category, variant in variants.items():
+            baseline = source_variants.get(category, source_variants.get('other', {}))
+            errors += check_translation(variant, baseline, locale, f'{label}/{category}')
+        return errors
+    unit = node.get('stringUnit', {})
+    value = unit.get('value')
+    if not isinstance(value, str) or not value:
+        errors.append(f'{label}: missing {locale} value')
+    else:
+        baseline = source.get('stringUnit', {}).get('value', '')
+        if specifiers(value) != specifiers(baseline):
+            errors.append(f'{label}: {locale} format specifier multiset differs from en')
+    if unit.get('state') != 'translated':
+        errors.append(f'{label}: {locale} state must be translated')
+    source_substitutions = source.get('substitutions', {})
+    for name, substitution in source_substitutions.items():
+        errors += check_translation(node.get('substitutions', {}).get(name, {}),
+                                    substitution, locale, f'{label}/{name}')
+    return errors
 
 
 def catalog(root, locales):
     path = root / 'Sources/PomaceApp/Resources/Localizable.xcstrings'
     strings = json.loads(path.read_text())['strings']
     errors = []
+    for locale in locales:
+        if locale not in PLURAL_CATEGORIES:
+            errors.append(f'unsupported locale: {locale}')
     for key, entry in strings.items():
-        if not has_english(entry.get('localizations', {}).get('en', {})):
-            errors.append(f'{key}: missing en value')
+        translations = entry.get('localizations', {})
+        source = translations.get('en', {})
+        for locale in dict.fromkeys(['en', *locales]):
+            if locale in PLURAL_CATEGORIES:
+                errors += check_translation(translations.get(locale, {}), source, locale, key)
     for source_path in sorted((root / 'Sources/PomaceApp').rglob('*.swift')):
         source = source_path.read_text()
         for match, call in source_calls(source, KEY_CALL):

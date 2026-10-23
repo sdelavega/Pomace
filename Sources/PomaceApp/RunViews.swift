@@ -28,42 +28,17 @@ struct ActionBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Button {
-                    model.startCompress()
-                } label: {
-                    Label(AppStrings.compress, systemImage: "arrow.down.right.and.arrow.up.left")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    compressionButtons
+                    modePicker.pickerStyle(.segmented)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(minWidth: 200)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .fixedSize()
-                .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
-                .help(model.toolReady
-                      ? AppStrings.compressEligible(model.compressibleCount)
-                      : AppStrings.toolUnavailable(CompressorTool.displayName))
-
-                Button {
-                    model.requestDecompress()
-                } label: {
-                    Label(AppStrings.decompress, systemImage: "arrow.up.left.and.arrow.down.right")
+                VStack(alignment: .leading, spacing: 8) {
+                    compressionButtons
+                    modePicker.pickerStyle(.menu).fixedSize()
                 }
-                .controlSize(.large)
-                .fixedSize()
-                .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
-
-                Picker(AppStrings.mode, selection: $model.mode) {
-                    ForEach(CompressionMode.allCases) { m in
-                        Text(m.label).tag(m)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                // Flexible, not fixed: a fixed width squeezed the buttons until SwiftUI dropped
-                // their labels down to bare icons when the inspector opened.
-                .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
-                .layoutPriority(-1)
-                .disabled(model.isRunning)
-                .help(model.mode.text)
             }
             if model.administratorAvailable {
                 Toggle(AppStrings.useAdministrator, isOn: $model.useAdministratorPrivileges)
@@ -73,6 +48,43 @@ struct ActionBar: View {
                     .help(AppStrings.administratorHelp)
             }
         }
+    }
+
+    private var compressionButtons: some View {
+        HStack(spacing: 10) {
+            Button {
+                model.startCompress()
+            } label: {
+                Label(AppStrings.compress, systemImage: "arrow.down.right.and.arrow.up.left")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .fixedSize()
+            .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
+            .help(model.toolReady
+                  ? AppStrings.compressEligible(model.compressibleCount)
+                  : AppStrings.toolUnavailable(CompressorTool.displayName))
+
+            Button {
+                model.requestDecompress()
+            } label: {
+                Label(AppStrings.decompress, systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+            .controlSize(.large)
+            .fixedSize()
+            .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
+        }
+    }
+
+    private var modePicker: some View {
+        Picker(AppStrings.mode, selection: $model.mode) {
+            ForEach(CompressionMode.allCases) { m in
+                Text(m.label).tag(m)
+            }
+        }
+        .labelsHidden()
+        .disabled(model.isRunning)
+        .help(model.mode.text)
     }
 }
 
