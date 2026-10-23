@@ -182,7 +182,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aceptar"
+            "value": "Listo"
           }
         },
         "ja": {
@@ -728,7 +728,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "削除"
+            "value": "取り除く"
           }
         },
         "ko": {
@@ -1148,7 +1148,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "计划和检查历史记录"
+            "value": "计划与检查历史"
           }
         },
         "es": {
@@ -2108,7 +2108,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mitgelieferten verwenden"
+            "value": "Mitgelieferten Kompressor verwenden"
           }
         },
         "fr": {
@@ -3146,7 +3146,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "applesauce (GPL-3.0)\n%@\n\nAs traduções foram feitas por máquina. Correções são bem-vindas.\nhttps://github.com/sdelavega/Pomace/blob/main/docs/TRANSLATING.md"
+            "value": "applesauce (GPL-3.0)\n%@\n\nAs traduções foram geradas automaticamente. Correções são bem-vindas.\nhttps://github.com/sdelavega/Pomace/blob/main/docs/TRANSLATING.md"
           }
         }
       }
@@ -5456,7 +5456,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ディスク上"
+            "value": "ディスク使用量"
           }
         },
         "ko": {
@@ -5468,7 +5468,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf Datenträger"
+            "value": "Auf dem Datenträger"
           }
         },
         "fr": {
@@ -7124,7 +7124,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "将在下次有条件时检查并压缩"
+            "value": "一有机会就会检查并压缩"
           }
         },
         "es": {
@@ -7178,7 +7178,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "现在应执行"
+            "value": "已到预定时间"
           }
         },
         "es": {
@@ -7574,7 +7574,7 @@
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 폴더를 더 이상 사용할 수 없습니다. 이동 또는 이름 변경되었거나 디스크가 추출되었을 수 있습니다."
+            "value": "이 폴더를 더 이상 사용할 수 없습니다. 이동 또는 이름 변경되었거나 디스크가 꺼내졌을 수 있습니다."
           }
         },
         "de": {
@@ -8084,7 +8084,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "大约时间"
+            "value": "大约在"
           }
         },
         "es": {
@@ -8636,7 +8636,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "現在%@を節約"
+            "value": "現在%@を節約済み"
           }
         },
         "ko": {
@@ -12068,57 +12068,41 @@
       }
     },
     "core.failureMessage.hardLinked": {
-      "comment": "Other hard link count",
+      "comment": "Legacy printf key; count of other paths sharing data, with locale plural forms. Active UI uses hardLinkedCount. Preserve the %ld integer width.",
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shares its data with %ld other files"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "与其他 %ld 个文件共享数据"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comparte datos con otros archivos: %ld"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ほかの%ld個のファイルとデータを共有しています"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "다른 파일 %ld개와 데이터 공유"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Teilt Daten mit weiteren Dateien: %ld"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Autres fichiers partageant les mêmes données : %ld"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Outros arquivos com os mesmos dados: %ld"
-          }
-        }
+        "en": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Shares its data with %ld other file"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Shares its data with %ld other files"}}
+        }}},
+        "zh-Hans": {"variations": {"plural": {
+          "other": {"stringUnit": {"state": "translated", "value": "与其他 %ld 个文件共享数据"}}
+        }}},
+        "es": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Comparte datos con %ld archivo más"}},
+          "many": {"stringUnit": {"state": "translated", "value": "Comparte datos con %ld archivos más"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Comparte datos con %ld archivos más"}}
+        }}},
+        "ja": {"variations": {"plural": {
+          "other": {"stringUnit": {"state": "translated", "value": "ほかの%ld個のファイルとデータを共有しています"}}
+        }}},
+        "ko": {"variations": {"plural": {
+          "other": {"stringUnit": {"state": "translated", "value": "다른 파일 %ld개와 데이터 공유"}}
+        }}},
+        "de": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Teilt Daten mit %ld weiteren Datei"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Teilt Daten mit %ld weiteren Dateien"}}
+        }}},
+        "fr": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Partage ses données avec %ld autre fichier"}},
+          "many": {"stringUnit": {"state": "translated", "value": "Partage ses données avec %ld autres fichiers"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Partage ses données avec %ld autres fichiers"}}
+        }}},
+        "pt-BR": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Compartilha dados com %ld outro arquivo"}},
+          "many": {"stringUnit": {"state": "translated", "value": "Compartilha dados com %ld outros arquivos"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Compartilha dados com %ld outros arquivos"}}
+        }}}
       }
     },
     "core.failureMessage.hardLinkedOne": {
@@ -12644,7 +12628,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Standard: schnellstes Lesen, Komprimierungsrate höchstens einen Prozentpunkt von den Alternativen entfernt"
+            "value": "Standard: schnellstes Lesen, Komprimierungsrate weicht höchstens um einen Prozentpunkt von den Alternativen ab"
           }
         },
         "fr": {
@@ -13850,57 +13834,41 @@
       }
     },
     "core.safetyReason.hardLinked": {
-      "comment": "Other hard link count",
+      "comment": "Legacy printf key; count of other paths sharing data, with locale plural forms. Compression affects every link. Active UI uses hardLinkedCount. Preserve the %ld integer width.",
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shares its data with %ld other files; compressing affects all of them"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "与其他 %ld 个文件共享数据；压缩会影响所有这些文件"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comparte datos con otros archivos (%ld); la compresión afectaría a todos"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ほかの%ld個のファイルとデータを共有しています。圧縮はすべてに影響します"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "다른 파일 %ld개와 데이터를 공유하며, 압축하면 모두 영향을 받습니다"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Teilt Daten mit weiteren Dateien (%ld); Komprimieren betrifft alle"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Autres fichiers partageant les mêmes données : %ld. La compression les affecterait tous"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Compartilha dados com outros arquivos (%ld); a compressão afeta todos"
-          }
-        }
+        "en": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Shares its data with %ld other file; compressing affects all of them"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Shares its data with %ld other files; compressing affects all of them"}}
+        }}},
+        "zh-Hans": {"variations": {"plural": {
+          "other": {"stringUnit": {"state": "translated", "value": "与其他 %ld 个文件共享数据；压缩会影响所有这些文件"}}
+        }}},
+        "es": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Comparte datos con %ld archivo más; la compresión afectaría a todos"}},
+          "many": {"stringUnit": {"state": "translated", "value": "Comparte datos con %ld archivos más; la compresión afectaría a todos"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Comparte datos con %ld archivos más; la compresión afectaría a todos"}}
+        }}},
+        "ja": {"variations": {"plural": {
+          "other": {"stringUnit": {"state": "translated", "value": "ほかの%ld個のファイルとデータを共有しています。圧縮はすべてに影響します"}}
+        }}},
+        "ko": {"variations": {"plural": {
+          "other": {"stringUnit": {"state": "translated", "value": "다른 파일 %ld개와 데이터를 공유하며, 압축하면 모두 영향을 받습니다"}}
+        }}},
+        "de": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Teilt Daten mit %ld weiteren Datei; Komprimieren betrifft alle"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Teilt Daten mit %ld weiteren Dateien; Komprimieren betrifft alle"}}
+        }}},
+        "fr": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Partage ses données avec %ld autre fichier ; la compression les affecterait tous"}},
+          "many": {"stringUnit": {"state": "translated", "value": "Partage ses données avec %ld autres fichiers ; la compression les affecterait tous"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Partage ses données avec %ld autres fichiers ; la compression les affecterait tous"}}
+        }}},
+        "pt-BR": {"variations": {"plural": {
+          "one": {"stringUnit": {"state": "translated", "value": "Compartilha dados com %ld outro arquivo; a compressão afeta todos"}},
+          "many": {"stringUnit": {"state": "translated", "value": "Compartilha dados com %ld outros arquivos; a compressão afeta todos"}},
+          "other": {"stringUnit": {"state": "translated", "value": "Compartilha dados com %ld outros arquivos; a compressão afeta todos"}}
+        }}}
       }
     },
     "core.safetyReason.hardLinkedOne": {
@@ -15338,7 +15306,7 @@
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "보호된 Homebrew 또는 응용 프로그램 파일의 경우 '관리자 권한 사용'을 켜고 다시 시도하세요. macOS 개인정보 보호 설정에서 전체 디스크 접근 권한이 추가로 필요할 수 있습니다."
+            "value": "보호된 Homebrew 또는 응용 프로그램 파일의 경우 ‘관리자 권한 사용’을 켜고 다시 시도하세요. macOS 개인정보 보호 설정에서 전체 디스크 접근 권한이 추가로 필요할 수 있습니다."
           }
         },
         "de": {
@@ -15392,7 +15360,7 @@
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "보호된 Homebrew 또는 응용 프로그램 파일의 경우 '관리자 권한 사용'을 켜고 다시 시도하세요. 읽기 전용 볼륨은 수정할 수 없습니다."
+            "value": "보호된 Homebrew 또는 응용 프로그램 파일의 경우 ‘관리자 권한 사용’을 켜고 다시 시도하세요. 읽기 전용 볼륨은 수정할 수 없습니다."
           }
         },
         "de": {

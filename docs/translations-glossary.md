@@ -18,6 +18,8 @@ Pomace uses neutral, concise macOS UI language. Spanish uses tú; French uses vo
 
 Use short forms of “sweep” where the schedule context is clear (检查, revisión, 再確認, 재확인, Prüfung, passage, revisão). Do not call a sweep a cleanup. “Verification” in compression policy means checking the round trip, while a scheduled recheck inspects a folder again.
 
+Completion and removal actions: Spanish uses **Listo** for Done when dismissing a settings sheet or completed-run banner; reserve **Aceptar** for accepting a dialog. Japanese uses **取り除く** for removing a watched folder from the list, which does not delete it from disk. A byte-size column uses **ディスク使用量** in Japanese and **Auf dem Datenträger** in German. Korean disk ejection is **꺼내기**, not archive extraction, and quoted control labels use ‘curly quotes’.
+
 ## macOS terminology
 
 Checked against this machine's installed Apple localization resources, rather than translating English labels from memory: System Settings `Localizable.loctable`; the TranslationAPI, GeneralSettings, LoginItems, SecurityPrivacy, PowerPreferences and BatterySettingsIntents extensions under `/System/Library/ExtensionKit/Extensions`; and Finder `Localizable.strings`. The Login Items section is called “Login Items & Extensions” on newer macOS; retain the shorter destination name where the source refers to Login Items. Literal filesystem paths such as `/Applications` never change.
@@ -36,4 +38,4 @@ Checked against this machine's installed Apple localization resources, rather th
 
 Keep Pomace, applesauce, LZFSE, ZLIB, LZVN, APFS, HFS+, Homebrew and GitHub unchanged. Keep CLI flags, xattr, SQL and SQLite recognizable. Format tokens, including their positional indices and integer widths, are executable contracts. Reorder indexed placeholders as needed; preserve the order of unindexed placeholders.
 
-Counts use CLDR cardinal categories: en/de one+other; es/fr/pt-BR one+many+other; zh-Hans/ja/ko other only. French and Brazilian Portuguese one includes zero. Use natural count-neutral wording in retained legacy nonplural count strings. A nested count phrase must fit its enclosing template without requiring case or gender changes.
+Counts use CLDR cardinal categories: en/de one+other; es/fr/pt-BR one+many+other; zh-Hans/ja/ko other only. French and Brazilian Portuguese one includes zero. A count beside a counted noun requires plural variations unless the caller demonstrably uses that key only with counts of 2 or more; document any such restriction. Use natural count-neutral wording in other retained legacy nonplural count strings. A nested count phrase must fit its enclosing template without requiring case or gender changes.
