@@ -18,6 +18,7 @@ struct UpdatesTests {
         var invocations = 0
         #expect(SweepLock.isHeld(at: url))
         let postponed = updates.updater(updates.updater, shouldPostponeRelaunchForUpdate: .empty()) {
+            #expect(SweepLock.acquire(at: url) == nil)
             invocations += 1
         }
         #expect(postponed)
@@ -83,6 +84,42 @@ struct UpdatesTests {
         }
         #expect(error.contains("unavailable"))
         #expect(!SweepLock.isHeld(at: url))
+    }
+
+    @Test func stagedInstallOnQuitReservesBeforeTermination() async throws {
+        let directory = URL(fileURLWithPath: "/private/tmp").appendingPathComponent(UUID().uuidString)
+        let url = directory.appendingPathComponent("sweep.lock")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let active = try #require(SweepLock.acquire(at: url))
+        defer { active.release() }
+        let updates = Updates(startingUpdater: false, lockURL: url, pollInterval: 0.01)
+        #expect(!updates.updater(updates.updater, willInstallUpdateOnQuit: .empty(), immediateInstallationBlock: {
+            Issue.record("The staged update should wait for normal termination")
+        }))
+        var replies = 0
+        let reply = updates.shouldTerminate {
+            #expect(SweepLock.acquire(at: url) == nil)
+            replies += 1
+        }
+        #expect(reply == .terminateLater)
+        #expect(replies == 0)
+        active.release()
+        for _ in 0..<100 {
+            if replies == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(replies == 1)
+        #expect(SweepLock.acquire(at: url) == nil)
+        #expect(updates.shouldTerminate {} == .terminateNow)
+    }
+
+    @Test func idleRelaunchReservesImmediately() throws {
+        let directory = URL(fileURLWithPath: "/private/tmp").appendingPathComponent(UUID().uuidString)
+        let url = directory.appendingPathComponent("sweep.lock")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let updates = Updates(startingUpdater: false, lockURL: url)
+        #expect(!updates.updater(updates.updater, shouldPostponeRelaunchForUpdate: .empty(), untilInvokingBlock: {}))
+        #expect(SweepLock.acquire(at: url) == nil)
     }
 
     @Test func headlessArgumentsCreateNoUpdater() {

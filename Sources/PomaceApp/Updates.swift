@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Sparkle
 import SwiftUI
 import PomaceCore
@@ -10,6 +11,8 @@ final class Updates: NSObject, ObservableObject, SPUUpdaterDelegate {
     private let lockURL: URL
     private let pollInterval: TimeInterval
     private var relaunchTask: Task<Void, Never>?
+    private var installationLock: SweepLock?
+    private var stagedInstall = false
 
     var updater: SPUUpdater { controller.updater }
 
@@ -30,6 +33,7 @@ final class Updates: NSObject, ObservableObject, SPUUpdaterDelegate {
         if startingUpdater { controller.startUpdater() }
     }
 
+    // Main retains Updates for the GUI process lifetime, including installation handoff.
     deinit { relaunchTask?.cancel() }
 
     var automaticallyChecksForUpdates: Bool {
@@ -47,18 +51,48 @@ final class Updates: NSObject, ObservableObject, SPUUpdaterDelegate {
         updater.checkForUpdates()
     }
 
+    private func reserveInstallation() -> Bool {
+        if installationLock != nil { return true }
+        installationLock = SweepLock.acquire(at: lockURL)
+        return installationLock != nil
+    }
+
+    private func waitForReservation(_ handler: @escaping () -> Void) {
+        relaunchTask?.cancel()
+        relaunchTask = Task { @MainActor [weak self] in
+            while let self, !self.reserveInstallation() {
+                do { try await Task.sleep(for: .seconds(self.pollInterval)) }
+                catch { return }
+            }
+            guard self != nil, !Task.isCancelled else { return }
+            handler()
+        }
+    }
+
     func updater(_ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem,
                  untilInvokingBlock installHandler: @escaping () -> Void) -> Bool {
-        guard SweepLock.isHeld(at: lockURL) else { return false }
-        relaunchTask?.cancel()
-        relaunchTask = Task { @MainActor [lockURL, pollInterval] in
-            repeat {
-                do { try await Task.sleep(for: .seconds(pollInterval)) }
-                catch { return }
-            } while SweepLock.isHeld(at: lockURL)
-            guard !Task.isCancelled else { return }
-            installHandler()
-        }
+        if reserveInstallation() { return false }
+        waitForReservation(installHandler)
         return true
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+                 immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        stagedInstall = true
+        return false
+    }
+
+    func shouldTerminate(reply: @escaping () -> Void) -> NSApplication.TerminateReply {
+        guard stagedInstall else { return .terminateNow }
+        if reserveInstallation() { return .terminateNow }
+        waitForReservation(reply)
+        return .terminateLater
+    }
+}
+
+@MainActor
+final class UpdateTerminationDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Main.updates?.shouldTerminate { sender.reply(toApplicationShouldTerminate: true) } ?? .terminateNow
     }
 }

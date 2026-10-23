@@ -3,6 +3,7 @@ import AppKit
 import PomaceCore
 
 struct PomaceApp: App {
+    @NSApplicationDelegateAdaptor(UpdateTerminationDelegate.self) private var terminationDelegate
     @State private var model = makeModel()
 
     private static func makeModel() -> ScanModel {
