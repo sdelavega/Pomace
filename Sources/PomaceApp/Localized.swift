@@ -1,6 +1,15 @@
 import Foundation
 
 enum AppStrings {
+    static let reportProblem = text("report.title", defaultValue: "Report a Problem", comment: "Help menu action and diagnostics sheet title.")
+    static let reportExplanation = text("report.explanation", defaultValue: "Review the report before sharing. Folder contents and personal names are redacted. Nothing is sent automatically. The report stays in English for the maintainer.", comment: "Diagnostics sheet privacy explanation. The report BODY intentionally stays English for the maintainer; translate only the sheet controls and explanation.")
+    static let reportContents = text("report.contents", defaultValue: "Diagnostic report", comment: "Accessibility label for the complete read-only report. The report body stays English for the maintainer.")
+    static let reportPreparing = text("report.preparing", defaultValue: "Preparing report…", comment: "Progress message while local diagnostics are collected and redacted.")
+    static let reportCopy = text("report.copy", defaultValue: "Copy", comment: "Copies the full redacted report to the clipboard.")
+    static let reportSave = text("report.save", defaultValue: "Save As…", comment: "Opens the save panel for the full redacted plain-text report.")
+    static let reportOpenIssue = text("report.open_issue", defaultValue: "Open GitHub Issue", comment: "Opens GitHub in the browser with the redacted report. Long reports are shortened with a note to attach the saved file.")
+    static let reportSaveFailed = text("report.save_failed", defaultValue: "The report could not be saved. Choose another location and try again.", comment: "Alert after saving the diagnostic report fails; suggests retrying elsewhere.")
+
     static let folders = text("accessibility.folders", defaultValue: "Folders", comment: "VoiceOver label for the watched-folder sidebar.")
     static let fileList = text("accessibility.files", defaultValue: "Files", comment: "VoiceOver label for the scan results table.")
 

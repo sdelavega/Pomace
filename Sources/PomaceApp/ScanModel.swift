@@ -45,6 +45,7 @@ final class ScanModel {
         let executor: CompressionExecutor
     }
     private var pendingAdministratorRun: PreparedRun?
+    var showingReportProblem = false
     var showingSettings = false
     var showingInspector = false
     var showingOnboarding = false
@@ -109,6 +110,12 @@ final class ScanModel {
         scan(path)
     }
     #endif
+
+    func diagnosticsContext() -> (roots: [URL], history: [String]) {
+        let runs = (try? store?.sweepHistory(limit: 20)) ?? []
+        let paths = Set(watchedPaths + [selectedPath].compactMap { $0 } + runs.map(\.path))
+        return (paths.sorted().map { URL(fileURLWithPath: $0) }, runs.map(CoreText.diagnosticsHistory))
+    }
 
     // MARK: - Scheduling
 

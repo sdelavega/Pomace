@@ -1,6 +1,118 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "report.title": {
+      "comment": "Help menu action and diagnostics sheet title.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Report a Problem" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "报告问题" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Informar de un problema" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "問題を報告" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "문제 보고" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Problem melden" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Signaler un problème" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Relatar um problema" } }
+      }
+    },
+    "report.explanation": {
+      "comment": "Diagnostics sheet privacy explanation. The report BODY intentionally stays English for the maintainer; translate only the sheet controls and explanation.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Review the report before sharing. Folder contents and personal names are redacted. Nothing is sent automatically. The report stays in English for the maintainer." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "分享前请先检查报告。文件夹内的路径和个人名称已隐去，不会自动发送任何内容。为便于维护者查看，报告正文保留英文。" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Revisa el informe antes de compartirlo. Se ocultan las rutas dentro de las carpetas y los nombres personales. No se envía nada automáticamente. El informe se mantiene en inglés para quien mantiene la app." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "共有する前にレポートを確認してください。フォルダ内のパスや個人を特定する名前は伏せられています。自動で送信されることはありません。開発者が確認できるよう、レポート本文は英語で作成されます。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "공유하기 전에 보고서를 확인하세요. 폴더 내부 경로와 개인을 식별하는 이름은 가려집니다. 어떤 내용도 자동으로 전송되지 않습니다. 유지보수 담당자가 확인할 수 있도록 보고서 본문은 영어로 작성됩니다." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Prüfen Sie den Bericht vor dem Teilen. Pfade innerhalb von Ordnern und persönliche Namen werden unkenntlich gemacht. Es wird nichts automatisch gesendet. Der Bericht bleibt für die Entwicklung auf Englisch." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Vérifiez le rapport avant de le partager. Les chemins à l’intérieur des dossiers et les noms personnels sont masqués. Rien n’est envoyé automatiquement. Le rapport reste en anglais pour la personne chargée de la maintenance." } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Confira o relatório antes de compartilhar. Os caminhos dentro das pastas e os nomes pessoais são ocultados. Nada é enviado automaticamente. O relatório permanece em inglês para facilitar a análise de quem mantém o app." } }
+      }
+    },
+    "report.contents": {
+      "comment": "Accessibility label for the complete read-only report. The report body stays English for the maintainer.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Diagnostic report" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "诊断报告" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Informe de diagnóstico" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "診断レポート" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "진단 보고서" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Diagnosebericht" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Rapport de diagnostic" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Relatório de diagnóstico" } }
+      }
+    },
+    "report.preparing": {
+      "comment": "Progress message while local diagnostics are collected and redacted.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Preparing report…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在生成报告…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Preparando el informe…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "レポートを作成中…" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "보고서 준비 중…" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Bericht wird erstellt…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Préparation du rapport…" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Preparando relatório…" } }
+      }
+    },
+    "report.copy": {
+      "comment": "Copies the full redacted report to the clipboard.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Copy" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "拷贝" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Copiar" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "コピー" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "복사" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Kopieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Copier" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Copiar" } }
+      }
+    },
+    "report.save": {
+      "comment": "Opens the save panel for the full redacted plain-text report.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Save As…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "存储为…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Guardar como…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "別名で保存…" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "다른 이름으로 저장…" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Sichern unter…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Enregistrer sous…" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Salvar Como…" } }
+      }
+    },
+    "report.open_issue": {
+      "comment": "Opens GitHub in the browser with the redacted report. Long reports are shortened with a note to attach the saved file.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Open GitHub Issue" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在 GitHub 上报告问题" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Crear incidencia en GitHub" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "GitHubで問題を報告" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "GitHub에서 이슈 작성" } },
+        "de": { "stringUnit": { "state": "translated", "value": "GitHub-Issue erstellen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Créer un ticket sur GitHub" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Abrir issue no GitHub" } }
+      }
+    },
+    "report.save_failed": {
+      "comment": "Alert after saving the diagnostic report fails; suggests retrying elsewhere.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The report could not be saved. Choose another location and try again." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法存储报告。请选择其他位置后重试。" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo guardar el informe. Elige otra ubicación e inténtalo de nuevo." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "レポートを保存できませんでした。別の保存先を選んで、もう一度お試しください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "보고서를 저장할 수 없습니다. 다른 위치를 선택한 후 다시 시도하세요." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Der Bericht konnte nicht gesichert werden. Wählen Sie einen anderen Speicherort und versuchen Sie es erneut." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Le rapport n’a pas pu être enregistré. Choisissez un autre emplacement et réessayez." } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Não foi possível salvar o relatório. Escolha outro local e tente novamente." } }
+      }
+    },
     "accessibility.folders": {
       "comment": "VoiceOver label for the watched-folder sidebar.",
       "extractionState": "manual",

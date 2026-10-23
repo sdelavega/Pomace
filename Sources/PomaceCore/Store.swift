@@ -213,14 +213,14 @@ public final class Store: @unchecked Sendable {
         }
     }
 
-    public func sweepHistory(path: String, limit: Int = 20) throws -> [SweepRun] {
+    public func sweepHistory(path: String? = nil, limit: Int = 20) throws -> [SweepRun] {
         try queue.sync {
             var out: [SweepRun] = []
             try query("""
                 SELECT id, path, started_at, duration, files_compressed, files_failed,
                        bytes_reclaimed, deferral, error, cancelled
-                FROM sweep_run WHERE path = ? ORDER BY started_at DESC LIMIT ?;
-                """, [.text(path), .int(Int64(limit))]) { stmt in
+                FROM sweep_run WHERE (? IS NULL OR path = ?) ORDER BY started_at DESC LIMIT ?;
+                """, [path.map(Value.text) ?? .null, path.map(Value.text) ?? .null, .int(Int64(limit))]) { stmt in
                 func text(_ i: Int32) -> String? {
                     guard let c = sqlite3_column_text(stmt, i) else { return nil }
                     return String(cString: c)

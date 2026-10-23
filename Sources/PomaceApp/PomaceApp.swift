@@ -56,6 +56,9 @@ struct PomaceApp: App {
                 Button(AppStrings.checkUpdates) { updates.checkForUpdates() }
                     .disabled(!updates.canCheckForUpdates)
             }
+            CommandGroup(replacing: .help) {
+                Button(AppStrings.reportProblem) { model.showingReportProblem = true }
+            }
             CommandGroup(after: .newItem) {
                 Button(AppStrings.addFolderMenu) { addFolder() }
                     .keyboardShortcut("o", modifiers: .command)

@@ -298,6 +298,12 @@ extension CompressionEngineError {
 
 
 enum CoreText {
+    /// Diagnostic fields stay English for the maintainer, regardless of UI language.
+    static func diagnosticsHistory(_ run: Store.SweepRun) -> String {
+        let date = ISO8601DateFormatter().string(from: run.startedAt)
+        return "[Sweep \(date)] \(run.path) compressed=\(run.filesCompressed) failed=\(run.filesFailed) reclaimed=\(run.bytesReclaimed) duration=\(run.duration) deferral=\(run.deferral?.rawValue ?? "none") error=\(run.error ?? "none") cancelled=\(run.cancelled)" // l10n-exempt: Maintainer diagnostics, intentionally English
+    }
+
     static let administratorPrompt = NSLocalizedString("core.administratorAccess.prompt", tableName: "Localizable", bundle: .module, value: "Pomace needs administrator access to modify the selected Homebrew or application files.", comment: "System authorization prompt")
     static let fileChangedMessage = NSLocalizedString("core.administratorAccess.fileChanged", tableName: "Localizable", bundle: .module, value: "A selected path is no longer a regular file.", comment: "A path changed before elevated execution")
 }

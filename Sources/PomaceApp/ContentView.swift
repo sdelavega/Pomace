@@ -76,6 +76,9 @@ struct ContentView: View {
                     }
                 }
         }
+        .sheet(isPresented: $model.showingReportProblem) {
+            ReportProblemView(model: model)
+        }
         .sheet(isPresented: $model.showingOnboarding) {
             OnboardingView(onContinue: model.dismissOnboarding)
         }
