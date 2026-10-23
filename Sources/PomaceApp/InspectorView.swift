@@ -75,7 +75,7 @@ struct InspectorView: View {
             Text("Schedule").font(.headline)
 
             Picker("Sweep", selection: $model.schedule.cadence) {
-                ForEach(SweepCadence.allCases) { Text($0.label).tag($0) }
+                ForEach(SweepCadence.allCases) { Text($0.text).tag($0) }
             }
             .onChange(of: model.schedule.cadence) { model.saveSchedule() }
 
@@ -94,13 +94,13 @@ struct InspectorView: View {
                       ? "checkmark.circle.fill" : "exclamationmark.circle")
                     .foregroundStyle(model.serviceStatus.isActive ? .green : .secondary)
                     .accessibilityHidden(true)
-                Text(model.serviceStatus.explanation)
+                Text(model.serviceStatus.text)
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Scheduled sweeps")
-            .accessibilityValue(model.serviceStatus.explanation)
+            .accessibilityValue(model.serviceStatus.text)
 
             if case .requiresApproval = model.serviceStatus {
                 Button("Open Login Items…") { model.openLoginItems() }
@@ -148,7 +148,7 @@ struct InspectorView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(run.startedAt, format: .relative(presentation: .named))
                             .font(.caption.weight(.medium))
-                        Text(run.summary)
+                        Text(run.text)
                             .font(.caption2)
                             .foregroundStyle(run.deferral != nil || run.error != nil
                                              ? .secondary : .primary)

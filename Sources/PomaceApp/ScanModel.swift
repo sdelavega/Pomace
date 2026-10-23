@@ -101,7 +101,7 @@ final class ScanModel {
         switch result {
         case .success(let status): serviceStatus = status
         case .failure(let error):
-            serviceError = error.description
+            serviceError = error.text
             serviceStatus = SweepService.status
         }
     }
@@ -130,7 +130,7 @@ final class ScanModel {
 
     var nextSweepDescription: String {
         guard schedule.enabled, schedule.cadence != .manual else { return "No scheduled sweeps" }
-        guard serviceStatus.isActive else { return serviceStatus.explanation }
+        guard serviceStatus.isActive else { return serviceStatus.text }
         guard let path = selectedPath,
               let last = (try? store?.lastCompletedSweep(path: path)).flatMap({ $0 }),
               let interval = schedule.cadence.interval else {
@@ -160,9 +160,9 @@ final class ScanModel {
             self.isSweeping = false
             self.loadSchedule(for: path)
             if let deferral = report.deferral {
-                self.runState = .refused(deferral.explanation)
+                self.runState = .refused(deferral.text)
             } else if let error = report.error {
-                self.runState = .refused(error)
+                self.runState = .refused(error.text)
             } else {
                 var outcome = CompressionOutcome()
                 outcome.filesSucceeded = report.filesCompressed
@@ -203,27 +203,7 @@ final class ScanModel {
     }
 
     var customCompressorRejectionText: String? {
-        guard let rejection = resolution.customRejection else { return nil }
-        let reason: String
-        switch rejection {
-        case .notFound: reason = "The chosen compressor could not be found."
-        case .notExecutable: reason = "The chosen compressor is not executable."
-        case .notRegularFile: reason = "Choose a regular executable file."
-        case .relativePath: reason = "The chosen compressor needs an absolute path."
-        case .missingCapabilities(let capabilities):
-            let names = capabilities.map { capability in
-                switch capability {
-                case .lzfse: "LZFSE compression"
-                case .verify: "--verify"
-                case .minimumRatio: "--minimum-compression-ratio"
-                }
-            }
-            reason = "The chosen compressor lacks: \(names.joined(separator: ", "))."
-        }
-        let fallback = resolution.installation == nil
-            ? "No usable compressor is available. Pomace can still scan your files."
-            : "Pomace is using the bundled compressor."
-        return "\(reason) \(fallback)"
+        resolution.rejectionText
     }
 
     func dismissOnboarding() {
@@ -308,7 +288,7 @@ final class ScanModel {
         }
         let run = PreparedRun(operation: op, root: root, installation: install,
                               paths: paths, plan: self.plan,
-                              executor: useAdministratorPrivileges ? .administrator : .standard)
+                              executor: useAdministratorPrivileges ? .administrator(prompt: CoreText.administratorPrompt, fileChangedMessage: CoreText.fileChangedMessage) : .standard)
         if useAdministratorPrivileges {
             guard administratorAvailable else {
                 runState = .refused("Administrator access is available only for /Applications, /opt/homebrew, and /usr/local.")
@@ -350,7 +330,7 @@ final class ScanModel {
                     // summary, so before and after come from the same code path.
                     self.refreshAfterMutation(root)
                 case .failed(let message):
-                    self.runState = .refused(message)
+                    self.runState = .refused(message.text)
                 }
             }
             if self.runCancellation === cancellation {
@@ -441,7 +421,7 @@ final class ScanModel {
     }
 
     func scheduleSummary(for path: String) -> String {
-        schedule(for: path).summary
+        schedule(for: path).text
     }
 
     @discardableResult
@@ -482,7 +462,7 @@ final class ScanModel {
         }
         let volume = VolumeContext.probe(path: path)
         if let blocked = volume.blockingReason {
-            state = .failed(blocked.explanation)
+            state = .failed(blocked.text)
             return
         }
 

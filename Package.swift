@@ -21,7 +21,7 @@ let package = Package(
             resources: [.process("Resources")],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
-        .testTarget(name: "PomaceCoreTests", dependencies: ["PomaceCore"]),
+        .testTarget(name: "PomaceCoreTests", dependencies: ["PomaceCore"], resources: [.copy("Fixtures")]),
         .testTarget(name: "PomaceAppTests", dependencies: ["PomaceApp", "PomaceCore"]),
     ]
 )

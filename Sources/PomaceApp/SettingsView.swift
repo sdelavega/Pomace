@@ -52,11 +52,11 @@ struct AdvancedSettingsView: View {
                 .font(.caption).foregroundStyle(.secondary)
 
             Picker("Mode", selection: $model.mode) {
-                ForEach(CompressionMode.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(CompressionMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            Text(model.mode.explanation).font(.caption).foregroundStyle(.secondary)
+            Text(model.mode.text).font(.caption).foregroundStyle(.secondary)
         }
         .padding(16)
     }
@@ -122,7 +122,7 @@ private struct JustificationRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(justification.value)
+                    Text(justification.value.text)
                         .font(.callout.weight(.medium))
                         .monospacedDigit()
                     if justification.isFixed {
@@ -138,7 +138,7 @@ private struct JustificationRow: View {
                             .background(.tint.opacity(0.2), in: Capsule())
                     }
                 }
-                Text(justification.reason)
+                Text(justification.reason.text)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

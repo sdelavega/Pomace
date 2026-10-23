@@ -53,7 +53,7 @@ struct ActionBar: View {
 
                 Picker("Mode", selection: $model.mode) {
                     ForEach(CompressionMode.allCases) { m in
-                        Text(m.rawValue).tag(m)
+                        Text(m.label).tag(m)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -63,7 +63,7 @@ struct ActionBar: View {
                 .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
                 .layoutPriority(-1)
                 .disabled(model.isRunning)
-                .help(model.mode.explanation)
+                .help(model.mode.text)
             }
             if model.administratorAvailable {
                 Toggle("Use administrator privileges", isOn: $model.useAdministratorPrivileges)
@@ -89,7 +89,7 @@ struct RunBanner: View {
         case .running(let op, let progress):
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("\(op.verb) — \(Fmt.count(progress.filesProcessed, "file")) of \(progress.filesTotal.formatted())")
+                    Text("\(op.text) — \(Fmt.count(progress.filesProcessed, "file")) of \(progress.filesTotal.formatted())")
                         .font(.callout).monospacedDigit()
                     Spacer()
                     Button(model.isStopping ? "Stopping…" : "Stop") { model.cancelRun() }
@@ -165,8 +165,8 @@ private struct OutcomeBanner: View {
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text((f.path as NSString).lastPathComponent)
                                         .font(.caption.weight(.medium))
-                                    Text(f.message).font(.caption2).foregroundStyle(.secondary)
-                                    Text(f.remedy).font(.caption2).foregroundStyle(.tertiary)
+                                    Text(f.message.text).font(.caption2).foregroundStyle(.secondary)
+                                    Text(f.remedy.text).font(.caption2).foregroundStyle(.tertiary)
                                 }
                             }
                         }

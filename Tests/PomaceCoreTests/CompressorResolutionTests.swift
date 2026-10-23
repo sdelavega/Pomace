@@ -145,7 +145,7 @@ struct CompressorResolutionTests {
         var refused = false
         for await event in CompressionEngine.run(operation: .compress, paths: [file.path],
                 root: f.directory.path, installation: installation, plan: CompressionPolicy.plan()) {
-            if case .failed(let message) = event { refused = message.contains("compressor") }
+            if case .failed(let message) = event { refused = message == .compressorUnavailable }
         }
         #expect(refused)
         #expect(!FileManager.default.fileExists(atPath: url.path + ".invoked"))
@@ -183,7 +183,7 @@ struct CompressorResolutionTests {
             // This fake executor never requests authorization, even for the elevated case.
             .completed(Subprocess.capture(path, args))
         }
-        var failures: [String] = []
+        var failures: [CompressionEngineError] = []
         var started = false
         var outcome: CompressionOutcome?
         let root = isAdministrator ? "/Applications" : f.directory.path
@@ -202,9 +202,7 @@ struct CompressorResolutionTests {
         if isAdministrator {
             let failure = try #require(failures.first)
             #expect(failures.count == 1)
-            #expect(failure.contains("The compressor changed after you confirmed"))
-            #expect(failure.contains(confirmed.path))
-            #expect(failure.contains(fallback.path))
+            #expect(failure == .compressorChanged(confirmed: confirmed.path, resolved: fallback.path))
             #expect(!started)
             #expect(outcome == nil)
             #expect(!FileManager.default.fileExists(atPath: marker))

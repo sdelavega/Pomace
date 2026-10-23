@@ -6,7 +6,7 @@ public struct SweepReport: Sendable {
     public var filesCompressed = 0
     public var filesFailed = 0
     public var bytesReclaimed: Int64 = 0
-    public var error: String?
+    public var error: CompressionEngineError?
     public var duration: TimeInterval = 0
     public var wasIncremental = false
     public var candidatesConsidered = 0
@@ -72,7 +72,7 @@ public struct SweepRunner: Sendable {
 
         guard let lock = SweepLock.acquire(at: lockURL) else {
             var report = SweepReport(path: dir.path)
-            report.error = "Another compression run is already active."
+            report.error = .alreadyRunning
             return report
         }
         defer { lock.release() }
@@ -152,7 +152,7 @@ public struct SweepRunner: Sendable {
                                    filesCompressed: report.filesCompressed,
                                    filesFailed: report.filesFailed,
                                    bytesReclaimed: report.bytesReclaimed,
-                                   error: report.error)
+                                   error: report.error.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) })
         return report
     }
 }

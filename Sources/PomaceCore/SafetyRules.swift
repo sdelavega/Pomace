@@ -32,47 +32,6 @@ public enum SafetyReason: Sendable, Equatable {
         }
     }
 
-    /// Shown directly in the UI beside the excluded file, so it must read as a sentence.
-    public var explanation: String {
-        switch self {
-        case .systemPath:
-            "On the sealed system volume, which is read-only"
-        case .sparseFile(let a, let l):
-            "Sparse file — occupies \(ByteFormat.short(a)) of \(ByteFormat.short(l)). "
-            + "Compressing it would materialize the empty space and use more disk, not less"
-        case .existingResourceFork:
-            "Already has a resource fork, which is where the compressed data would need to go"
-        case .liveDatabase(let kind):
-            "\(kind) is written to constantly; compression would be undone immediately"
-        case .virtualMachineImage:
-            "Virtual machine images are written in place and can use low-level disk access"
-        case .cloudSyncedDirectory(let service):
-            "Inside \(service) — modifying every file could trigger a full re-upload"
-        case .timeMachineVolume:
-            "Time Machine backup storage"
-        case .unsupportedFilesystem(let fs):
-            "\(fs.uppercased()) volumes don't support transparent compression"
-        case .networkVolume:
-            "Network volumes don't support transparent compression"
-        case .zeroLength:
-            "Empty file — nothing to compress"
-        case .notRegularFile:
-            "Not a regular file"
-        case .appStoreApplication:
-            "Mac App Store application — leave the store-managed bundle unchanged"
-        case .adobeApplication:
-            "Adobe application — excluded because its installation components perform integrity checks"
-        case .applicationBundle:
-            "Application bundle — generally safe, and signatures still validate, "
-            + "but worth verifying the app afterwards"
-        case .hardLinked(let n):
-            "Shares its data with \(n - 1) other file\(n == 2 ? "" : "s"); compressing affects all of them"
-        case .veryLargeFile(let b):
-            "\(ByteFormat.short(b)) — this one file will take a while and can't be interrupted partway"
-        case .likelyIncompressible(let kind):
-            "\(kind) is already compressed; there's little or nothing to reclaim"
-        }
-    }
 }
 
 public enum ByteFormat {

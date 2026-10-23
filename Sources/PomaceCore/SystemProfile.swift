@@ -37,9 +37,4 @@ public struct SystemProfile: Sendable {
     // rather than left as dead code that looks load-bearing. See ADR-0015 and, for why the
     // floor existed at all, docs/M2-FINDINGS.md.
 
-    public var justification: String {
-        isAppleSilicon
-            ? "matched to \(performanceCores) performance core\(performanceCores == 1 ? "" : "s")"
-            : "matched to \(physicalCores) physical cores"
-    }
 }

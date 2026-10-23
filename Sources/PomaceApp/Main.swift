@@ -35,7 +35,7 @@ enum Main {
             exit(reportService(SweepService.unregister()))
         }
         if args.contains("--service-status") {
-            print("\(SweepService.status): \(SweepService.status.explanation)")
+            print("\(SweepService.status): \(SweepService.status.text)")
             exit(0)
         }
 
@@ -52,10 +52,10 @@ enum Main {
     ) -> Int32 {
         switch result {
         case .success(let status):
-            print("\(status): \(status.explanation)")
+            print("\(status): \(status.text)")
             return status.isActive || status == .notRegistered ? 0 : 1
         case .failure(let error):
-            print("failed: \(error.description)")
+            print("failed: \(error.text)")
             return 1
         }
     }

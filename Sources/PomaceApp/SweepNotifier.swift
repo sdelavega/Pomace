@@ -13,7 +13,7 @@ enum SweepNotifier {
             if reports.count == 1, let r = reports.first {
                 let name = (r.path as NSString).lastPathComponent
                 content.title = "Pomace couldn't finish sweeping \(name)"
-                content.body = r.error ?? "\(r.filesFailed) file\(r.filesFailed == 1 ? "" : "s") were skipped."
+                content.body = r.error?.text ?? "\(r.filesFailed) file\(r.filesFailed == 1 ? "" : "s") were skipped."
             } else {
                 content.title = "Pomace had trouble with \(reports.count) folders"
                 content.body = "Open Pomace to see which files were skipped and why."

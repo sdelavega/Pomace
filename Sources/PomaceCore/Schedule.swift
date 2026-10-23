@@ -11,15 +11,6 @@ public enum SweepCadence: String, Sendable, CaseIterable, Identifiable, Codable 
 
     public var id: String { rawValue }
 
-    public var label: String {
-        switch self {
-        case .daily: "Every day"
-        case .weekly: "Every week"
-        case .monthly: "Every month"
-        case .manual: "Only when I ask"
-        }
-    }
-
     public var interval: TimeInterval? {
         switch self {
         case .daily: 24 * 3600
@@ -54,34 +45,12 @@ public struct SweepSchedule: Sendable, Equatable, Codable {
         if elapsed >= interval * 2 { return true }
         return calendar.component(.hour, from: now) >= preferredHour
     }
-
-    public var summary: String {
-        guard enabled else { return "Paused" }
-        switch cadence {
-        case .manual: return "Only when you ask"
-        case .daily, .weekly, .monthly:
-            let h = preferredHour
-            let suffix = h == 0 ? "midnight" : (h < 12 ? "\(h) AM" : (h == 12 ? "noon" : "\(h - 12) PM"))
-            return "\(cadence.label), around \(suffix)"
-        }
-    }
 }
 
 /// Reasons a due sweep was skipped. Recorded rather than silently dropped, so the history
 /// can explain a gap instead of just showing one.
 public enum SweepDeferral: String, Sendable, Codable {
     case onBattery, lowPowerMode, thermalPressure, timeMachineRunning, volumeUnavailable, alreadyRunning
-
-    public var explanation: String {
-        switch self {
-        case .onBattery: "Skipped — running on battery"
-        case .lowPowerMode: "Skipped — Low Power Mode was on"
-        case .thermalPressure: "Skipped — the Mac was running warm"
-        case .timeMachineRunning: "Skipped — a Time Machine backup was in progress"
-        case .volumeUnavailable: "Skipped — the folder wasn't available"
-        case .alreadyRunning: "Skipped — another sweep was already running"
-        }
-    }
 }
 
 public enum SweepPreconditions {

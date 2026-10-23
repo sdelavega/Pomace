@@ -1,42 +1,1542 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "onboarding.body" : {
-      "comment" : "First-run explanation of transparent compression and its write behavior.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pomace keeps selected folders smaller using macOS transparent compression. Files still open normally, with no archive to manage. Writing a compressed file expands it again, so Pomace can periodically recheck watched folders. Every compression is verified, and you can decompress files whenever you need to."
+  "sourceLanguage": "en",
+  "strings": {
+    "core.administratorAccess.fileChanged": {
+      "comment": "A path changed before elevated execution",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A selected path is no longer a regular file."
           }
         }
       }
     },
-    "onboarding.get_started" : {
-      "comment" : "Confirms the first-run explanation.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Get Started"
+    "core.administratorAccess.prompt": {
+      "comment": "System authorization prompt",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pomace needs administrator access to modify the selected Homebrew or application files."
           }
         }
       }
     },
-    "onboarding.title" : {
-      "comment" : "First-run window title.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pomace"
+    "core.compressionMode.automatic": {
+      "comment": "Mode explanation",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pomace measures this folder and picks what works best for it"
+          }
+        }
+      }
+    },
+    "core.compressionMode.automaticLabel": {
+      "comment": "Mode name; separate from persistence key",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
+          }
+        }
+      }
+    },
+    "core.compressionMode.fastest": {
+      "comment": "Mode explanation",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finishes soonest, reclaiming a little less"
+          }
+        }
+      }
+    },
+    "core.compressionMode.fastestLabel": {
+      "comment": "Mode name",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastest"
+          }
+        }
+      }
+    },
+    "core.compressionMode.maximumSavings": {
+      "comment": "Mode explanation",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reclaims the most space, and takes noticeably longer"
+          }
+        }
+      }
+    },
+    "core.compressionMode.maximumSavingsLabel": {
+      "comment": "Mode name",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximum savings"
+          }
+        }
+      }
+    },
+    "core.compressionOperation.compress": {
+      "comment": "Progress verb",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compressing"
+          }
+        }
+      }
+    },
+    "core.compressionOperation.decompress": {
+      "comment": "Progress verb",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decompressing"
+          }
+        }
+      }
+    },
+    "core.compressorResolution.bundled": {
+      "comment": "Fallback available",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pomace is using the bundled compressor."
+          }
+        }
+      }
+    },
+    "core.compressorResolution.rejection": {
+      "comment": "Rejection and fallback explanation",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@"
+          }
+        }
+      }
+    },
+    "core.compressorResolution.unavailable": {
+      "comment": "No fallback available",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No usable compressor is available. Pomace can still scan your files."
+          }
+        }
+      }
+    },
+    "core.customCompressorRejection.missingCapabilities": {
+      "comment": "Missing capability list",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chosen compressor lacks: %@."
+          }
+        }
+      }
+    },
+    "core.customCompressorRejection.notExecutable": {
+      "comment": "Custom compressor rejection",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chosen compressor is not executable."
+          }
+        }
+      }
+    },
+    "core.customCompressorRejection.notFound": {
+      "comment": "Custom compressor rejection",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chosen compressor could not be found."
+          }
+        }
+      }
+    },
+    "core.customCompressorRejection.notRegularFile": {
+      "comment": "Custom compressor rejection",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a regular executable file."
+          }
+        }
+      }
+    },
+    "core.customCompressorRejection.relativePath": {
+      "comment": "Custom compressor rejection",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chosen compressor needs an absolute path."
+          }
+        }
+      }
+    },
+    "core.engineError.administratorUnsupported": {
+      "comment": "Unsupported elevated root",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Administrator access is available only for /Applications, /opt/homebrew, and /usr/local."
+          }
+        }
+      }
+    },
+    "core.engineError.alreadyRunning": {
+      "comment": "Sweep lock held",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another compression run is already active."
+          }
+        }
+      }
+    },
+    "core.engineError.compressorChanged": {
+      "comment": "Confirmed and newly resolved paths",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The compressor changed after you confirmed administrator access. Confirmed: %@. Resolved: %@. Start the operation again to confirm the new compressor."
+          }
+        }
+      }
+    },
+    "core.engineError.compressorUnavailable": {
+      "comment": "Resolution failed",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The compressor is unavailable or lacks required verification support."
+          }
+        }
+      }
+    },
+    "core.engineError.insufficientFreeSpace": {
+      "comment": "Available and needed space",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough free space to work safely — %@ available, %@ needed for the temporary replacement file."
+          }
+        }
+      }
+    },
+    "core.engineError.nothingToDo": {
+      "comment": "No eligible files",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing here needs compressing."
+          }
+        }
+      }
+    },
+    "core.engineError.readOnlyVolume": {
+      "comment": "Read-only volume",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This volume is read-only. Administrator access cannot make it writable."
+          }
+        }
+      }
+    },
+    "core.engineError.safetyMetadataUnreadable": {
+      "comment": "File path",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot read safety metadata for %@. Allow Pomace to inspect this file before using administrator access."
+          }
+        }
+      }
+    },
+    "core.engineError.toolMissing": {
+      "comment": "Legacy missing-tool error",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "applesauce isn't installed. Pomace can install it for you."
+          }
+        }
+      }
+    },
+    "core.engineError.verificationRequired": {
+      "comment": "Missing mandatory verification",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compression refused: verification is required."
+          }
+        }
+      }
+    },
+    "core.failureMessage.compressorError": {
+      "comment": "Fallback when tool output is empty",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The compressor reported an error"
+          }
+        }
+      }
+    },
+    "core.failureMessage.decompressionFailed": {
+      "comment": "Failure message",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't be decompressed"
+          }
+        }
+      }
+    },
+    "core.failureMessage.emptyFile": {
+      "comment": "Skip message",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty file"
+          }
+        }
+      }
+    },
+    "core.failureMessage.fileMissing": {
+      "comment": "Failure message",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file is no longer there"
+          }
+        }
+      }
+    },
+    "core.failureMessage.hardLinked": {
+      "comment": "Other hard link count",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shares its data with %ld other files"
+          }
+        }
+      }
+    },
+    "core.failureMessage.hardLinkedOne": {
+      "comment": "One other hard link",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shares its data with 1 other file"
+          }
+        }
+      }
+    },
+    "core.failureMessage.insufficientSaving": {
+      "comment": "Skip message",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wouldn't compress enough to be worth it"
+          }
+        }
+      }
+    },
+    "core.failureMessage.unreadable": {
+      "comment": "Failure message",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't be read"
+          }
+        }
+      }
+    },
+    "core.failureMessage.unwritable": {
+      "comment": "Failure message",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't be modified"
+          }
+        }
+      }
+    },
+    "core.justification.compressor": {
+      "comment": "Policy row label",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compressor"
+          }
+        }
+      }
+    },
+    "core.justification.hardlinks": {
+      "comment": "Policy row label",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hard links"
+          }
+        }
+      }
+    },
+    "core.justification.sparse": {
+      "comment": "Policy row label",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sparse files"
+          }
+        }
+      }
+    },
+    "core.justification.threshold": {
+      "comment": "Policy row label",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimum saving"
+          }
+        }
+      }
+    },
+    "core.justification.verify": {
+      "comment": "Policy row label",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification"
+          }
+        }
+      }
+    },
+    "core.justificationReason.defaultLZFSE": {
+      "comment": "Policy reason fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "default — reads back fastest, for a ratio within a point of the alternatives"
+          }
+        }
+      }
+    },
+    "core.justificationReason.hardLinksRefused": {
+      "comment": "Fixed safety reason",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "applesauce refuses files that share storage with another file, which is why Pomace lists them as excluded rather than silently doing nothing"
+          }
+        }
+      }
+    },
+    "core.justificationReason.maximumSavingsRequested": {
+      "comment": "Policy reason fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "you asked for maximum savings — a slightly better ratio, and slower to read back"
+          }
+        }
+      }
+    },
+    "core.justificationReason.measuredBest": {
+      "comment": "Policy reason fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "measured best on this folder"
+          }
+        }
+      }
+    },
+    "core.justificationReason.minimumSavingThreshold": {
+      "comment": "Policy reason fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "files that would gain less than this are left alone"
+          }
+        }
+      }
+    },
+    "core.justificationReason.setByUser": {
+      "comment": "Override reason",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "set by you"
+          }
+        }
+      }
+    },
+    "core.justificationReason.sparseWouldGrow": {
+      "comment": "Fixed safety reason",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compressing one would materialise its empty space and use more disk, not less"
+          }
+        }
+      }
+    },
+    "core.justificationReason.speedRequested": {
+      "comment": "Policy reason fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "you asked for speed"
+          }
+        }
+      }
+    },
+    "core.justificationReason.verificationAlwaysOn": {
+      "comment": "Fixed safety reason",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "applesauce re-reads every file and compares it before replacing the original; Pomace never turns this off"
+          }
+        }
+      }
+    },
+    "core.justificationValue.alwaysOn": {
+      "comment": "Fixed verification value",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always on"
+          }
+        }
+      }
+    },
+    "core.justificationValue.percent": {
+      "comment": "Minimum saving percentage",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%ld%%"
+          }
+        }
+      }
+    },
+    "core.justificationValue.skipped": {
+      "comment": "Fixed exclusion value",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped"
+          }
+        }
+      }
+    },
+    "core.planWarning.compressorUnsupported": {
+      "comment": "Requested and fallback compressor names",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This copy of applesauce doesn't support %@; using %@ instead."
+          }
+        }
+      }
+    },
+    "core.planWarning.zlibSlowerReads": {
+      "comment": "Maximum savings tradeoff",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ZLIB reclaims marginally more space than the default, but every later read of these files is slower. Measured on a mixed corpus the difference in size was under one percent."
+          }
+        }
+      }
+    },
+    "core.runtimeConstraint.lowPowerMode": {
+      "comment": "Constraint fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low Power Mode is on"
+          }
+        }
+      }
+    },
+    "core.runtimeConstraint.onBattery": {
+      "comment": "Constraint fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "running on battery"
+          }
+        }
+      }
+    },
+    "core.runtimeConstraint.slowMedia": {
+      "comment": "Constraint fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "slow media"
+          }
+        }
+      }
+    },
+    "core.runtimeConstraint.thermalPressure": {
+      "comment": "Constraint fragment",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the Mac is running warm"
+          }
+        }
+      }
+    },
+    "core.safetyReason.adobeApplication": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adobe application — excluded because its installation components perform integrity checks"
+          }
+        }
+      }
+    },
+    "core.safetyReason.appStoreApplication": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac App Store application — leave the store-managed bundle unchanged"
+          }
+        }
+      }
+    },
+    "core.safetyReason.applicationBundle": {
+      "comment": "Safety advisory",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application bundle — generally safe, and signatures still validate, but worth verifying the app afterwards"
+          }
+        }
+      }
+    },
+    "core.safetyReason.cloudSyncedDirectory": {
+      "comment": "Cloud service",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inside %@ — modifying every file could trigger a full re-upload"
+          }
+        }
+      }
+    },
+    "core.safetyReason.existingResourceFork": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already has a resource fork, which is where the compressed data would need to go"
+          }
+        }
+      }
+    },
+    "core.safetyReason.hardLinked": {
+      "comment": "Other hard link count",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shares its data with %ld other files; compressing affects all of them"
+          }
+        }
+      }
+    },
+    "core.safetyReason.hardLinkedOne": {
+      "comment": "One other hard link",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shares its data with 1 other file; compressing affects all of them"
+          }
+        }
+      }
+    },
+    "core.safetyReason.likelyIncompressible": {
+      "comment": "File format",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is already compressed; there's little or nothing to reclaim"
+          }
+        }
+      }
+    },
+    "core.safetyReason.liveDatabase": {
+      "comment": "Database kind",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is written to constantly; compression would be undone immediately"
+          }
+        }
+      }
+    },
+    "core.safetyReason.networkVolume": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network volumes don't support transparent compression"
+          }
+        }
+      }
+    },
+    "core.safetyReason.notRegularFile": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not a regular file"
+          }
+        }
+      }
+    },
+    "core.safetyReason.sparseFile": {
+      "comment": "Allocated and logical sizes",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sparse file — occupies %@ of %@. Compressing it would materialize the empty space and use more disk, not less"
+          }
+        }
+      }
+    },
+    "core.safetyReason.systemPath": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the sealed system volume, which is read-only"
+          }
+        }
+      }
+    },
+    "core.safetyReason.timeMachineVolume": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Time Machine backup storage"
+          }
+        }
+      }
+    },
+    "core.safetyReason.unsupportedFilesystem": {
+      "comment": "Filesystem name",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ volumes don't support transparent compression"
+          }
+        }
+      }
+    },
+    "core.safetyReason.veryLargeFile": {
+      "comment": "File size",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — this one file will take a while and can't be interrupted partway"
+          }
+        }
+      }
+    },
+    "core.safetyReason.virtualMachineImage": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Virtual machine images are written in place and can use low-level disk access"
+          }
+        }
+      }
+    },
+    "core.safetyReason.zeroLength": {
+      "comment": "Safety exclusion",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty file — nothing to compress"
+          }
+        }
+      }
+    },
+    "core.serviceStatus.enabled": {
+      "comment": "Service status",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scheduled sweeps are on"
+          }
+        }
+      }
+    },
+    "core.serviceStatus.notFound": {
+      "comment": "Service status",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pomace can't register its background helper. Move Pomace to your Applications folder and try again."
+          }
+        }
+      }
+    },
+    "core.serviceStatus.notRegistered": {
+      "comment": "Service status",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scheduled sweeps are off"
+          }
+        }
+      }
+    },
+    "core.serviceStatus.requiresApproval": {
+      "comment": "Service status",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for your approval in System Settings › General › Login Items"
+          }
+        }
+      }
+    },
+    "core.serviceStatus.unknown": {
+      "comment": "Unknown service status",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown state"
+          }
+        }
+      }
+    },
+    "core.skipRemedy.decompressionFailed": {
+      "comment": "Decompression remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file was left exactly as it was."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.diskFull": {
+      "comment": "Disk full remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free up disk space and try again."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.emptyFile": {
+      "comment": "Empty file remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There was nothing to compress."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.fileMissing": {
+      "comment": "Missing file remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It was moved or deleted while Pomace was working. Nothing was changed."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.hardLinked": {
+      "comment": "Next step for skipped hard links",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "applesauce can't compress hard-linked files. Nothing was changed."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.insufficientSaving": {
+      "comment": "Savings threshold remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left as it was — compressing it would have saved little or nothing."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.readOnly": {
+      "comment": "Read-only remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file is on a read-only volume."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.resourceFork": {
+      "comment": "Resource fork remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file already uses its resource fork, so it can't be compressed. It will be skipped."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.unchanged": {
+      "comment": "Generic failure remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left unchanged. The file itself was not modified."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.unreadable": {
+      "comment": "Permission remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For protected Homebrew or application files, enable Use administrator privileges and retry. macOS privacy controls may still require Full Disk Access."
+          }
+        }
+      }
+    },
+    "core.skipRemedy.unwritable": {
+      "comment": "Write permission remedy",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For protected Homebrew or application files, enable Use administrator privileges and retry. Read-only volumes cannot be modified."
+          }
+        }
+      }
+    },
+    "core.storeError.open": {
+      "comment": "SQLite open error",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not open store: %@"
+          }
+        }
+      }
+    },
+    "core.storeError.sql": {
+      "comment": "SQLite error",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sql error: %@"
+          }
+        }
+      }
+    },
+    "core.sweepCadence.daily": {
+      "comment": "Schedule cadence",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every day"
+          }
+        }
+      }
+    },
+    "core.sweepCadence.manual": {
+      "comment": "Schedule cadence",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only when I ask"
+          }
+        }
+      }
+    },
+    "core.sweepCadence.monthly": {
+      "comment": "Schedule cadence",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every month"
+          }
+        }
+      }
+    },
+    "core.sweepCadence.weekly": {
+      "comment": "Schedule cadence",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every week"
+          }
+        }
+      }
+    },
+    "core.sweepDeferral.alreadyRunning": {
+      "comment": "Deferred sweep",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped — another sweep was already running"
+          }
+        }
+      }
+    },
+    "core.sweepDeferral.lowPowerMode": {
+      "comment": "Deferred sweep",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped — Low Power Mode was on"
+          }
+        }
+      }
+    },
+    "core.sweepDeferral.onBattery": {
+      "comment": "Deferred sweep",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped — running on battery"
+          }
+        }
+      }
+    },
+    "core.sweepDeferral.thermalPressure": {
+      "comment": "Deferred sweep",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped — the Mac was running warm"
+          }
+        }
+      }
+    },
+    "core.sweepDeferral.timeMachineRunning": {
+      "comment": "Deferred sweep",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped — a Time Machine backup was in progress"
+          }
+        }
+      }
+    },
+    "core.sweepDeferral.volumeUnavailable": {
+      "comment": "Deferred sweep",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped — the folder wasn't available"
+          }
+        }
+      }
+    },
+    "core.sweepRun.cancelled": {
+      "comment": "Completed file count",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped after %ld files"
+          }
+        }
+      }
+    },
+    "core.sweepRun.completed": {
+      "comment": "File count and reclaimed space",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compressed %ld files, reclaimed %@"
+          }
+        }
+      }
+    },
+    "core.sweepRun.completedOne": {
+      "comment": "Reclaimed space",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compressed 1 file, reclaimed %@"
+          }
+        }
+      }
+    },
+    "core.sweepRun.failed": {
+      "comment": "Persisted failure",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed — %@"
+          }
+        }
+      }
+    },
+    "core.sweepRun.skipped": {
+      "comment": "Skipped count suffix",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · %ld skipped"
+          }
+        }
+      }
+    },
+    "core.sweepRun.unchanged": {
+      "comment": "No files changed",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing had changed"
+          }
+        }
+      }
+    },
+    "core.sweepSchedule.am": {
+      "comment": "Morning hour",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%ld AM"
+          }
+        }
+      }
+    },
+    "core.sweepSchedule.manual": {
+      "comment": "Manual schedule",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only when you ask"
+          }
+        }
+      }
+    },
+    "core.sweepSchedule.midnight": {
+      "comment": "Schedule time",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "midnight"
+          }
+        }
+      }
+    },
+    "core.sweepSchedule.noon": {
+      "comment": "Schedule time",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "noon"
+          }
+        }
+      }
+    },
+    "core.sweepSchedule.paused": {
+      "comment": "Disabled schedule",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused"
+          }
+        }
+      }
+    },
+    "core.sweepSchedule.pm": {
+      "comment": "Afternoon hour",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%ld PM"
+          }
+        }
+      }
+    },
+    "core.sweepSchedule.scheduled": {
+      "comment": "Cadence and preferred time",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, around %@"
+          }
+        }
+      }
+    },
+    "core.systemProfile.performance": {
+      "comment": "Performance core count",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "matched to %ld performance cores"
+          }
+        }
+      }
+    },
+    "core.systemProfile.performanceOne": {
+      "comment": "Legacy machine profile explanation",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "matched to 1 performance core"
+          }
+        }
+      }
+    },
+    "core.systemProfile.physical": {
+      "comment": "Physical core count",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "matched to %ld physical cores"
+          }
+        }
+      }
+    },
+    "core.toolCapability.lzfse": {
+      "comment": "Required capability",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LZFSE compression"
+          }
+        }
+      }
+    },
+    "core.toolCapability.minimumRatio": {
+      "comment": "Required CLI flag",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--minimum-compression-ratio"
+          }
+        }
+      }
+    },
+    "core.toolCapability.verify": {
+      "comment": "Required CLI flag",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--verify"
+          }
+        }
+      }
+    },
+    "onboarding.body": {
+      "comment": "First-run explanation of transparent compression and its write behavior.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pomace keeps selected folders smaller using macOS transparent compression. Files still open normally, with no archive to manage. Writing a compressed file expands it again, so Pomace can periodically recheck watched folders. Every compression is verified, and you can decompress files whenever you need to."
+          }
+        }
+      }
+    },
+    "onboarding.get_started": {
+      "comment": "Confirms the first-run explanation.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get Started"
+          }
+        }
+      }
+    },
+    "onboarding.title": {
+      "comment": "First-run window title.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pomace"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

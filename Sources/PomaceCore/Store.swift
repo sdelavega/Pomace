@@ -12,14 +12,8 @@ import SQLite3
 /// them should be designed alongside the code that reads them back.
 public final class Store: @unchecked Sendable {
 
-    public enum StoreError: Error, CustomStringConvertible {
+    public enum StoreError: Error {
         case open(String), sql(String)
-        public var description: String {
-            switch self {
-            case .open(let m): "could not open store: \(m)"
-            case .sql(let m): "sql error: \(m)"
-            }
-        }
     }
 
     private var db: OpaquePointer?
@@ -196,16 +190,6 @@ public final class Store: @unchecked Sendable {
         public let error: String?
         public let cancelled: Bool
 
-        /// One line for the history list.
-        public var summary: String {
-            if let d = deferral { return d.explanation }
-            if let e = error { return "Failed — \(e)" }
-            if cancelled { return "Stopped after \(filesCompressed) files" }
-            if filesCompressed == 0 { return "Nothing had changed" }
-            var s = "Compressed \(filesCompressed) file\(filesCompressed == 1 ? "" : "s"), reclaimed \(ByteFormat.short(bytesReclaimed))"
-            if filesFailed > 0 { s += " · \(filesFailed) skipped" }
-            return s
-        }
     }
 
     @discardableResult

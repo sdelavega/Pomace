@@ -35,11 +35,12 @@ struct AdministratorAccessTests {
         // Execute the production argv/quoting logic WITHOUT elevation. No test requests
         // an administrator password or executes any command as root.
         let script = AdministratorAccess.script.replacingOccurrences(
-            of: " with prompt \"Pomace needs administrator access to modify the selected Homebrew or application files.\" with administrator privileges",
+            of: " with prompt authorizationPrompt with administrator privileges",
             with: "")
+        #expect(script != AdministratorAccess.script)
         let values = ["", "with spaces", "single'quote", "double\"quote", "back\\slash", "line\nbreak",
                       "$(touch \(marker.path))", "; touch \(marker.path);", "--verify"]
-        let output = Subprocess.capture("/usr/bin/osascript", ["-e", script, "--", "/usr/bin/printf", "%s|"] + values)
+        let output = Subprocess.capture("/usr/bin/osascript", ["-e", script, "--", "Test prompt", "A selected path is no longer a regular file.", "/usr/bin/printf", "%s|"] + values)
         #expect(output.succeeded, "\(output.stderr)")
         #expect(output.stdout.replacingOccurrences(of: "\r", with: "\n") == values.map { $0 + "|" }.joined() + "\n")
         #expect(!FileManager.default.fileExists(atPath: marker.path))
@@ -55,14 +56,15 @@ struct AdministratorAccessTests {
         let link = directory.appendingPathComponent("link")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: file)
         let script = AdministratorAccess.script.replacingOccurrences(
-            of: " with prompt \"Pomace needs administrator access to modify the selected Homebrew or application files.\" with administrator privileges",
+            of: " with prompt authorizationPrompt with administrator privileges",
             with: "")
+        #expect(script != AdministratorAccess.script)
         for path in [directory.path, link.path] {
-            let output = Subprocess.capture("/usr/bin/osascript", ["-e", script, "--", "/usr/bin/printf", "%s", "--", path])
+            let output = Subprocess.capture("/usr/bin/osascript", ["-e", script, "--", "Test prompt", "A selected path is no longer a regular file.", "/usr/bin/printf", "%s", "--", path])
             #expect(!output.succeeded)
             #expect(output.stderr.contains("no longer a regular file"))
         }
-        let output = Subprocess.capture("/usr/bin/osascript", ["-e", script, "--", "/usr/bin/printf", "%s", "--", file.path])
+        let output = Subprocess.capture("/usr/bin/osascript", ["-e", script, "--", "Test prompt", "A selected path is no longer a regular file.", "/usr/bin/printf", "%s", "--", file.path])
         #expect(output.succeeded)
     }
 
@@ -90,10 +92,10 @@ struct AdministratorAccessTests {
         defer { try? FileManager.default.removeItem(at: file) }
         try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: file.path)
         let elevated = CompressionEngine.classifySkip(path: file.path, operation: .compress, output: "", isAdministrator: true)
-        #expect(elevated.kind == .skipped)
+        #expect(elevated == .insufficientSaving)
         if geteuid() != 0 {
             let standard = CompressionEngine.classifySkip(path: file.path, operation: .compress, output: "")
-            #expect(standard.kind == .failed)
+            #expect(standard == .unwritable)
         }
     }
 
@@ -171,7 +173,7 @@ struct AdministratorAccessTests {
         var refused = false
         for await event in CompressionEngine.run(operation: .compress, paths: [], root: NSTemporaryDirectory(),
                 installation: installation, plan: CompressionPolicy.plan(), executor: executor) {
-            if case .failed(let message) = event { refused = message.contains("Administrator access") }
+            if case .failed(let message) = event { refused = message == .administratorUnsupported }
         }
         #expect(refused)
         #expect(calls.all.isEmpty)

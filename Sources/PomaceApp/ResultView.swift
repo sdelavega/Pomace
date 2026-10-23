@@ -165,8 +165,8 @@ private struct StateCell: View {
     var body: some View {
         if let reason = entry.reasons.first(where: { $0.isHardExclusion }) {
             Label {
-                Text(reason.explanation).lineLimit(1).truncationMode(.tail)
-                    .help(reason.explanation)   // full text on hover; the short form elides
+                Text(reason.text).lineLimit(1).truncationMode(.tail)
+                    .help(reason.text)   // full text on hover; the short form elides
             } icon: {
                 Image(systemName: "minus.circle").foregroundStyle(.secondary)
             }
@@ -178,8 +178,8 @@ private struct StateCell: View {
                 .foregroundStyle(.tint)
         } else if let warning = entry.reasons.first {
             Label {
-                Text(warning.explanation).lineLimit(1).truncationMode(.tail)
-                    .help(warning.explanation)
+                Text(warning.text).lineLimit(1).truncationMode(.tail)
+                    .help(warning.text)
             } icon: {
                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
             }

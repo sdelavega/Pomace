@@ -35,14 +35,16 @@ public enum AdministratorAccess {
     // No password is supplied, captured, or persisted; macOS owns authorization.
     static let script = """
     on run argv
+        set authorizationPrompt to item 1 of argv
+        set changedFileMessage to quoted form of (item 2 of argv)
         set command to ""
         set fileChecks to ""
         set checkingFiles to false
-        repeat with argument in argv
+        repeat with argument in items 3 thru -1 of argv
             set value to contents of argument
             set quotedArgument to quoted form of value
             if checkingFiles then
-                set fileChecks to fileChecks & "if [ ! -f " & quotedArgument & " ] || [ -L " & quotedArgument & " ]; then printf '%s' 'A selected path is no longer a regular file.' >&2; exit 1; fi; "
+                set fileChecks to fileChecks & "if [ ! -f " & quotedArgument & " ] || [ -L " & quotedArgument & " ]; then printf '%s' " & changedFileMessage & " >&2; exit 1; fi; "
             else if value is "--" then
                 set checkingFiles to true
             end if
@@ -51,7 +53,7 @@ public enum AdministratorAccess {
         set command to fileChecks & command & "2>&1"
         try
             with timeout of 86400 seconds
-                return do shell script command with prompt "Pomace needs administrator access to modify the selected Homebrew or application files." with administrator privileges
+                return do shell script command with prompt authorizationPrompt with administrator privileges
             end timeout
         on error errorMessage number errorNumber
             error ("POMACE_ADMIN_ERROR:" & errorNumber & ":" & errorMessage) number errorNumber
@@ -59,8 +61,8 @@ public enum AdministratorAccess {
     end run
     """
 
-    static func capture(_ binary: String, _ arguments: [String]) -> CompressorInvocation {
-        let output = Subprocess.capture("/usr/bin/osascript", ["-e", script, "--", binary] + arguments)
+    static func capture(_ binary: String, _ arguments: [String], prompt: String, fileChangedMessage: String) -> CompressorInvocation {
+        let output = Subprocess.capture("/usr/bin/osascript", ["-e", script, "--", prompt, fileChangedMessage, binary] + arguments)
         return interpret(output)
     }
 
@@ -94,7 +96,9 @@ public struct CompressionExecutor: Sendable {
     public static let standard = CompressionExecutor(isAdministrator: false) {
         .completed(Subprocess.capture($0, $1))
     }
-    public static let administrator = CompressionExecutor(isAdministrator: true) {
-        AdministratorAccess.capture($0, $1)
+    public static func administrator(prompt: String, fileChangedMessage: String) -> CompressionExecutor {
+        CompressionExecutor(isAdministrator: true) {
+            AdministratorAccess.capture($0, $1, prompt: prompt, fileChangedMessage: fileChangedMessage)
+        }
     }
 }

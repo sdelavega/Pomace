@@ -238,7 +238,7 @@ case "scan":
                     for e in excluded {
                         print("  \(e.name)")
                         for reason in e.reasons where reason.isHardExclusion {
-                            print("     \(reason.explanation)")
+                            print("     \(String(describing: reason))")
                         }
                     }
                 }
@@ -268,10 +268,10 @@ case "engine-verify":
     let plan = CompressionPolicy.plan(mode: mode)
     print("\nplan (\(mode.rawValue)):")
     for j in plan.justifications {
-        print("  \(j.label.padding(toLength: 14, withPad: " ", startingAt: 0)) \(j.value.padding(toLength: 18, withPad: " ", startingAt: 0)) \(j.reason)\(j.isFixed ? "  [fixed]" : "")")
+        print("  \(j.id.padding(toLength: 14, withPad: " ", startingAt: 0)) \(String(describing: j.value).padding(toLength: 18, withPad: " ", startingAt: 0)) \(String(describing: j.reason))\(j.isFixed ? "  [fixed]" : "")")
     }
     print("  argv: \(plan.arguments.joined(separator: " "))")
-    for w in plan.warnings { print("  ! \(w)") }
+    for w in plan.warnings { print("  ! \(String(describing: w))") }
 
     var failures: [String] = []
     func check(_ ok: Bool, _ label: String) {
@@ -305,8 +305,8 @@ case "engine-verify":
             FileHandle.standardError.write(Data("\r  \(p.filesProcessed)/\(p.filesTotal)".utf8))
         case .finished(let o): compressOutcome = o
         case .failed(let m):
-            print("  engine refused: \(m)")
-            engineRefused = m
+            print("  engine refused: \(String(describing: m))")
+            engineRefused = String(describing: m)
         }
     }
     print("")
@@ -319,11 +319,11 @@ case "engine-verify":
                      o.filesAttempted, o.filesSucceeded, o.realFailures.count, o.skipped.count,
                      ByteFormat.short(o.bytesReclaimed), o.duration))
         for f in o.realFailures.prefix(5) {
-            print("    PROBLEM \((f.path as NSString).lastPathComponent): \(f.message)")
-            print("            -> \(f.remedy)")
+            print("    PROBLEM \((f.path as NSString).lastPathComponent): \(String(describing: f.message))")
+            print("            -> \(String(describing: f.remedy))")
         }
         for f in o.skipped.prefix(5) {
-            print("    skipped \((f.path as NSString).lastPathComponent): \(f.message)")
+            print("    skipped \((f.path as NSString).lastPathComponent): \(String(describing: f.message))")
         }
         check(o.realFailures.isEmpty, "no real failures (\(o.realFailures.count))")
         check(o.filesSucceeded > 0, "engine compressed at least one file")
@@ -350,7 +350,7 @@ case "engine-verify":
             print(String(format: "  attempted=%d succeeded=%d in %.2fs",
                          o.filesAttempted, o.filesSucceeded, o.duration))
         }
-        if case .failed(let m) = ev { print("  engine refused: \(m)") }
+        if case .failed(let m) = ev { print("  engine refused: \(String(describing: m))") }
     }
     let afterD = snapshot(dir)
     var mismatch2 = 0, stillCompressed = 0
