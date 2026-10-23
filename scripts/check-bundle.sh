@@ -38,6 +38,9 @@ check_universal() {
 }
 
 if [ "$UNIVERSAL" -eq 1 ]; then
+  if LC_ALL=C grep -a -q 'PomaceUITestFixture' "$BINARY"; then
+    fail "release binary contains PomaceUITestFixture debug hook"
+  fi
   check_universal "$BINARY" "Contents/MacOS/Pomace"
   check_universal "$HELPER" "Contents/Helpers/applesauce"
   check_universal "$FRAMEWORK/Sparkle" "Sparkle.framework/Sparkle"

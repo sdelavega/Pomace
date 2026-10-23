@@ -3,19 +3,51 @@ import AppKit
 import UniformTypeIdentifiers
 import PomaceCore
 
+enum MainFocusRegion: Int, CaseIterable {
+    case sidebar, table, inspector
+}
+
 struct ContentView: View {
     @Bindable var model: ScanModel
+    @FocusState private var focusedRegion: MainFocusRegion?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationSplitView {
             Sidebar(model: model)
+                .focused($focusedRegion, equals: .sidebar)
+                .focusSection()
+                .accessibilityLabel(AppStrings.folders)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
-            Detail(model: model)
+            Detail(model: model, focus: $focusedRegion)
                 .inspector(isPresented: $model.showingInspector) {
                     InspectorView(model: model)
+                        .focusable()
+                        .focused($focusedRegion, equals: .inspector)
+                        .focusSection()
+                        .accessibilityLabel(AppStrings.scheduleHelp)
                 }
         }
+        .onKeyPress(keys: [KeyEquivalent(Character(UnicodeScalar(NSF6FunctionKey)!))], phases: .down) { press in
+            guard press.modifiers.intersection([.command, .control, .option]).isEmpty else { return .ignored }
+            let regions = MainFocusRegion.allCases.filter {
+                ($0 != .inspector || model.showingInspector) && ($0 != .table || model.result != nil)
+            }
+            let current = regions.firstIndex(of: focusedRegion ?? .sidebar) ?? 0
+            let step = press.modifiers.contains(.shift) ? regions.count - 1 : 1
+            focusedRegion = regions[(current + step) % regions.count]
+            return .handled
+        }
+        .onAppear { focusedRegion = .sidebar }
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
+        .background(NativeAccessibilityLabels(sidebarLabels: sidebarAccessibilityLabels,
+                                               fileEntries: model.visibleEntries))
         .navigationTitle(AppStrings.appName)
         .confirmationDialog(
             AppStrings.decompressQuestion(model.compressedCount),
@@ -26,6 +58,8 @@ struct ContentView: View {
                 model.confirmDecompress()
             }
             Button(AppStrings.cancel, role: .cancel) { model.confirmingDecompress = false }
+                .keyboardShortcut(.cancelAction)
+                .keyboardShortcut(.defaultAction)
         } message: {
             // Returning files to their full on-disk size must never be a one-click surprise.
             Text(AppStrings.decompressExplanation)
@@ -42,6 +76,17 @@ struct ContentView: View {
         .sheet(isPresented: $model.showingOnboarding) {
             OnboardingView(onContinue: model.dismissOnboarding)
         }
+    }
+
+    private var sidebarAccessibilityLabels: [String] {
+        let scheduled = model.watchedPaths.filter(model.isScheduled)
+        let unscheduled = model.watchedPaths.filter { !model.isScheduled($0) }
+        func names(_ paths: [String]) -> [String] {
+            paths.map { AppStrings.accessibilityDetail(($0 as NSString).lastPathComponent,
+                                                       model.scheduleSummary(for: $0)) }
+        }
+        return (scheduled.isEmpty ? [] : [AppStrings.scheduled] + names(scheduled))
+            + (unscheduled.isEmpty ? [] : [AppStrings.notScheduled] + names(unscheduled))
     }
 }
 
@@ -67,6 +112,82 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(minWidth: 420, idealWidth: 460, maxWidth: 520)
+    }
+}
+
+// SwiftUI does not pass cell text through to native row labels. Supply those labels and
+// the system's localized subrole names for otherwise unnamed standard window/scroller buttons.
+private struct NativeAccessibilityLabels: NSViewRepresentable {
+    let sidebarLabels: [String]
+    let fileEntries: [ScanEntry]
+
+    func makeNSView(context: Context) -> LabelingView { LabelingView() }
+
+    func updateNSView(_ view: LabelingView, context: Context) {
+        view.sidebarLabels = sidebarLabels
+        view.fileEntries = fileEntries
+        DispatchQueue.main.async { view.applyLabels() }
+    }
+
+    final class LabelingView: NSView {
+        var sidebarLabels: [String] = []
+        var fileEntries: [ScanEntry] = []
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            setAccessibilityElement(false)
+            NotificationCenter.default.removeObserver(self)
+            if let window {
+                NotificationCenter.default.addObserver(self, selector: #selector(applyLabels),
+                                                       name: NSWindow.didUpdateNotification, object: window)
+            }
+        }
+
+        @objc func applyLabels() {
+            guard let window else { return }
+            var visited: Set<ObjectIdentifier> = []
+            func labelButtons(_ element: any NSAccessibilityProtocol, depth: Int) {
+                guard depth < 24, visited.count < 20_000,
+                      visited.insert(ObjectIdentifier(element)).inserted else { return }
+                if element.accessibilityRole() == .button,
+                   (element.accessibilityLabel() ?? "").isEmpty,
+                   (element.accessibilityTitle() ?? "").isEmpty,
+                   let subrole = element.accessibilitySubrole(),
+                   let name = NSAccessibility.Role.button.description(with: subrole) {
+                    element.setAccessibilityLabel(name)
+                }
+                for child in element.accessibilityChildren() ?? [] {
+                    if let child = child as? any NSAccessibilityProtocol { labelButtons(child, depth: depth + 1) }
+                }
+            }
+            labelButtons(window, depth: 0)
+            func labelTables(_ view: NSView) {
+                if let table = view as? NSTableView {
+                    // Virtual outline rows do not adopt the modern protocol. The public
+                    // legacy override API supplies their descriptions without replacing them.
+                    let rows = table.accessibilityAttributeValue(.visibleRows) as? [NSObject] ?? []
+                    let visibleRange = table.rows(in: table.visibleRect)
+                    for (offset, row) in rows.enumerated() {
+                        let index = (row.accessibilityAttributeValue(.index) as? NSNumber)?.intValue
+                            ?? visibleRange.location + offset
+                        let name: String
+                        if table.numberOfColumns == 4, fileEntries.indices.contains(index) {
+                            let entry = fileEntries[index]
+                            name = AppStrings.accessibilityDetail(entry.name, ListFormatter.localizedString(byJoining: [
+                                AppStrings.accessibilityDetail(AppStrings.size, Fmt.bytes(entry.logicalSize)),
+                                AppStrings.accessibilityDetail(AppStrings.onDisk, Fmt.bytes(entry.physicalSize)),
+                                FileRowState(entry: entry).accessibilityLabelText,
+                            ]))
+                        } else if table.numberOfColumns == 1, sidebarLabels.indices.contains(index) {
+                            name = sidebarLabels[index]
+                        } else { continue }
+                        row.accessibilitySetOverrideValue(name, forAttribute: .description)
+                    }
+                }
+                view.subviews.forEach(labelTables)
+            }
+            if let content = window.contentView { labelTables(content) }
+        }
     }
 }
 
@@ -142,6 +263,7 @@ private struct Sidebar: View {
 
 private struct Detail: View {
     @Bindable var model: ScanModel
+    let focus: FocusState<MainFocusRegion?>.Binding
 
     var body: some View {
         Group {
@@ -173,7 +295,7 @@ private struct Detail: View {
                             .font(.caption).foregroundStyle(.secondary)
                             .padding(.top, 8)
                     }
-                    ResultView(model: model, result: result)
+                    ResultView(model: model, result: result, focus: focus)
                 }
             }
         }

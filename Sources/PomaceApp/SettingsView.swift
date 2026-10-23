@@ -11,7 +11,7 @@ struct GeneralSettingsView: View {
             Toggle(AppStrings.menuBarItem, isOn: $menuBarEnabled)
         }
         .padding(24)
-        .frame(width: 560, height: 360)
+        .frame(minWidth: 560, minHeight: 360)
     }
 }
 

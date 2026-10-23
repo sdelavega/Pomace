@@ -3,7 +3,18 @@ import AppKit
 import PomaceCore
 
 struct PomaceApp: App {
-    @State private var model = ScanModel()
+    @State private var model = makeModel()
+
+    private static func makeModel() -> ScanModel {
+        #if DEBUG
+        if let path = Main.uiTestFixturePath {
+            let model = ScanModel(store: nil, log: MutationLog(url: URL(fileURLWithPath: path).appendingPathExtension("log")))
+            model.prepareUITestFixture(path)
+            return model
+        }
+        #endif
+        return ScanModel()
+    }
     @AppStorage("menuBarEnabled") private var menuBarEnabled = false
     @ObservedObject private var updates = Main.updates!
 
@@ -20,6 +31,9 @@ struct PomaceApp: App {
             ContentView(model: model)
                 .frame(minWidth: 940, minHeight: 560)
                 .task {
+                    #if DEBUG
+                    if Main.uiTestFixturePath != nil { return }
+                    #endif
                     SweepNotifier.requestAuthorizationIfNeeded()
                     model.refreshServiceStatus()
                     if let p = Self.launchScanPath {
@@ -47,7 +61,19 @@ struct PomaceApp: App {
                     .keyboardShortcut("o", modifiers: .command)
                 Button(AppStrings.rescan) { model.rescan() }
                     .keyboardShortcut("r", modifiers: .command)
-                    .disabled(model.selectedPath == nil)
+                    .disabled(model.selectedPath == nil || model.isRunning || model.isSweeping)
+                Divider()
+                Button(AppStrings.compress) { model.startCompress() }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning || model.isSweeping)
+                Button(AppStrings.decompress) { model.requestDecompress() }
+                    .keyboardShortcut(.return, modifiers: [.command, .shift])
+                    .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning || model.isSweeping)
+                Button(AppStrings.stop) {
+                    if model.isRunning { model.cancelRun() } else { model.cancelScan() }
+                }
+                .keyboardShortcut(".", modifiers: .command)
+                .disabled((!model.isRunning && !model.isScanning) || model.isStopping)
             }
         }
 

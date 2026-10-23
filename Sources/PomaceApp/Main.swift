@@ -17,6 +17,10 @@ enum Main {
 
     @MainActor private(set) static var updates: Updates?
 
+    #if DEBUG
+    @MainActor private(set) static var uiTestFixturePath: String?
+    #endif
+
     static func main() {
         let args = CommandLine.arguments
 
@@ -40,9 +44,26 @@ enum Main {
         }
 
         MainActor.assumeIsolated {
+            #if DEBUG
+            if let index = args.firstIndex(of: "-PomaceUITestFixture") {
+                guard index + 1 < args.count else {
+                    print("Pomace fixture: missing directory") // l10n-exempt: debug harness output
+                    exit(1)
+                }
+                var isDirectory: ObjCBool = false
+                let path = args[index + 1]
+                guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
+                    print("Pomace fixture: directory unavailable") // l10n-exempt: debug harness output
+                    exit(1)
+                }
+                uiTestFixturePath = path
+            }
+            updates = Updates(startingUpdater: uiTestFixturePath == nil)
+            #else
             if shouldCreateUpdater(arguments: args) {
                 updates = Updates(startingUpdater: true)
             }
+            #endif
             PomaceApp.main()
         }
     }

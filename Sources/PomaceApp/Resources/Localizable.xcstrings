@@ -1,6 +1,76 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "accessibility.folders": {
+      "comment": "VoiceOver label for the watched-folder sidebar.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Folders" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "文件夹" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Carpetas" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "フォルダ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "폴더" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ordner" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Dossiers" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Pastas" } }
+      }
+    },
+    "accessibility.files": {
+      "comment": "VoiceOver label for the scan results table.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Files" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "文件" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Archivos" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ファイル" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "파일" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Dateien" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Fichiers" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "Arquivos" } }
+      }
+    },
+    "accessibility.coverage_saved": {
+      "comment": "Coverage bar spoken value; formatted percent of compressed files, then formatted disk space saved.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%@ compressed, %@ saved" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已压缩 %@，节省 %@ 空间" } },
+        "es": { "stringUnit": { "state": "translated", "value": "%@ comprimido, %@ de espacio recuperado" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@を圧縮済み、%@を節約" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@ 압축됨, 공간 %@ 확보" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ komprimiert, %@ Speicherplatz eingespart" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%@ compressés, %@ d’espace récupéré" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "%@ comprimido, %@ de espaço recuperado" } }
+      }
+    },
+    "accessibility.detail": {
+      "comment": "VoiceOver item: state name followed by its full reason or compression type; also timeline date followed by space saved.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%@: %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@：%@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "%@: %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@：%@" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@: %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@: %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%@ : %@" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "%@: %@" } }
+      }
+    },
+    "accessibility.progress_files": {
+      "comment": "Spoken run progress: formatted processed count, then a localized total file-count phrase (for example 3 of 10 files). The second placeholder includes the noun and plural.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%@ of %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已处理 %@，共 %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "%@ de %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@ / %@" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@ / %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ von %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%@ sur %@" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "%@ de %@" } }
+      }
+    },
     "core.compressionType.storedInline": {
       "comment": "File table state for data stored without compression in an extended attribute. Keep xattr as a technical abbreviation.",
       "extractionState": "manual",

@@ -59,9 +59,16 @@ struct InspectorView: View {
                     AxisMarks(values: .automatic(desiredCount: 3))
                 }
                 .frame(height: 120)
-                .accessibilityElement(children: .ignore)
+                .accessibilityElement(children: .contain)
                 .accessibilityLabel(AppStrings.coverageOverTime)
                 .accessibilityValue(trendSummary)
+                .accessibilityChildren {
+                    ForEach(model.snapshotHistory, id: \.scannedAt) { snapshot in
+                        Text(AppStrings.accessibilityDetail(
+                            snapshot.scannedAt.formatted(date: .abbreviated, time: .shortened),
+                            AppStrings.reclaimedDetail(Fmt.bytes(snapshot.reclaimedBytes))))
+                    }
+                }
 
                 Text(trendSummary)
                     .font(.caption).foregroundStyle(.secondary)
@@ -77,6 +84,7 @@ struct InspectorView: View {
             Picker(AppStrings.sweep, selection: $model.schedule.cadence) {
                 ForEach(SweepCadence.allCases) { Text($0.text).tag($0) }
             }
+            .accessibilityLabel(AppStrings.sweep)
             .onChange(of: model.schedule.cadence) { model.saveSchedule() }
 
             if model.schedule.cadence != .manual {
@@ -85,6 +93,7 @@ struct InspectorView: View {
                         Text(Fmt.hour(h)).tag(h)
                     }
                 }
+                .accessibilityLabel(AppStrings.around)
                 .onChange(of: model.schedule.preferredHour) { model.saveSchedule() }
             }
 
@@ -121,6 +130,7 @@ struct InspectorView: View {
                 ))
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .accessibilityLabel(AppStrings.backgroundService)
             }
 
             Button {

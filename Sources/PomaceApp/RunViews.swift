@@ -12,6 +12,8 @@ struct AdministratorConfirmation: ViewModifier {
         ) {
             Button(AppStrings.continueAdministrator) { model.confirmAdministrator() }
             Button(AppStrings.cancel, role: .cancel) { model.cancelAdministrator() }
+                .keyboardShortcut(.cancelAction)
+                .keyboardShortcut(.defaultAction)
         } message: {
             Text(model.administratorConfirmationText)
         }
@@ -110,6 +112,8 @@ struct RunBanner: View {
                 }
                 ProgressView(value: progress.fraction)
                     .progressViewStyle(.linear)
+                    .accessibilityLabel(op.text)
+                    .accessibilityValue(AppStrings.progressFiles(progress.filesProcessed, progress.filesTotal))
                 if model.isStopping {
                     Text(AppStrings.stoppingHelp)
                         .font(.caption).foregroundStyle(.secondary)

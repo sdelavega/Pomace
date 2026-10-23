@@ -1,6 +1,21 @@
 import Foundation
 
 enum AppStrings {
+    static let folders = text("accessibility.folders", defaultValue: "Folders", comment: "VoiceOver label for the watched-folder sidebar.")
+    static let fileList = text("accessibility.files", defaultValue: "Files", comment: "VoiceOver label for the scan results table.")
+
+    static func coverageSaved(_ percent: String, _ bytes: String) -> String {
+        String(format: text("accessibility.coverage_saved", defaultValue: "%@ compressed, %@ saved", comment: "Coverage bar spoken value; formatted percent of compressed files, then formatted disk space saved."), percent, bytes)
+    }
+
+    static func accessibilityDetail(_ name: String, _ detail: String) -> String {
+        String(format: text("accessibility.detail", defaultValue: "%@: %@", comment: "VoiceOver item: state name followed by its full reason or compression type; also timeline date followed by space saved."), name, detail)
+    }
+
+    static func progressFiles(_ count: Int, _ total: Int) -> String {
+        String(format: text("accessibility.progress_files", defaultValue: "%@ of %@", comment: "Spoken run progress: formatted processed count, then a localized total file-count phrase (for example 3 of 10 files). The second placeholder includes the noun and plural."), count.formatted(), files(total))
+    }
+
     static let onboardingTitle = text(
         "onboarding.title",
         defaultValue: "Pomace",

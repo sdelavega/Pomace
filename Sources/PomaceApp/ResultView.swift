@@ -5,6 +5,7 @@ import PomaceCore
 struct ResultView: View {
     @Bindable var model: ScanModel
     let result: ScanResult
+    let focus: FocusState<MainFocusRegion?>.Binding
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,6 +18,9 @@ struct ResultView: View {
             .padding(.bottom, 14)
             Divider()
             FileTable(model: model, result: result)
+                .focused(focus, equals: .table)
+                .focusSection()
+                .accessibilityLabel(AppStrings.fileList)
             Divider()
             StatusBar(model: model, result: result)
         }
@@ -87,7 +91,7 @@ private struct SummaryHeader: View {
     }
 }
 
-private struct CoverageBar: View {
+struct CoverageBar: View {
     let result: ScanResult
 
     var body: some View {
@@ -107,9 +111,12 @@ private struct CoverageBar: View {
         .frame(height: 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(AppStrings.compressionCoverage)
-        .accessibilityValue(AppStrings.coverage(Fmt.percent(result.compressionCoverage),
-                                              AppStrings.files(result.progress.eligibleFiles),
-                                              AppStrings.files(result.progress.excludedFiles)))
+        .accessibilityValue(Self.accessibilityValueText(fraction: result.compressionCoverage,
+                                                       saved: result.reclaimedBytes))
+    }
+
+    static func accessibilityValueText(fraction: Double, saved: Int64) -> String {
+        AppStrings.coverageSaved(Fmt.percent(fraction), Fmt.bytes(saved))
     }
 
     @ViewBuilder
@@ -137,9 +144,10 @@ private struct Stat: View {
 private struct FileTable: View {
     @Bindable var model: ScanModel
     let result: ScanResult
+    @State private var selection: Set<String> = []
 
     var body: some View {
-        Table(model.visibleEntries) {
+        Table(model.visibleEntries, selection: $selection) {
             TableColumn(AppStrings.name) { entry in
                 HStack(spacing: 6) {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: entry.path))
@@ -171,11 +179,47 @@ private struct FileTable: View {
     }
 }
 
+enum FileRowState {
+    case excluded(SafetyReason)
+    case compressed(CompressionType?)
+    case warning(SafetyReason)
+    case notCompressed
+
+    init(entry: ScanEntry) {
+        if let reason = entry.reasons.first(where: { $0.isHardExclusion }) {
+            self = .excluded(reason)
+        } else if entry.isCompressed {
+            self = .compressed(entry.type)
+        } else if let warning = entry.reasons.first {
+            self = .warning(warning)
+        } else {
+            self = .notCompressed
+        }
+    }
+
+    var accessibilityLabelText: String {
+        switch self {
+        case .excluded(let reason): AppStrings.accessibilityDetail(AppStrings.excluded, reason.text)
+        case .compressed(let type): type.map { AppStrings.accessibilityDetail(AppStrings.compressedState, $0.text) } ?? AppStrings.compressedState
+        case .warning(let reason): AppStrings.accessibilityDetail(AppStrings.state, reason.text)
+        case .notCompressed: AppStrings.notCompressed
+        }
+    }
+}
+
 private struct StateCell: View {
     let entry: ScanEntry
 
     var body: some View {
-        if let reason = entry.reasons.first(where: { $0.isHardExclusion }) {
+        badge
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(FileRowState(entry: entry).accessibilityLabelText)
+    }
+
+    @ViewBuilder
+    private var badge: some View {
+        switch FileRowState(entry: entry) {
+        case .excluded(let reason):
             Label {
                 Text(reason.text).lineLimit(1).truncationMode(.tail)
                     .help(reason.text)   // full text on hover; the short form elides
@@ -184,11 +228,11 @@ private struct StateCell: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-        } else if entry.isCompressed {
-            Label(entry.type?.text ?? AppStrings.compressedState, systemImage: "checkmark.circle.fill")
+        case .compressed(let type):
+            Label(type?.text ?? AppStrings.compressedState, systemImage: "checkmark.circle.fill")
                 .font(.caption)
                 .foregroundStyle(.tint)
-        } else if let warning = entry.reasons.first {
+        case .warning(let warning):
             Label {
                 Text(warning.text).lineLimit(1).truncationMode(.tail)
                     .help(warning.text)
@@ -197,7 +241,7 @@ private struct StateCell: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-        } else {
+        case .notCompressed:
             Text(AppStrings.notCompressed).font(.caption).foregroundStyle(.secondary)
         }
     }

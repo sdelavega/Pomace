@@ -96,6 +96,20 @@ final class ScanModel {
         showingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
     }
 
+    #if DEBUG
+    private var isUITestFixture = false
+
+    func prepareUITestFixture(_ path: String) {
+        isUITestFixture = true
+        watchedPaths = [path]
+        selectedPath = path
+        showingOnboarding = false
+        showingInspector = true
+        showExcluded = true
+        scan(path)
+    }
+    #endif
+
     // MARK: - Scheduling
 
     /// Turning scheduled sweeps on registers a launchd agent, which appears in the user's
@@ -151,6 +165,9 @@ final class ScanModel {
     /// Runs a sweep immediately for the selected folder, through the same runner the agent
     /// uses — so "Sweep Now" exercises the scheduled path rather than a parallel one.
     func sweepNow() {
+        #if DEBUG
+        guard !isUITestFixture else { return }
+        #endif
         guard !isRunning, !isSweeping,
               let path = selectedPath, let store, let install = resolution.installation else { return }
         scanCache.invalidate(path)
@@ -283,6 +300,9 @@ final class ScanModel {
     }
 
     private func start(_ op: CompressionOperation) {
+        #if DEBUG
+        guard !isUITestFixture else { return }
+        #endif
         guard !isRunning, !isSweeping,
               let root = selectedPath, let install = resolution.installation else { return }
         let paths = targetPaths(for: op)

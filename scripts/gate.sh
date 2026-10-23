@@ -17,3 +17,6 @@ release/release.sh 0.0.0-dryrun --dry-run
 python3 -m unittest discover -s scripts/tests
 python3 scripts/check-l10n.py lint
 python3 scripts/check-l10n.py catalog --locales en zh-Hans es ja ko de fr pt-BR
+./build-app.sh debug
+swiftc scripts/check-ax.swift -o build/check-ax
+build/check-ax
