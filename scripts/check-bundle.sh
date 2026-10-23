@@ -26,6 +26,20 @@ PLIST="$APP/Contents/Info.plist"
 [ -x "$BINARY" ] || fail "missing executable app: Contents/MacOS/Pomace"
 [ -d "$FRAMEWORK" ] || fail "missing Sparkle.framework"
 
+RESOURCE_BUNDLE="$APP/Contents/Resources/Pomace_PomaceApp.bundle"
+[ -d "$RESOURCE_BUNDLE" ] || fail "missing localization resource bundle"
+# swift-build emits a macOS bundle; native SwiftPM puts resources at the root.
+if [ -d "$RESOURCE_BUNDLE/Contents/Resources" ]; then
+  RESOURCE_BUNDLE="$RESOURCE_BUNDLE/Contents/Resources"
+fi
+LOCALE_COUNT=0
+for locale in "$RESOURCE_BUNDLE"/*.lproj; do
+  [ -d "$locale" ] || continue
+  [ -s "$locale/Localizable.stringsdict" ] || fail "missing plural rules: $(basename "$locale")/Localizable.stringsdict"
+  LOCALE_COUNT=$((LOCALE_COUNT + 1))
+done
+[ "$LOCALE_COUNT" -gt 0 ] || fail "no localized resources in resource bundle"
+
 check_universal() {
   local archs
   archs="$(lipo -archs "$1")" || fail "cannot read architectures: $2"

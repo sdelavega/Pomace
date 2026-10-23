@@ -54,7 +54,10 @@ class BundleRpathTests(unittest.TestCase):
         self.products = self.root / 'products'
         self.products.mkdir()
         shutil.copy2(self.fixture, self.products / 'PomaceApp')
-        (self.products / 'Pomace_PomaceApp.bundle').mkdir()
+        for locale in ['en', 'zh-Hans', 'es', 'ja', 'ko', 'de', 'fr', 'pt-BR']:
+            directory = self.products / 'Pomace_PomaceApp.bundle' / f'{locale}.lproj'
+            directory.mkdir(parents=True)
+            (directory / 'Localizable.stringsdict').write_text('fixture plural rules')
         framework = self.root / '.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-test/Sparkle.framework'
         framework.mkdir(parents=True)
         for relative in ['Sparkle', 'Versions/B/Autoupdate',
@@ -112,6 +115,41 @@ class BundleRpathTests(unittest.TestCase):
             self.assertIn(f'path {path} (offset ', at_signing)
         # The SwiftPM product is shared build output and must remain untouched.
         self.assertEqual(set(rpaths(self.products / 'PomaceApp')), set(ALLOWED + TOOLCHAIN))
+
+    def test_bundle_requires_plural_rules_in_every_locale(self):
+        # Native SwiftPM uses a flat bundle; swift-build uses Contents/Resources.
+        for layout in ['', 'Contents/Resources']:
+            if layout:
+                product = self.products / 'Pomace_PomaceApp.bundle'
+                nested = product / layout
+                nested.mkdir(parents=True)
+                for directory in product.glob('*.lproj'):
+                    shutil.move(directory, nested / directory.name)
+            with self.subTest(layout=layout):
+                self.build('release')
+                result = self.check_bundle()
+                self.assertEqual(result.returncode, 0, result.stdout)
+                resources = self.app / 'Contents/Resources/Pomace_PomaceApp.bundle'
+                locales = sorted((resources / layout).glob('*.lproj'))
+                self.assertEqual(len(locales), 8)
+                for directory in locales:
+                    with self.subTest(locale=directory.name):
+                        rules = directory / 'Localizable.stringsdict'
+                        self.assertTrue(rules.is_file())
+                        contents = rules.read_bytes()
+                        rules.unlink()
+                        result = self.check_bundle()
+                        self.assertNotEqual(result.returncode, 0, result.stdout)
+                        self.assertIn(f'{directory.name}/Localizable.stringsdict', result.stdout)
+                        rules.write_bytes(contents)
+                shutil.rmtree(resources)
+                result = self.check_bundle()
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn('resource bundle', result.stdout)
+                (resources / layout).mkdir(parents=True)
+                result = self.check_bundle()
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn('no localized resources', result.stdout)
 
     def test_debug_keeps_toolchain_rpaths(self):
         self.build('debug')

@@ -35,5 +35,8 @@ jobs:
           brew install openssl@3
           echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
 
+      - name: Test with the native SwiftPM build system
+        run: swift test --build-system native
+
       - name: Run the gate
         run: scripts/gate.sh

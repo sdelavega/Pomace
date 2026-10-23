@@ -4,9 +4,12 @@ import Testing
 
 @Suite("App localization")
 struct LocalizationTests {
-    @Test("module resources contain a compiled English plural table")
-    func compiledCatalog() throws {
-        let url = try #require(Bundle.module.url(forResource: "Localizable", withExtension: "stringsdict", subdirectory: "en.lproj"))
+    @Test("every locale contains compiled strings and plural rules", arguments: ["en", "zh-Hans", "es", "ja", "ko", "de", "fr", "pt-BR"])
+    func compiledCatalog(_ locale: String) throws {
+        let stringsURL = try #require(Bundle.module.url(forResource: "Localizable", withExtension: "strings", subdirectory: "\(locale).lproj"))
+        let strings = try Data(contentsOf: stringsURL)
+        #expect(!strings.isEmpty)
+        let url = try #require(Bundle.module.url(forResource: "Localizable", withExtension: "stringsdict", subdirectory: "\(locale).lproj"))
         let data = try Data(contentsOf: url)
         let table = try #require(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
         #expect(table["content.decompress_question"] != nil)
