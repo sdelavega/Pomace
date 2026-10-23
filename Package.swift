@@ -9,13 +9,17 @@ let package = Package(
         .executable(name: "pomace-spike", targets: ["pomace-spike"]),
         .executable(name: "PomaceApp", targets: ["PomaceApp"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
+    ],
     targets: [
         .target(name: "PomaceCore", linkerSettings: [.linkedLibrary("sqlite3")]),
         .executableTarget(name: "pomace-spike", dependencies: ["PomaceCore"]),
         .executableTarget(
             name: "PomaceApp",
-            dependencies: ["PomaceCore"],
-            resources: [.process("Resources")]
+            dependencies: ["PomaceCore", .product(name: "Sparkle", package: "Sparkle")],
+            resources: [.process("Resources")],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         .testTarget(name: "PomaceCoreTests", dependencies: ["PomaceCore"]),
         .testTarget(name: "PomaceAppTests", dependencies: ["PomaceApp", "PomaceCore"]),

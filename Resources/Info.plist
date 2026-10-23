@@ -13,4 +13,11 @@
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Stephen de la Vega</string>
+  <key>SUFeedURL</key><string>https://sdelavega.github.io/Pomace/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>bbNkOT+GVm6wBHXKW0I2WbeCxh5aa7dtduz9cjhvhgI=</string>
+  <key>SURequireSignedFeed</key><true/>
+  <key>SUVerifyUpdateBeforeExtraction</key><true/>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUScheduledCheckInterval</key><integer>86400</integer>
+  <key>SUEnableSystemProfiling</key><false/>
 </dict></plist>

@@ -5,6 +5,7 @@ import PomaceCore
 struct PomaceApp: App {
     @State private var model = ScanModel()
     @AppStorage("menuBarEnabled") private var menuBarEnabled = false
+    @ObservedObject private var updates = Main.updates!
 
     /// `--scan <path>` opens straight onto a folder without the panel. Used by the test
     /// harness, and the same argument-dispatch shape the headless `--sweep` mode needs in M3.
@@ -38,6 +39,8 @@ struct PomaceApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Pomace") { showAbout() }
+                Button("Check for Updates…") { updates.checkForUpdates() }
+                    .disabled(!updates.canCheckForUpdates)
             }
             CommandGroup(after: .newItem) {
                 Button("Add Folder…") { addFolder() }
@@ -45,6 +48,15 @@ struct PomaceApp: App {
                 Button("Rescan") { model.rescan() }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(model.selectedPath == nil)
+            }
+        }
+
+        Settings {
+            TabView {
+                GeneralSettingsView(updates: updates)
+                    .tabItem { Label("General", systemImage: "gearshape") }
+                AdvancedSettingsView(model: model)
+                    .tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
             }
         }
 

@@ -10,6 +10,13 @@ import PomaceCore
 @main
 enum Main {
 
+    static func shouldCreateUpdater(arguments: [String]) -> Bool {
+        let headless = ["--sweep-all", "--sweep-now", "--register-sweeps", "--unregister-sweeps", "--service-status"]
+        return !arguments.contains { headless.contains($0) }
+    }
+
+    @MainActor private(set) static var updates: Updates?
+
     static func main() {
         let args = CommandLine.arguments
 
@@ -32,7 +39,12 @@ enum Main {
             exit(0)
         }
 
-        PomaceApp.main()
+        MainActor.assumeIsolated {
+            if shouldCreateUpdater(arguments: args) {
+                updates = Updates(startingUpdater: true)
+            }
+            PomaceApp.main()
+        }
     }
 
     private static func reportService(

@@ -219,14 +219,17 @@ struct ScanModelTests {
             ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
                              supportsLevel: false, supportsMinimumRatio: true, rawUsage: ""))
         let model = ScanModel(store: nil, resolution: CompressorResolution(installation: installation, customRejection: nil),
-                              log: MutationLog(url: directory.appendingPathComponent("log")))
+                              log: MutationLog(url: directory.appendingPathComponent("log")),
+                              sweepLockURL: directory.appendingPathComponent("sweep.lock"))
         model.select(root.path)
         try await waitUntil { model.result != nil }
         model.startCompress()
         try await waitUntil { FileManager.default.fileExists(atPath: binary.path + ".started") }
+        #expect(SweepLock.isHeld(at: directory.appendingPathComponent("sweep.lock")))
         model.cancelRun()
         #expect(model.isStopping)
         #expect(model.isRunning)
+        #expect(SweepLock.isHeld(at: directory.appendingPathComponent("sweep.lock")))
         model.select(other.path)
         try Data().write(to: URL(fileURLWithPath: binary.path + ".release"))
         try await waitUntil { !model.isRunning && !model.isStopping && model.result != nil }
@@ -235,6 +238,7 @@ struct ScanModelTests {
             return
         }
         #expect(outcome.wasCancelled)
+        #expect(!SweepLock.isHeld(at: directory.appendingPathComponent("sweep.lock")))
         #expect(model.selectedPath == other.path)
         #expect(model.result?.root == other.path)
         model.select(root.path)

@@ -14,6 +14,7 @@ if [ "${1:-}" = "--universal" ]; then
 fi
 [ "$#" -eq 1 ] || fail "usage: scripts/check-bundle.sh [--universal] <app>"
 APP="$1"
+[ -d "$APP" ] || fail "app bundle missing: $APP"
 HELPER="$APP/Contents/Helpers/applesauce"
 BINARY="$APP/Contents/MacOS/Pomace"
 FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
@@ -21,6 +22,7 @@ PLIST="$APP/Contents/Info.plist"
 
 [ -x "$HELPER" ] || fail "missing executable helper: Contents/Helpers/applesauce"
 [ -x "$BINARY" ] || fail "missing executable app: Contents/MacOS/Pomace"
+[ -d "$FRAMEWORK" ] || fail "missing Sparkle.framework"
 
 check_universal() {
   local archs
@@ -38,21 +40,20 @@ check_universal() {
 if [ "$UNIVERSAL" -eq 1 ]; then
   check_universal "$BINARY" "Contents/MacOS/Pomace"
   check_universal "$HELPER" "Contents/Helpers/applesauce"
+  check_universal "$FRAMEWORK/Sparkle" "Sparkle.framework/Sparkle"
 fi
+SPARKLE_VERSION="$FRAMEWORK/Versions/B"
+for component in XPCServices/Installer.xpc XPCServices/Downloader.xpc Autoupdate Updater.app; do
+  codesign --verify --strict "$SPARKLE_VERSION/$component" || fail "invalid Sparkle component signature: $component"
+done
+codesign --verify --strict "$FRAMEWORK" || fail "invalid Sparkle signature"
+echo "Sparkle signed: framework and nested helpers verified"
 codesign --verify --strict "$HELPER" || fail "invalid helper signature"
 codesign --verify --strict "$APP" || fail "invalid app signature"
 "$HELPER" --version || fail "helper --version failed"
 
-# Task 5 makes Sparkle mandatory; already validate it when embedded or requested.
-if [ -d "$FRAMEWORK" ] || [ -n "${REQUIRE_SPARKLE:-}" ]; then
-  [ -d "$FRAMEWORK" ] || fail "missing Sparkle.framework"
-  if [ "$UNIVERSAL" -eq 1 ]; then
-    check_universal "$FRAMEWORK/Sparkle" "Sparkle.framework/Sparkle"
-  fi
-  codesign --verify --strict "$FRAMEWORK" || fail "invalid Sparkle signature"
-  for key in SUFeedURL SUPublicEDKey SURequireSignedFeed SUEnableAutomaticChecks SUScheduledCheckInterval SUEnableSystemProfiling; do
-    /usr/libexec/PlistBuddy -c "Print :$key" "$PLIST" >/dev/null 2>&1 || fail "missing Info.plist key: $key"
-  done
-fi
+for key in SUFeedURL SUPublicEDKey SURequireSignedFeed SUVerifyUpdateBeforeExtraction SUEnableAutomaticChecks SUScheduledCheckInterval SUEnableSystemProfiling; do
+  /usr/libexec/PlistBuddy -c "Print :$key" "$PLIST" >/dev/null 2>&1 || fail "missing Info.plist key: $key"
+done
 
 echo "bundle check passed: $APP"

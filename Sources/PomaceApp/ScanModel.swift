@@ -32,6 +32,7 @@ final class ScanModel {
     var overrides: CompressionSettings?
     var resolution: CompressorResolution
     private let defaults: UserDefaults
+    private let sweepLockURL: URL
     var confirmingDecompress = false
     var confirmingAdministrator = false
     var useAdministratorPrivileges = false
@@ -73,11 +74,13 @@ final class ScanModel {
     init(store: Store? = try? Store(),
          resolution: CompressorResolution? = nil,
          defaults: UserDefaults = .standard,
-         log: MutationLog = MutationLog()) {
+         log: MutationLog = MutationLog(),
+         sweepLockURL: URL = SweepLock.defaultURL) {
         // A broken store must not stop the app from scanning — it only costs us history.
         self.store = store
         self.log = log
         self.defaults = defaults
+        self.sweepLockURL = sweepLockURL
         let watched = (try? store?.watched()) .flatMap { $0 } ?? []
         watchedPaths = watched.map(\.path)
         schedulesByPath = Dictionary(uniqueKeysWithValues: watched.map { ($0.path, $0.schedule) })
@@ -320,6 +323,10 @@ final class ScanModel {
 
     private func launch(_ run: PreparedRun) {
         guard !isRunning, !isSweeping else { return }
+        guard let lock = SweepLock.acquire(at: sweepLockURL) else {
+            runState = .refused("Another compression run is already active.")
+            return
+        }
         let op = run.operation, root = run.root
         let install = run.installation, paths = run.paths, plan = run.plan
         let cancellation = CompressionCancellation()
@@ -328,12 +335,12 @@ final class ScanModel {
         scanCache.invalidate(root)
         runState = .running(op, CompressionProgress())
         runTask = Task { [weak self] in
+            defer { lock.release() }
             guard let self else { return }
             for await event in CompressionEngine.run(operation: op, paths: paths, root: root,
                                                      installation: install, plan: plan,
                                                      logger: self.log, cancellation: cancellation,
                                                      executor: run.executor) {
-                if Task.isCancelled { return }
                 switch event {
                 case .started(let p), .progress(let p):
                     self.runState = .running(op, p)

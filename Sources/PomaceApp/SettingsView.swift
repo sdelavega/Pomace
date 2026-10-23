@@ -1,6 +1,20 @@
 import SwiftUI
 import PomaceCore
 
+struct GeneralSettingsView: View {
+    @ObservedObject var updates: Updates
+    @AppStorage("menuBarEnabled") private var menuBarEnabled = false
+
+    var body: some View {
+        Form {
+            Toggle("Check for updates automatically", isOn: $updates.automaticallyChecksForUpdates)
+            Toggle("Show menu bar item", isOn: $menuBarEnabled)
+        }
+        .padding(24)
+        .frame(width: 560, height: 360)
+    }
+}
+
 /// Settings → Advanced, on the Xcode build-settings model (ADR-0009).
 ///
 /// The pane's primary job is DIAGNOSTIC. Seeing what Pomace decided and why is what makes
