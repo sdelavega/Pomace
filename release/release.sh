@@ -12,6 +12,9 @@ if [ "$#" = 2 ]; then
   DRY_RUN=1
 fi
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ( "$DRY_RUN" = 1 && "$VERSION" = 0.0.0-dryrun ) ]] || fail 'VERSION must be x.y.z'
+# notarytool keychain profile; any profile for the same Developer ID team works.
+NOTARY_PROFILE="${POMACE_NOTARY_PROFILE:-Pomace Notary}"
+[[ -n "$NOTARY_PROFILE" && "$NOTARY_PROFILE" != *[[:cntrl:]]* ]] || fail 'Invalid POMACE_NOTARY_PROFILE'
 NOTES="release/$VERSION.md"
 if [ "$DRY_RUN" = 1 ] && [ ! -f "$NOTES" ]; then NOTES=release/1.1.0.md; fi
 [ -s "$NOTES" ] || fail 'Missing release notes'
@@ -67,7 +70,7 @@ if [ "$DRY_RUN" = 1 ]; then
   KEY_ARGS=(--ed-key-file "$WORK/ed-key")
 else
   codesign --force --timestamp --sign "$IDENTITY" "$DMG"
-  xcrun notarytool submit "$DMG" --keychain-profile "Pomace Notary" --wait
+  xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
   xcrun stapler staple "$DMG"
   xcrun stapler validate "$DMG"
   spctl -a -t open --context context:primary-signature "$DMG"

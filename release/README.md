@@ -9,7 +9,8 @@ Run both from the same clean source commit. `dist/` is ignored scratch space.
   `POMACE_SIGN_ID` to its SHA-1 identity hash (keep local identity details out of Git).
 - Store notarization credentials interactively with
   `xcrun notarytool store-credentials "Pomace Notary"`. Follow its prompts; never put
-  credentials in scripts or command arguments.
+  credentials in scripts or command arguments. To reuse an existing profile for the
+  same Developer ID team instead, set `POMACE_NOTARY_PROFILE` to its name.
 - Keep the existing Sparkle key for account `Pomace` in the login keychain. Its public
   key is in `Resources/Info.plist`. Do not generate a replacement key for a release.
 - Initialize and push an orphan `gh-pages` branch containing an empty RSS appcast
@@ -29,7 +30,7 @@ release/release.sh 1.1.0
 
 Real mode requires a clean tree, runs `scripts/gate.sh`, builds the universal app with
 Developer ID signing, and checks the bundle. It creates a UDZO disk image with an
-Applications shortcut, signs and notarizes it using `Pomace Notary`, staples and
+Applications shortcut, signs and notarizes it using `Pomace Notary` (or `POMACE_NOTARY_PROFILE`), staples and
 validates it, then assesses the DMG and mounted app with Gatekeeper. Mounts are inside
 an ignored temporary directory and are detached on exit.
 
