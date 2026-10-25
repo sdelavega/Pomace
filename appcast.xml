@@ -1,2 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><title>Pomace</title></channel></rss>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Pomace</title>
+        <item>
+            <title>1.1.0</title>
+            <pubDate>Sun, 25 Oct 2026 11:15:19 -0400</pubDate>
+            <sparkle:version>10100</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h1>Pomace 1.1.0</h1>
+<p>This is the last update you need to install by hand: Pomace now updates itself.</p>
+<ul>
+<li>Install Pomace by opening the disk image and dragging Pomace to Applications.</li>
+<li>Pomace includes its compression tool, so Homebrew is no longer required.</li>
+<li>The app and bundled compressor support Apple silicon and Intel Macs running macOS 14 or later.</li>
+<li>Automatic update checks and Check for Updates are available in Pomace.</li>
+<li>A custom compressor can still be selected in Advanced settings and is checked before each run.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/sdelavega/Pomace/releases/download/v1.1.0/Pomace-1.1.0.dmg" length="8372815" type="application/octet-stream" sparkle:edSignature="bJ6kc8oUsczJYEA97xA4gRvGrGlIzi4tR7v+qAd+BXc3hT9jxlnTVKGESsqvGZXOSecz8rXwh/S7xEJz3/PICw=="></enclosure>
+        </item>
+    </channel>
+</rss><!-- sparkle-signatures:
+edSignature: qlH+QFNZre+1omuuC7FlFxjwhlQG/AjfEM40GVTz/MuLjcrvbfrpcfwDUJ0viM5MWVo6E2t9h3+0CYhMX3OKDQ==
+length: 1686
+-->
