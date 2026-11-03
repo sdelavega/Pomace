@@ -12,14 +12,11 @@ struct GeneralSettingsView: View {
         }
         .padding(24)
         .frame(minWidth: 560, minHeight: 360)
+        .aetherTheme()
     }
 }
 
-/// Settings → Advanced, on the Xcode build-settings model (ADR-0009).
-///
-/// The pane's primary job is DIAGNOSTIC. Seeing what Pomace decided and why is what makes
-/// the automatic behaviour trustworthy rather than opaque; overriding is almost a side
-/// effect. Rows marked fixed are safety properties and cannot be changed at any tier.
+/// Diagnostic settings preserve the automatic plan and its fixed safety properties.
 struct AdvancedSettingsView: View {
     @Bindable var model: ScanModel
     @AppStorage("menuBarEnabled") private var menuBarEnabled = false
@@ -37,26 +34,29 @@ struct AdvancedSettingsView: View {
                         Divider()
                     }
                 }
+                .aetherSurface()
+                .padding(16)
             }
             Divider()
             footer
         }
         .frame(minWidth: 460, idealWidth: 560, maxWidth: 680,
                minHeight: 360, idealHeight: 460, maxHeight: 640)
+        .aetherTheme()
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(AppStrings.compressionSettings).font(.headline)
+            Text(AppStrings.compressionSettings).font(.system(size: 22, weight: .semibold))
+                .tracking(-0.33)
             Text(AppStrings.settingsExplanation)
-                .font(.caption).foregroundStyle(.secondary)
-
+                .font(.system(size: 12)).foregroundStyle(Aether.muted)
             Picker(AppStrings.mode, selection: $model.mode) {
                 ForEach(CompressionMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            Text(model.mode.text).font(.caption).foregroundStyle(.secondary)
+            Text(model.mode.text).font(.system(size: 12)).foregroundStyle(Aether.muted)
         }
         .padding(16)
     }
@@ -66,12 +66,12 @@ struct AdvancedSettingsView: View {
             Text(AppStrings.compressor).font(.headline)
             Text(model.toolSummary).font(.callout)
             if let installation = model.resolution.installation {
-                Text(installation.path).font(.caption).foregroundStyle(.secondary)
+                Text(installation.path).font(.system(size: 12)).foregroundStyle(Aether.muted)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let rejection = model.customCompressorRejectionText {
-                Text(rejection).font(.caption).foregroundStyle(.secondary)
+                Text(rejection).font(.system(size: 12)).foregroundStyle(Aether.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
@@ -119,28 +119,21 @@ private struct JustificationRow: View {
             Text(justification.label)
                 .font(.callout)
                 .frame(width: 120, alignment: .leading)
-
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(justification.value.text)
                         .font(.callout.weight(.medium))
                         .monospacedDigit()
                     if justification.isFixed {
-                        Text(AppStrings.always)
-                            .font(.caption2)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(.quaternary, in: Capsule())
+                        AetherBadge(text: AppStrings.always)
                     }
                     if justification.isOverridden {
-                        Text(AppStrings.overridden)
-                            .font(.caption2)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(.tint.opacity(0.2), in: Capsule())
+                        AetherBadge(text: AppStrings.overridden)
                     }
                 }
                 Text(justification.reason.text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Aether.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()

@@ -18,11 +18,13 @@ struct ContentView: View {
                 .focused($focusedRegion, equals: .sidebar)
                 .focusSection()
                 .accessibilityLabel(AppStrings.folders)
+                .background { AetherChrome() }
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             Detail(model: model, focus: $focusedRegion)
                 .inspector(isPresented: $model.showingInspector) {
                     InspectorView(model: model)
+                        .aetherTheme()
                         .focusable()
                         .focused($focusedRegion, equals: .inspector)
                         .focusSection()
@@ -48,6 +50,9 @@ struct ContentView: View {
         }
         .background(NativeAccessibilityLabels(sidebarLabels: sidebarAccessibilityLabels,
                                                fileEntries: model.visibleEntries))
+        .aetherTheme()
+        .toolbarBackground(Aether.canvas, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
         .navigationTitle(AppStrings.appName)
         .confirmationDialog(
             AppStrings.decompressQuestion(model.compressedCount),
@@ -70,6 +75,7 @@ struct ContentView: View {
         })
         .sheet(isPresented: $model.showingSettings) {
             AdvancedSettingsView(model: model)
+                .aetherTheme()
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(AppStrings.done) { model.showingSettings = false }
@@ -81,6 +87,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $model.showingOnboarding) {
             OnboardingView(onContinue: model.dismissOnboarding)
+                .aetherTheme()
         }
     }
 
@@ -98,9 +105,13 @@ private struct OnboardingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            AetherBadge(text: AppStrings.onboardingGetStarted)
             Image(systemName: "internaldrive")
                 .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.tint)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Aether.accent)
+                .padding(16)
+                .background(Aether.well, in: RoundedRectangle(cornerRadius: 12))
                 .accessibilityHidden(true)
             Text(AppStrings.onboardingTitle).font(.system(.title, weight: .semibold))
             Text(AppStrings.onboardingBody)
@@ -109,7 +120,7 @@ private struct OnboardingView: View {
             HStack {
                 Spacer()
                 Button(AppStrings.onboardingGetStarted, action: onContinue)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(AetherPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -137,6 +148,25 @@ private struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: "internaldrive")
+                        .font(.system(size: 22, weight: .light))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Aether.accent)
+                    Text(AppStrings.appName)
+                        .font(.system(size: 22, weight: .semibold))
+                        .tracking(-0.33)
+                }
+                Text(verbatim: "APFS / HFS+")
+                    .font(Aether.metadata)
+                    .foregroundStyle(Aether.muted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
+        }
         .onDrop(of: [.fileURL], isTargeted: $isDropTarget, perform: model.addDroppedFolders)
         .overlay {
             if model.watchedPaths.isEmpty {
@@ -161,8 +191,8 @@ private struct Sidebar: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text((path as NSString).lastPathComponent)
                 Text(model.scheduleSummary(for: path))
-                    .font(.caption)
-                    .foregroundStyle(model.isScheduled(path) ? .secondary : .tertiary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Aether.muted)
                     .lineLimit(1)
             }
         } icon: {
@@ -207,7 +237,7 @@ private struct Detail: View {
                 VStack(spacing: 0) {
                     if !model.toolReady {
                         Text(AppStrings.compressorUnavailable)
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.system(size: 12)).foregroundStyle(Aether.muted)
                             .padding(8)
                     }
                     if model.showingRecentScan {
@@ -219,6 +249,8 @@ private struct Detail: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { AetherCanvas() }
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button(AppStrings.settings, systemImage: "slider.horizontal.3") {
@@ -254,6 +286,7 @@ private struct ScanningView: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            AetherBadge(text: AppStrings.scanProgress)
             ProgressView()
                 .controlSize(.large)
             if reduceMotion {
@@ -263,7 +296,7 @@ private struct ScanningView: View {
             }
             if let path = progress.currentPath {
                 Text(path)
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -273,7 +306,7 @@ private struct ScanningView: View {
                 .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(reduceMotion ? nil : .default, value: progress.filesSeen)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: progress.filesSeen)
     }
 
     private var progressText: some View {

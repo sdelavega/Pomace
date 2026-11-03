@@ -12,15 +12,23 @@ struct InspectorView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                AetherBadge(text: AppStrings.scheduleHelp)
                 scheduleSection
-                Divider()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .aetherSurface()
                 trendSection
-                Divider()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .aetherSurface()
                 historySection
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .aetherSurface()
             }
             .padding(16)
         }
-        .frame(minWidth: 260, idealWidth: 300)
+        .frame(minWidth: 280, idealWidth: 320)
     }
 
     private var trendSection: some View {
@@ -28,15 +36,24 @@ struct InspectorView: View {
             Text(AppStrings.compressionTrend).font(.headline)
             if model.snapshotHistory.isEmpty {
                 Text(AppStrings.firstScanBaseline)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
             } else {
                 Chart(model.snapshotHistory, id: \.scannedAt) { snapshot in
+                    AreaMark(
+                        x: .value(AppStrings.scan, snapshot.scannedAt),
+                        y: .value(AppStrings.compressedState, snapshot.compressionCoverage)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(LinearGradient(colors: [Aether.accent.opacity(0.4), Aether.accent.opacity(0)],
+                                                    startPoint: .top, endPoint: .bottom))
+
                     LineMark(
                         x: .value(AppStrings.scan, snapshot.scannedAt),
                         y: .value(AppStrings.compressedState, snapshot.compressionCoverage)
                     )
                     .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.tint)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .foregroundStyle(Aether.accent)
 
                     PointMark(
                         x: .value(AppStrings.scan, snapshot.scannedAt),
@@ -71,7 +88,7 @@ struct InspectorView: View {
                 }
 
                 Text(trendSummary)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -101,10 +118,10 @@ struct InspectorView: View {
             HStack(spacing: 6) {
                 Image(systemName: model.serviceStatus.isActive
                       ? "checkmark.circle.fill" : "exclamationmark.circle")
-                    .foregroundStyle(model.serviceStatus.isActive ? .green : .secondary)
+                    .foregroundStyle(model.serviceStatus.isActive ? Aether.accent : Aether.muted)
                     .accessibilityHidden(true)
                 Text(model.serviceStatus.text)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .ignore)
@@ -116,12 +133,12 @@ struct InspectorView: View {
                     .controlSize(.small)
             }
             if let error = model.serviceError {
-                Text(error).font(.caption).foregroundStyle(.orange)
+                Text(error).font(.system(size: 12)).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Text(model.nextSweepDescription)
-                .font(.caption).foregroundStyle(.tertiary)
+                .font(.system(size: 12)).foregroundStyle(Aether.muted)
 
             HStack {
                 Toggle(AppStrings.backgroundService, isOn: Binding(
@@ -152,14 +169,14 @@ struct InspectorView: View {
             Text(AppStrings.history).font(.headline)
             if model.sweepHistory.isEmpty {
                 Text(AppStrings.noSweeps)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
             } else {
                 ForEach(model.sweepHistory) { run in
                     VStack(alignment: .leading, spacing: 1) {
                         Text(run.startedAt, format: .relative(presentation: .named))
                             .font(.caption.weight(.medium))
                         Text(run.text)
-                            .font(.caption2)
+                            .font(.system(size: 12))
                             .foregroundStyle(run.deferral != nil || run.error != nil
                                              ? .secondary : .primary)
                             .fixedSize(horizontal: false, vertical: true)

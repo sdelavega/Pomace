@@ -26,25 +26,25 @@ struct AdministratorConfirmation: ViewModifier {
 /// a single click: it opens a confirmation naming the exact file count (SAFETY.md §4 rule 2).
 struct ActionBar: View {
     @Bindable var model: ScanModel
+    var inlineMode = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
+            if inlineMode {
+                HStack(spacing: 12) {
                     compressionButtons
+                    Spacer(minLength: 0)
                     modePicker.pickerStyle(.segmented)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .frame(minWidth: 200)
+                        .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    compressionButtons
-                    modePicker.pickerStyle(.menu).fixedSize()
-                }
+            } else {
+                compressionButtons
+                modePicker.pickerStyle(.menu).fixedSize()
             }
             if model.administratorAvailable {
                 Toggle(AppStrings.useAdministrator, isOn: $model.useAdministratorPrivileges)
                     .toggleStyle(.checkbox)
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .disabled(model.isRunning || model.isSweeping)
                     .help(AppStrings.administratorHelp)
             }
@@ -58,7 +58,7 @@ struct ActionBar: View {
             } label: {
                 Label(AppStrings.compress, systemImage: "arrow.down.right.and.arrow.up.left")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(AetherPrimaryButtonStyle())
             .controlSize(.large)
             .fixedSize()
             .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
@@ -115,19 +115,19 @@ struct RunBanner: View {
                     .accessibilityValue(AppStrings.progressFiles(progress.filesProcessed, progress.filesTotal))
                 if model.isStopping {
                     Text(AppStrings.stoppingHelp)
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 12)).foregroundStyle(Aether.muted)
                 }
                 if let p = progress.currentPath {
-                    Text(AppStrings.currentBatch(p)).font(.caption2).foregroundStyle(.secondary)
+                    Text(AppStrings.currentBatch(p)).font(.system(size: 12)).foregroundStyle(Aether.muted)
                         .lineLimit(1).truncationMode(.middle)
                 }
                 if progress.failures > 0 {
                     Text(AppStrings.processingFailures(progress.failures))
-                        .font(.caption).foregroundStyle(.orange)
+                        .font(.system(size: 12)).foregroundStyle(.orange)
                 }
             }
             .padding(12)
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+            .background(Aether.well.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
 
         case .finished(let outcome):
             OutcomeBanner(outcome: outcome) { model.dismissRunResult() }
@@ -137,7 +137,7 @@ struct RunBanner: View {
                 .font(.callout)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                .background(Aether.well.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
         }
     }
 }
@@ -153,7 +153,7 @@ private struct OutcomeBanner: View {
                 Image(systemName: icon).foregroundStyle(tint).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline).font(.callout.weight(.medium))
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                    Text(detail).font(.system(size: 12)).foregroundStyle(Aether.muted)
                 }
                 Spacer()
                 if !outcome.failures.isEmpty {
@@ -176,12 +176,12 @@ private struct OutcomeBanner: View {
                                 Image(systemName: f.kind == .failed
                                       ? "exclamationmark.triangle.fill" : "minus.circle")
                                     .foregroundStyle(f.kind == .failed ? .orange : .secondary)
-                                    .font(.caption2)
+                                    .font(.system(size: 12))
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text((f.path as NSString).lastPathComponent)
-                                        .font(.caption.weight(.medium))
-                                    Text(f.message.text).font(.caption2).foregroundStyle(.secondary)
-                                    Text(f.remedy.text).font(.caption2).foregroundStyle(.tertiary)
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text(f.message.text).font(.system(size: 12)).foregroundStyle(Aether.muted)
+                                    Text(f.remedy.text).font(.system(size: 12)).foregroundStyle(Aether.muted)
                                 }
                             }
                         }
@@ -192,7 +192,7 @@ private struct OutcomeBanner: View {
             }
         }
         .padding(12)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        .background(Aether.well.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var icon: String {

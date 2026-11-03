@@ -8,66 +8,113 @@ struct ResultView: View {
     let focus: FocusState<MainFocusRegion?>.Binding
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                SummaryHeader(result: result)
-                    .padding(.bottom, -6)
-                ActionBar(model: model).padding(.horizontal, 20)
-                RunBanner(model: model).padding(.horizontal, 20)
+        // Anchor the result to the space offered by the split view. Table's ideal content
+        // height must never enlarge the window's layout and push the overview above its top.
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                ScanOverview(model: model, result: result, availableSize: geometry.size)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
+                    .padding(12)
+
+                FileTable(model: model, result: result)
+                    .focused(focus, equals: .table)
+                    .focusSection()
+                    .accessibilityLabel(AppStrings.fileList)
+                    .frame(minHeight: 0, maxHeight: .infinity)
+                    .aetherSurface()
+                    .padding(.horizontal, 16)
+                StatusBar(model: model, result: result)
+                    .background(Aether.canvas)
             }
-            .padding(.bottom, 14)
-            Divider()
-            FileTable(model: model, result: result)
-                .focused(focus, equals: .table)
-                .focusSection()
-                .accessibilityLabel(AppStrings.fileList)
-            Divider()
-            StatusBar(model: model, result: result)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
         }
     }
 }
 
 // MARK: - Summary
 
-private struct SummaryHeader: View {
+/// Intrinsic height, with no scroll container or table-dependent size proposal.
+/// Keep this separate so minimum-window layouts can be measured in regression tests.
+struct ScanOverview: View {
+    @Bindable var model: ScanModel
     let result: ScanResult
+    let availableSize: CGSize
+
+    private var compact: Bool { availableSize.width < 640 || availableSize.height < 620 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(headline)
-                        .font(.system(.title2, weight: .semibold))
-                    Text(subhead)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-
-            CoverageBar(result: result)
-
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 22) { statistics }
-                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
-                                    GridItem(.flexible(), alignment: .leading)],
-                          alignment: .leading, spacing: 12) {
-                    statistics
-                }
-            }
+        VStack(alignment: .leading, spacing: compact ? 10 : 14) {
+            SummaryHeader(result: result, columns: availableSize.width < 640 ? 2 : 4,
+                          compact: compact)
+            Divider()
+            ActionBar(model: model, inlineMode: availableSize.width >= 640)
+            RunBanner(model: model)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(compact ? 12 : 16)
+        .aetherSurface()
+    }
+}
+
+private struct SummaryHeader: View {
+    let result: ScanResult
+    let columns: Int
+    let compact: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(headline)
+                    .font(.system(size: compact ? 18 : 22, weight: .semibold))
+                    .tracking(-0.27)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(subhead)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Aether.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            CoverageBar(result: result)
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                if columns == 4 {
+                    GridRow { metrics }
+                } else {
+                    GridRow {
+                        eligibleMetric
+                        compressedMetric
+                    }
+                    GridRow {
+                        excludedMetric
+                        diskMetric
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     @ViewBuilder
-    private var statistics: some View {
+    private var metrics: some View {
+        eligibleMetric
+        compressedMetric
+        excludedMetric
+        diskMetric
+    }
+
+    private var eligibleMetric: some View {
         Stat(AppStrings.eligible, AppStrings.files(result.progress.eligibleFiles),
              Fmt.bytes(result.progress.eligibleLogicalBytes))
-        Stat(AppStrings.alreadyCompressed, AppStrings.files(result.progress.compressedFiles),
+    }
+
+    private var compressedMetric: some View {
+        Stat(AppStrings.compressedState, AppStrings.files(result.progress.compressedFiles),
              AppStrings.reclaimedDetail(Fmt.bytes(result.reclaimedBytes)))
-        Stat(AppStrings.excluded, AppStrings.files(result.progress.excludedFiles),
-             AppStrings.forSafety)
+    }
+
+    private var excludedMetric: some View {
+        Stat(AppStrings.excluded, AppStrings.files(result.progress.excludedFiles), AppStrings.forSafety)
+    }
+
+    private var diskMetric: some View {
         Stat(AppStrings.onDisk, Fmt.bytes(result.progress.physicalBytes),
              AppStrings.logicalSize(Fmt.bytes(result.progress.logicalBytes)))
     }
@@ -83,11 +130,8 @@ private struct SummaryHeader: View {
     }
 
     private var subhead: String {
-        var parts = [AppStrings.eligibleData(Fmt.bytes(result.progress.eligibleLogicalBytes))]
-        if result.progress.compressedFiles > 0 {
-            parts.append(AppStrings.folderCompressed(Fmt.percent(result.compressionCoverage)))
-        }
-        return parts.joined(separator: " · ")
+        [AppStrings.folderCompressed(Fmt.percent(result.compressionCoverage)),
+         AppStrings.eligibleData(Fmt.bytes(result.progress.eligibleLogicalBytes))].joined(separator: " · ")
     }
 }
 
@@ -102,13 +146,13 @@ struct CoverageBar: View {
             let eligible = max(0, 1 - compressed - excluded)
 
             HStack(spacing: 1) {
-                segment(.accentColor, compressed, geo.size.width)
-                segment(Color.secondary.opacity(0.45), eligible, geo.size.width)
-                segment(Color.secondary.opacity(0.18), excluded, geo.size.width)
+                segment(Aether.accent, compressed, geo.size.width)
+                segment(Aether.accent.opacity(0.35), eligible, geo.size.width)
+                segment(Aether.muted.opacity(0.18), excluded, geo.size.width)
             }
             .clipShape(RoundedRectangle(cornerRadius: 3))
         }
-        .frame(height: 6)
+        .frame(height: 8)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(AppStrings.compressionCoverage)
         .accessibilityValue(Self.accessibilityValueText(fraction: result.compressionCoverage,
@@ -130,12 +174,16 @@ private struct Stat: View {
     init(_ l: String, _ v: String, _ d: String) { label = l; value = v; detail = d }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.system(.body, weight: .medium)).monospacedDigit()
-            Text(detail).font(.caption2).foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.system(size: 12)).foregroundStyle(Aether.muted)
+            Text(value).font(.system(size: 15, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+            Text(detail).font(.system(size: 12)).foregroundStyle(Aether.muted)
         }
-        .fixedSize(horizontal: true, vertical: false)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Aether.well.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -160,13 +208,13 @@ private struct FileTable: View {
 
             TableColumn(AppStrings.size) { entry in
                 Text(Fmt.bytes(entry.logicalSize))
-                    .monospacedDigit().foregroundStyle(.secondary)
+                    .monospacedDigit().foregroundStyle(Aether.muted)
             }
             .width(min: 90, ideal: 130, max: 200)
 
             TableColumn(AppStrings.onDisk) { entry in
                 Text(Fmt.bytes(entry.physicalSize))
-                    .monospacedDigit().foregroundStyle(.secondary)
+                    .monospacedDigit().foregroundStyle(Aether.muted)
             }
             .width(min: 90, ideal: 130, max: 200)
 
@@ -176,6 +224,9 @@ private struct FileTable: View {
             .width(min: 200, ideal: 320)
         }
         .tableStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .background(Aether.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -224,13 +275,13 @@ private struct StateCell: View {
                 Text(reason.text).lineLimit(1).truncationMode(.tail)
                     .help(reason.text)   // full text on hover; the short form elides
             } icon: {
-                Image(systemName: "minus.circle").foregroundStyle(.secondary)
+                Image(systemName: "minus.circle").foregroundStyle(Aether.muted)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 12))
+            .foregroundStyle(Aether.muted)
         case .compressed(let type):
             Label(type?.text ?? AppStrings.compressedState, systemImage: "checkmark.circle.fill")
-                .font(.caption)
+                .font(.system(size: 12))
                 .foregroundStyle(.tint)
         case .warning(let warning):
             Label {
@@ -239,10 +290,10 @@ private struct StateCell: View {
             } icon: {
                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 12))
+            .foregroundStyle(Aether.muted)
         case .notCompressed:
-            Text(AppStrings.notCompressed).font(.caption).foregroundStyle(.secondary)
+            Text(AppStrings.notCompressed).font(.system(size: 12)).foregroundStyle(Aether.muted)
         }
     }
 }
@@ -271,15 +322,15 @@ private struct StatusBar: View {
 
             if result.entriesTruncated {
                 Label(AppStrings.truncatedFiles(ScanEngine.maxRetainedEntries), systemImage: "info.circle")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
             }
             if result.hardLinkDuplicates > 0 {
                 Text(AppStrings.hardLinksCountedOnce(result.hardLinkDuplicates))
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
                     .help(AppStrings.hardLinkHelp)
             }
             Text(AppStrings.scannedIn(result.duration))
-                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                .font(.system(size: 12)).foregroundStyle(Aether.muted).monospacedDigit()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 7)
