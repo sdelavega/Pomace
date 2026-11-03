@@ -1,8 +1,28 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
---><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
         <title>Pomace</title>
+        <item>
+            <title>1.1.1</title>
+            <pubDate>Tue, 03 Nov 2026 14:51:45 -0500</pubDate>
+            <sparkle:version>10101</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h1>Pomace 1.1.1</h1>
+<p>Pomace gains a refreshed native interface with adaptive Carolina blue and navy styling.</p>
+<ul>
+<li>Light and dark appearances use clearer panels, typography, and compression metrics.</li>
+<li>The scan summary fits the available window space without scrolling. Metrics reflow into compact rows when the schedule inspector is open or the window is narrow.</li>
+<li>Compression coverage, reclaimed space, and Compress / Decompress controls remain visible after a scan.</li>
+<li>Existing automatic updates, the bundled compressor, localized controls, keyboard navigation, and safety confirmations are preserved.</li>
+</ul>
+<p>Supports Apple silicon and Intel Macs running macOS 14 or later.</p>
+]]></description>
+            <enclosure url="https://github.com/sdelavega/Pomace/releases/download/v1.1.1/Pomace-1.1.1.dmg" length="8470492" type="application/octet-stream" sparkle:edSignature="46J6qAJ+dMv8zWhK1jl+YP0yZUHeGP7ElMWV/+SXQpNbrPQNI4hngFsVGx5q2bOCSLt2b0t6aVBiReWtBUY0Cw=="/>
+        </item>
         <item>
             <title>1.1.0</title>
             <pubDate>Sun, 25 Oct 2026 11:15:19 -0400</pubDate>
@@ -19,10 +39,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 <li>A custom compressor can still be selected in Advanced settings and is checked before each run.</li>
 </ul>
 ]]></description>
-            <enclosure url="https://github.com/sdelavega/Pomace/releases/download/v1.1.0/Pomace-1.1.0.dmg" length="8372815" type="application/octet-stream" sparkle:edSignature="bJ6kc8oUsczJYEA97xA4gRvGrGlIzi4tR7v+qAd+BXc3hT9jxlnTVKGESsqvGZXOSecz8rXwh/S7xEJz3/PICw=="></enclosure>
+            <enclosure url="https://github.com/sdelavega/Pomace/releases/download/v1.1.0/Pomace-1.1.0.dmg" length="8372815" type="application/octet-stream" sparkle:edSignature="bJ6kc8oUsczJYEA97xA4gRvGrGlIzi4tR7v+qAd+BXc3hT9jxlnTVKGESsqvGZXOSecz8rXwh/S7xEJz3/PICw=="/>
         </item>
     </channel>
-</rss><!-- sparkle-signatures:
-edSignature: qlH+QFNZre+1omuuC7FlFxjwhlQG/AjfEM40GVTz/MuLjcrvbfrpcfwDUJ0viM5MWVo6E2t9h3+0CYhMX3OKDQ==
-length: 1686
+</rss>
+<!-- sparkle-signatures:
+edSignature: 08XKjVvn5yhLOpxuB9HfVLjKYCQ6W+Mz7uvtcrnpX5gQVENmbVZUewrs87mGtFO3zIr6YL/uZnSfVp5fiUrXCA==
+length: 3050
 -->
