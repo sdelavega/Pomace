@@ -8,54 +8,67 @@ import PomaceCore
 /// a single click: it opens a confirmation naming the exact file count (SAFETY.md §4 rule 2).
 struct ActionBar: View {
     @Bindable var model: ScanModel
+    var inlineMode = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Button {
-                    model.startCompress()
-                } label: {
-                    Label("Compress", systemImage: "arrow.down.right.and.arrow.up.left")
+            if inlineMode {
+                HStack(spacing: 12) {
+                    operationButtons
+                    Spacer(minLength: 0)
+                    modePicker
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .fixedSize()
-                .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
-                .help(model.toolReady
-                      ? "Compress \(Fmt.count(model.compressibleCount, "eligible file"))"
-                      : "\(CompressorTool.displayName) isn't available")
-
-                Button {
-                    model.requestDecompress()
-                } label: {
-                    Label("Decompress", systemImage: "arrow.up.left.and.arrow.down.right")
-                }
-                .controlSize(.large)
-                .fixedSize()
-                .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
-
-                Picker("Mode", selection: $model.mode) {
-                    ForEach(CompressionMode.allCases) { m in
-                        Text(m.rawValue).tag(m)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                // Flexible, not fixed: a fixed width squeezed the buttons until SwiftUI dropped
-                // their labels down to bare icons when the inspector opened.
-                .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
-                .layoutPriority(-1)
-                .disabled(model.isRunning)
-                .help(model.mode.explanation)
+            } else {
+                HStack(spacing: 10) { operationButtons }
+                modePicker
             }
             if model.administratorAvailable {
                 Toggle("Use administrator privileges", isOn: $model.useAdministratorPrivileges)
                     .toggleStyle(.checkbox)
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .disabled(model.isRunning || model.isSweeping)
                     .help("Authorize compression or decompression of protected Homebrew and application files. macOS handles authentication.")
             }
         }
+    }
+
+    @ViewBuilder
+    private var operationButtons: some View {
+        Button {
+            model.startCompress()
+        } label: {
+            Label("Compress", systemImage: "arrow.down.right.and.arrow.up.left")
+        }
+        .buttonStyle(AetherPrimaryButtonStyle())
+        .controlSize(.large)
+        .fixedSize()
+        .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
+        .help(model.toolReady
+              ? "Compress \(Fmt.count(model.compressibleCount, "eligible file"))"
+              : "\(CompressorTool.displayName) isn't available")
+
+        Button {
+            model.requestDecompress()
+        } label: {
+            Label("Decompress", systemImage: "arrow.up.left.and.arrow.down.right")
+        }
+        .controlSize(.large)
+        .fixedSize()
+        .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
+    }
+
+    private var modePicker: some View {
+        Picker("Mode", selection: $model.mode) {
+            ForEach(CompressionMode.allCases) { m in
+                Text(m.rawValue).tag(m)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        // Keep the mode control on its own row so both operation labels remain visible.
+        .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
+        .disabled(model.isRunning)
+        .help(model.mode.explanation)
     }
 }
 
@@ -83,19 +96,19 @@ struct RunBanner: View {
                     .progressViewStyle(.linear)
                 if model.isStopping {
                     Text("Waiting for the active batch to finish safely. No further batches will start.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 12)).foregroundStyle(Aether.muted)
                 }
                 if let p = progress.currentPath {
-                    Text("Current batch starts with: \(p)").font(.caption2).foregroundStyle(.secondary)
+                    Text("Current batch starts with: \(p)").font(.system(size: 12)).foregroundStyle(Aether.muted)
                         .lineLimit(1).truncationMode(.middle)
                 }
                 if progress.failures > 0 {
                     Text("\(Fmt.count(progress.failures, "file")) couldn't be processed — details when this finishes")
-                        .font(.caption).foregroundStyle(.orange)
+                        .font(.system(size: 12)).foregroundStyle(.orange)
                 }
             }
             .padding(12)
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+            .background(Aether.well.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
 
         case .finished(let outcome):
             OutcomeBanner(outcome: outcome) { model.dismissRunResult() }
@@ -105,7 +118,7 @@ struct RunBanner: View {
                 .font(.callout)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                .background(Aether.well.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
         }
     }
 }
@@ -121,7 +134,7 @@ private struct OutcomeBanner: View {
                 Image(systemName: icon).foregroundStyle(tint).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline).font(.callout.weight(.medium))
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                    Text(detail).font(.system(size: 12)).foregroundStyle(Aether.muted)
                 }
                 Spacer()
                 if !outcome.failures.isEmpty {
@@ -144,12 +157,12 @@ private struct OutcomeBanner: View {
                                 Image(systemName: f.kind == .failed
                                       ? "exclamationmark.triangle.fill" : "minus.circle")
                                     .foregroundStyle(f.kind == .failed ? .orange : .secondary)
-                                    .font(.caption2)
+                                    .font(.system(size: 12))
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text((f.path as NSString).lastPathComponent)
-                                        .font(.caption.weight(.medium))
-                                    Text(f.message).font(.caption2).foregroundStyle(.secondary)
-                                    Text(f.remedy).font(.caption2).foregroundStyle(.tertiary)
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text(f.message).font(.system(size: 12)).foregroundStyle(Aether.muted)
+                                    Text(f.remedy).font(.system(size: 12)).foregroundStyle(Aether.muted)
                                 }
                             }
                         }
@@ -160,7 +173,7 @@ private struct OutcomeBanner: View {
             }
         }
         .padding(12)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        .background(Aether.well.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var icon: String {

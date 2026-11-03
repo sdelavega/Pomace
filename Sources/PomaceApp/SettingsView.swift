@@ -21,6 +21,8 @@ struct AdvancedSettingsView: View {
                         Divider()
                     }
                 }
+                .aetherSurface()
+                .padding(16)
             }
             Divider()
             footer
@@ -31,16 +33,18 @@ struct AdvancedSettingsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Compression Settings").font(.headline)
+            AetherBadge(text: "POMACE // PREFERENCES")
+            Text("Compression Settings").font(.system(size: 22, weight: .semibold))
+                .tracking(-0.33)
             Text("Pomace chooses these for you. Everything below shows what it picked and why.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.system(size: 12)).foregroundStyle(Aether.muted)
 
             Picker("Mode", selection: $model.mode) {
                 ForEach(CompressionMode.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            Text(model.mode.explanation).font(.caption).foregroundStyle(.secondary)
+            Text(model.mode.explanation).font(.system(size: 12)).foregroundStyle(Aether.muted)
         }
         .padding(16)
     }
@@ -48,9 +52,9 @@ struct AdvancedSettingsView: View {
     private var footer: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
-                Text(model.toolSummary).font(.caption)
+                Text(model.toolSummary).font(.system(size: 12))
                 if let i = model.installation {
-                    Text(i.path).font(.caption2).foregroundStyle(.tertiary)
+                    Text(i.path).font(.system(size: 12, design: .monospaced)).foregroundStyle(Aether.muted)
                         .lineLimit(1).truncationMode(.middle)
                 }
             }
@@ -82,21 +86,15 @@ private struct JustificationRow: View {
                         .font(.callout.weight(.medium))
                         .monospacedDigit()
                     if justification.isFixed {
-                        Text("Always")
-                            .font(.caption2)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(.quaternary, in: Capsule())
+                        AetherBadge(text: "Always")
                     }
                     if justification.isOverridden {
-                        Text("Overridden")
-                            .font(.caption2)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(.tint.opacity(0.2), in: Capsule())
+                        AetherBadge(text: "Overridden")
                     }
                 }
                 Text(justification.reason)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Aether.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
@@ -115,7 +113,10 @@ struct InstallToolView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: "shippingbox").font(.system(size: 36)).foregroundStyle(.secondary)
+            AetherBadge(text: "COMPRESSOR SETUP")
+            Image(systemName: "shippingbox").font(.system(size: 36, weight: .light))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Aether.accent)
             Text("Pomace needs \(CompressorTool.displayName)").font(.headline)
             Text("""
                  \(CompressorTool.displayName) is the tool that actually applies compression. \
@@ -123,43 +124,45 @@ struct InstallToolView: View {
                  """)
                 .font(.callout)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Aether.muted)
                 .frame(maxWidth: 420)
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("About to install").font(.caption.weight(.medium))
                     Text("applesauce, by Zachary Dremann")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 12)).foregroundStyle(Aether.muted)
                     Text("Licensed GPL-3.0 — separate software, not part of Pomace")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 12)).foregroundStyle(Aether.muted)
                     Text("Installed via: brew install \(ToolInstaller.homebrewFormula)")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        .font(Aether.metadata)
+                        .foregroundStyle(Aether.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: 420)
 
             if let message {
-                Text(message).font(.caption).foregroundStyle(.secondary)
+                Text(message).font(.system(size: 12)).foregroundStyle(Aether.muted)
                     .frame(maxWidth: 420)
             }
 
             HStack {
                 Button("Install with Homebrew") { install() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(AetherPrimaryButtonStyle())
                     .disabled(installing || !ToolInstaller.homebrewAvailable)
                 Button("Check Again") { model.refreshInstallation() }
                     .disabled(installing)
             }
             if !ToolInstaller.homebrewAvailable {
                 Text("Homebrew isn't installed, so Pomace can't install \(CompressorTool.displayName) automatically.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
             }
             if installing { ProgressView().controlSize(.small) }
         }
         .padding(28)
+        .aetherSurface()
+        .padding(24)
     }
 
     private func install() {

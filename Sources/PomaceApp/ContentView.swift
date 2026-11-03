@@ -9,13 +9,18 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             Sidebar(model: model)
+                .background { AetherChrome() }
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             Detail(model: model)
                 .inspector(isPresented: $model.showingInspector) {
                     InspectorView(model: model)
+                        .aetherTheme()
                 }
         }
+        .aetherTheme()
+        .toolbarBackground(Aether.canvas, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
         .navigationTitle("Pomace")
         .confirmationDialog(
             "Decompress \(Fmt.count(model.compressedCount, "file"))?",
@@ -45,6 +50,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $model.showingSettings) {
             AdvancedSettingsView(model: model)
+                .aetherTheme()
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { model.showingSettings = false }
@@ -53,6 +59,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $model.showingOnboarding) {
             OnboardingView(onContinue: model.dismissOnboarding)
+                .aetherTheme()
         }
     }
 }
@@ -62,9 +69,13 @@ private struct OnboardingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            AetherBadge(text: "POMACE // GET STARTED")
             Image(systemName: "internaldrive")
                 .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.tint)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Aether.accent)
+                .padding(16)
+                .background(Aether.well, in: RoundedRectangle(cornerRadius: 12))
                 .accessibilityHidden(true)
             Text(AppStrings.onboardingTitle).font(.system(.title, weight: .semibold))
             Text(AppStrings.onboardingBody)
@@ -73,7 +84,7 @@ private struct OnboardingView: View {
             HStack {
                 Spacer()
                 Button(AppStrings.onboardingGetStarted, action: onContinue)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(AetherPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -108,6 +119,25 @@ private struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: "internaldrive")
+                        .font(.system(size: 22, weight: .light))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Aether.accent)
+                    Text("Pomace")
+                        .font(.system(size: 22, weight: .semibold))
+                        .tracking(-0.33)
+                }
+                Text("APFS / HFS+ COMPRESSION")
+                    .font(Aether.metadata)
+                    .foregroundStyle(Aether.muted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
+        }
         .onDrop(of: [.fileURL], isTargeted: $isDropTarget, perform: model.addDroppedFolders)
         .overlay {
             if model.watchedPaths.isEmpty {
@@ -132,8 +162,8 @@ private struct Sidebar: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text((path as NSString).lastPathComponent)
                 Text(model.scheduleSummary(for: path))
-                    .font(.caption)
-                    .foregroundStyle(model.isScheduled(path) ? .secondary : .tertiary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Aether.muted)
                     .lineLimit(1)
             }
         } icon: {
@@ -178,7 +208,7 @@ private struct Detail: View {
                     VStack(spacing: 0) {
                         if model.showingRecentScan {
                             Text("Showing a recent scan. Rescan to check for changes.")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
                                 .padding(.top, 8)
                         }
                         ResultView(model: model, result: result)
@@ -188,6 +218,8 @@ private struct Detail: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { AetherCanvas() }
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button("Settings", systemImage: "slider.horizontal.3") {
@@ -223,6 +255,7 @@ private struct ScanningView: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            AetherBadge(text: "READ-ONLY SCAN")
             ProgressView()
                 .controlSize(.large)
             if reduceMotion {
@@ -232,7 +265,7 @@ private struct ScanningView: View {
             }
             if let path = progress.currentPath {
                 Text(path)
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -242,7 +275,7 @@ private struct ScanningView: View {
                 .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(reduceMotion ? nil : .default, value: progress.filesSeen)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: progress.filesSeen)
     }
 
     private var progressText: some View {
