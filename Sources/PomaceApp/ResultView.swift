@@ -44,14 +44,14 @@ struct ScanOverview: View {
     private var compact: Bool { availableSize.width < 640 || availableSize.height < 620 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 10 : 14) {
+        VStack(alignment: .leading, spacing: compact ? 8 : 14) {
             SummaryHeader(result: result, columns: availableSize.width < 640 ? 2 : 4,
                           compact: compact)
             Divider()
             ActionBar(model: model, inlineMode: availableSize.width >= 640)
             RunBanner(model: model)
         }
-        .padding(compact ? 12 : 16)
+        .padding(compact ? 10 : 16)
         .aetherSurface()
     }
 }

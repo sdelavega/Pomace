@@ -14,7 +14,7 @@ struct SummaryLayoutTests {
                      CGSize(width: 388, height: 508), CGSize(width: 300, height: 508)]
         for size in sizes {
             for administrator in [false, true] {
-                let model = ScanModel(store: nil, installation: nil)
+                let model = ScanModel(store: nil)
                 var result = ScanResult()
                 result.root = administrator ? "/Applications" : "/tmp/PomaceLayout"
                 result.progress.filesSeen = 259_410

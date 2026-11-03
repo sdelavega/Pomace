@@ -29,7 +29,8 @@ release/release.sh 1.1.0
 ```
 
 Real mode requires a clean tree, runs `scripts/gate.sh`, builds the universal app with
-Developer ID signing, and checks the bundle. It creates a UDZO disk image with an
+Developer ID signing, and checks the bundle. It notarizes, staples, and validates the app
+before packaging, so the installed app retains its own ticket. It creates a UDZO disk image with an
 Applications shortcut, signs and notarizes it using `Pomace Notary` (or `POMACE_NOTARY_PROFILE`), staples and
 validates it, then assesses the DMG and mounted app with Gatekeeper. Mounts are inside
 an ignored temporary directory and are detached on exit.

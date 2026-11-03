@@ -55,6 +55,15 @@ fi
 prepare_tools
 POMACE_VERSION="$VERSION" POMACE_SIGN_ID="$IDENTITY" POMACE_SIGN_ADHOC="$DRY_RUN" ./build-app.sh release
 scripts/check-bundle.sh --universal build/Pomace.app
+# Staple the application before packaging so it keeps its ticket after installation,
+# including when it is copied out of the DMG and opened without a network connection.
+if [ "$DRY_RUN" != 1 ]; then
+  ditto -c -k --keepParent build/Pomace.app "$WORK/Pomace-notarization.zip"
+  xcrun notarytool submit "$WORK/Pomace-notarization.zip" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple build/Pomace.app
+  xcrun stapler validate build/Pomace.app
+  spctl -a -t exec build/Pomace.app
+fi
 mkdir -p "$WORK/image" "$WORK/feed"
 ditto build/Pomace.app "$WORK/image/Pomace.app"
 if [ "$DRY_RUN" = 1 ]; then
