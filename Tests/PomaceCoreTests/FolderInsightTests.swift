@@ -108,13 +108,16 @@ struct SavingsEstimatorTests {
         let installation = ToolInstallation(source: .custom("/nonexistent/applesauce"),
                                             capabilities: capabilities, sha256: nil)
         let invoked = LockedPaths()
-        let estimate = try #require(SavingsEstimator.estimate(
+        // Called outside #require: the macro re-wraps arguments and loses the closure's
+        // @Sendable annotation under Swift 6.
+        let result = SavingsEstimator.estimate(
             candidates: [SampleCandidate(path: file.path, size: size)], eligibleBytes: size * 10,
             root: dir.path, installation: installation,
-            runCompressor: { _, arguments in
+            runCompressor: { @Sendable _, arguments in
                 invoked.add(arguments)
                 return Subprocess.Output(stdout: "", stderr: "", code: 0)
-            }))
+            })
+        let estimate = try #require(result)
         // A compressor that does nothing saves nothing, with either algorithm.
         #expect(estimate.measurements.map(\.compressor) == ["lzfse", "zlib"])
         #expect(estimate.recommendedReclaim == 0)
