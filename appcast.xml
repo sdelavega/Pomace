@@ -6,6 +6,26 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Pomace</title>
         <item>
+            <title>1.1.2</title>
+            <pubDate>Wed, 04 Nov 2026 18:55:30 -0500</pubDate>
+            <sparkle:version>10102</sparkle:version>
+            <sparkle:shortVersionString>1.1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h1>Pomace 1.1.2</h1>
+<p>Pomace adds per-folder insight: savings estimates, exclusions, and re-expansion reporting.</p>
+<ul>
+<li>Each watched folder now shows an estimate of the space compression would reclaim, sampled from real temporary copies so the estimate reflects your files and your chosen compressor.</li>
+<li>Folders can exclude files and subfolders by name pattern; excluded paths are skipped by scans and sweeps and labeled in the file table.</li>
+<li>A degradation indicator shows how much a folder has drifted since its last compression, so you can see when a re-compression is worthwhile.</li>
+<li>A re-expansion report attributes space reclaimed by decompression to your manual and scheduled actions.</li>
+<li>Scan history is pruned at launch and per folder, keeping the most recent runs for watched folders and dropping records for folders you no longer watch.</li>
+<li>Fixed scan cancellation, truncated runs, sweep scheduling and accounting bugs; improved schedule drift tolerance, error reporting, and accessibility labels for the exclusion field and existing controls.</li>
+</ul>
+<p>Supports Apple silicon and Intel Macs running macOS 14 or later.</p>
+]]></description>
+            <enclosure url="https://github.com/sdelavega/Pomace/releases/download/v1.1.2/Pomace-1.1.2.dmg" length="8724909" type="application/octet-stream" sparkle:edSignature="RUje75650fcu8jtEP52meNU/lE0d2X7zskb+w3iV7hrfevDApRwZyMtrAYigvDOlEdO7MAmazJOerwVLCCQSBQ=="/>
+        </item>
+        <item>
             <title>1.1.1</title>
             <pubDate>Tue, 03 Nov 2026 14:51:45 -0500</pubDate>
             <sparkle:version>10101</sparkle:version>
@@ -44,6 +64,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: 08XKjVvn5yhLOpxuB9HfVLjKYCQ6W+Mz7uvtcrnpX5gQVENmbVZUewrs87mGtFO3zIr6YL/uZnSfVp5fiUrXCA==
-length: 3050
+edSignature: Ta4Uusiwl9bfWdrPJpXlKlQCxtlFEORF54i9siloBR9kKgHjEk9doXwW3szixvwBsKMBCvXm/2q/IVHnzcZzDQ==
+length: 4877
 -->
