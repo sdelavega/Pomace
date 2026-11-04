@@ -81,6 +81,7 @@ struct ActionBar: View {
             } label: {
                 Label(AppStrings.decompress, systemImage: "arrow.up.left.and.arrow.down.right")
             }
+            .buttonStyle(AetherSecondaryButtonStyle())
             .controlSize(.large)
             .fixedSize()
             .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning || model.isPreparingRun)
@@ -117,6 +118,7 @@ struct RunBanner: View {
                         .font(.callout).monospacedDigit()
                     Spacer()
                     Button(model.isStopping ? AppStrings.stopping : AppStrings.stop) { model.cancelRun() }
+                        .buttonStyle(AetherSecondaryButtonStyle())
                         .controlSize(.small)
                         .disabled(model.isStopping)
                 }
@@ -134,7 +136,7 @@ struct RunBanner: View {
                 }
                 if progress.failures > 0 {
                     Text(AppStrings.processingFailures(progress.failures))
-                        .font(.system(size: 12)).foregroundStyle(.orange)
+                        .font(.system(size: 12)).foregroundStyle(Aether.warning)
                 }
             }
             .padding(12)
@@ -171,9 +173,10 @@ private struct OutcomeBanner: View {
                     Button(showingFailures ? AppStrings.hideDetails : AppStrings.showDetails) {
                         showingFailures.toggle()
                     }
+                    .buttonStyle(AetherSecondaryButtonStyle())
                     .controlSize(.small)
                 }
-                Button(AppStrings.done, action: onDismiss).controlSize(.small)
+                Button(AppStrings.done, action: onDismiss).buttonStyle(AetherSecondaryButtonStyle()).controlSize(.small)
             }
 
             if showingFailures {
@@ -186,7 +189,7 @@ private struct OutcomeBanner: View {
                             HStack(alignment: .top, spacing: 6) {
                                 Image(systemName: f.kind == .failed
                                       ? "exclamationmark.triangle.fill" : "minus.circle")
-                                    .foregroundStyle(f.kind == .failed ? .orange : .secondary)
+                                    .foregroundStyle(f.kind == .failed ? Aether.warning : Aether.muted)
                                     .font(.system(size: 12))
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text((f.path as NSString).lastPathComponent)
@@ -211,8 +214,8 @@ private struct OutcomeBanner: View {
         return outcome.realFailures.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
     }
     private var tint: Color {
-        if outcome.wasCancelled { return .secondary }
-        return outcome.realFailures.isEmpty ? .green : .orange
+        if outcome.wasCancelled { return Aether.muted }
+        return outcome.realFailures.isEmpty ? Aether.success : Aether.warning
     }
 
     private var headline: String {

@@ -244,7 +244,7 @@ struct InspectorView: View {
                     .controlSize(.small)
             }
             if let error = model.serviceError {
-                Text(error).font(.system(size: 12)).foregroundStyle(.orange)
+                Text(error).font(.system(size: 12)).foregroundStyle(Aether.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
 

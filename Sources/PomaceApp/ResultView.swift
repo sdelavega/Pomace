@@ -297,7 +297,7 @@ private struct StateCell: View {
                 Text(warning.text).lineLimit(1).truncationMode(.tail)
                     .help(warning.text)
             } icon: {
-                Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(Aether.warning)
             }
             .font(.system(size: 12))
             .foregroundStyle(Aether.muted)

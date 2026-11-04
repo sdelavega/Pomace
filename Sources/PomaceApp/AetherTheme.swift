@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// Native mapping of Aether7B v1.0, sourced from ../aether7b/tokens/aether7b.tokens.json.
+/// Native mapping of Aether7B v1.1, sourced from ../aether7b/tokens/aether7b.tokens.json.
 /// Content stays opaque; material is reserved for navigation chrome.
 enum Aether {
     static let classic = color(0x7BAFD4)
@@ -16,6 +16,10 @@ enum Aether {
     static let muted = adaptive(light: 0x4A6583, dark: 0x8CA7C0)
     static let border = adaptive(light: 0x13294B, dark: 0x7BAFD4, lightAlpha: 0.12, darkAlpha: 0.22)
     static let specular = adaptive(light: 0xFFFFFF, dark: 0xFFFFFF, lightAlpha: 0.95, darkAlpha: 0.16)
+    static let borderStrong = adaptive(light: 0x13294B, dark: 0x7BAFD4, lightAlpha: 0.55, darkAlpha: 0.55)
+    static let warning = adaptive(light: 0xB45309, dark: 0xF59E0B)
+    static let danger = adaptive(light: 0xB91C1C, dark: 0xEF4444)
+    static let success = adaptive(light: 0x047857, dark: 0x10B981)
     static let metadata = Font.system(size: 12, design: .monospaced)
 
     private static func color(_ hex: UInt32) -> Color {
@@ -45,7 +49,7 @@ struct AetherCanvas: View {
             .overlay {
                 if !reduceTransparency {
                     RadialGradient(colors: [Aether.web.opacity(0.14), .clear],
-                                   center: .topTrailing, startRadius: 0, endRadius: 600)
+                                   center: UnitPoint(x: 0.1, y: 0), startRadius: 0, endRadius: 520)
                 }
             }
             .ignoresSafeArea()
@@ -64,13 +68,6 @@ private struct AetherSurface: ViewModifier {
                     .strokeBorder(contrast == .increased ? Aether.muted : Aether.border, lineWidth: 1)
                     .allowsHitTesting(false)
             }
-            .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Aether.specular)
-                    .frame(height: 1)
-                    .padding(.horizontal, 12)
-                    .allowsHitTesting(false)
-            }
     }
 }
 
@@ -86,6 +83,7 @@ struct AetherChrome: View {
                     .overlay(Aether.navy.opacity(0.05))
             }
         }
+        .overlay(alignment: .top) { Rectangle().fill(Aether.specular).frame(height: 1) }
         .accessibilityHidden(true)
     }
 }
@@ -100,7 +98,7 @@ struct AetherBadge: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(Aether.classic.opacity(0.15), in: Capsule())
-            .overlay(Capsule().strokeBorder(Aether.accent.opacity(0.3), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(Aether.borderStrong, lineWidth: 1))
     }
 }
 
@@ -148,5 +146,20 @@ extension View {
             .foregroundStyle(Aether.text, Aether.muted)
             .font(.system(size: 13))
             .background { AetherCanvas() }
+    }
+}
+
+struct AetherSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.isFocused) private var focused
+    @Environment(\.colorSchemeContrast) private var contrast
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(enabled ? Aether.text : Aether.muted)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(configuration.isPressed ? Aether.well : Aether.card, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(
+                focused ? Aether.accent : (contrast == .increased ? Aether.muted : Aether.borderStrong),
+                lineWidth: focused ? 2 : 1))
     }
 }
