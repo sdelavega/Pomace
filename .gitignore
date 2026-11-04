@@ -42,3 +42,20 @@ dist/
 # Built spike artifacts — regenerate with spikes/tcc/build.sh
 spikes/tcc/*.app/
 build/
+
+# Gortex (code intelligence)
+/.gortex/
+/.claude/
+/.agents/
+/.gemini/
+/.kiro/
+/.opencode/
+/.github/skills/
+/.github/copilot-instructions.md
+/.mcp.json
+/.windsurfrules
+/.rules
+/CLAUDE.md
+/AGENTS.md
+/GEMINI.md
+/opencode.json
