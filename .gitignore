@@ -41,7 +41,6 @@ dist/
 
 # Built spike artifacts — regenerate with spikes/tcc/build.sh
 spikes/tcc/*.app/
-build/
 
 # Gortex (code intelligence)
 /.gortex/
@@ -59,3 +58,6 @@ build/
 /AGENTS.md
 /GEMINI.md
 /opencode.json
+
+# Python
+__pycache__/

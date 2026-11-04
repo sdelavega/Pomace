@@ -1,6 +1,6 @@
 // Vendored from https://github.com/Dr-Emann/applesauce, tag applesauce-cli-v0.5.30,
 // crates/applesauce-cli/src/main.rs; licensed GPL-3.0-or-later.
-// Tesserae: a disk-space visualizer.
+// Pomace: transparent filesystem compression for macOS.
 // Copyright (C) 2026 Stephen de la Vega
 //
 // This program is free software: you can redistribute it and/or modify

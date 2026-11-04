@@ -1,7 +1,7 @@
 # M0 Spike — Findings
 
 **Run:** 2026-08-26 · MacBook Air M5 (4P + 6E), 24 GB, macOS 27, APFS · afsctool 1.7.3
-**Harness:** `Sources/pomace-spike`, `spikes/` · **Tests:** 18 passing in `Tests/PomaceCoreTests`
+**Harness:** `Sources/pomace-spike`, `spikes/` (the afsctool benchmark scripts were removed after ADR-0015; see git history) · **Tests:** 18 passing in `Tests/PomaceCoreTests`
 
 Verdict: **the architecture survives, with four corrections.** Three were bugs in my own
 design, one is a genuine data hazard that was previously only suspected.

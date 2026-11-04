@@ -2,8 +2,9 @@
 
 Pomace's separate binary crate packages the GPL-3.0-or-later CLI from
 [Dr-Emann/applesauce, applesauce-cli-v0.5.30](https://github.com/Dr-Emann/applesauce/releases/tag/applesauce-cli-v0.5.30).
-`src/main.rs` and `src/progress.rs` are copied unchanged from Tesserae's wrapper:
-verbatim upstream files with provenance and GPL notices prepended. The package
+`src/main.rs` and `src/progress.rs` are verbatim upstream files with provenance and
+GPL notices prepended (originally prepared for Tesserae's wrapper; only the notice's
+project line differs). The package
 is named `pomace-applesauce`; the executable remains `applesauce`. Consequently
 `--version` prints `pomace-applesauce 0.5.30`.
 
