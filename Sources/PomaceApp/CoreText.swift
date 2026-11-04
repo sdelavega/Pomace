@@ -30,6 +30,8 @@ extension SafetyReason {
             NSLocalizedString("core.safetyReason.appStoreApplication", tableName: "Localizable", bundle: .module, value: "Mac App Store application — leave the store-managed bundle unchanged", comment: "Safety exclusion")
         case .adobeApplication:
             NSLocalizedString("core.safetyReason.adobeApplication", tableName: "Localizable", bundle: .module, value: "Adobe application — excluded because its installation components perform integrity checks", comment: "Safety exclusion")
+        case .userExcluded(let pattern):
+            String(format: NSLocalizedString("core.safetyReason.userExcluded", tableName: "Localizable", bundle: .module, value: "Matches your exclusion “%@”", comment: "Exclusion the user added for this folder; placeholder is the name or pattern they typed, such as node_modules or *.log."), pattern)
         case .applicationBundle:
             NSLocalizedString("core.safetyReason.applicationBundle", tableName: "Localizable", bundle: .module, value: "Application bundle — generally safe, and signatures still validate, but worth verifying the app afterwards", comment: "Safety advisory")
         case .hardLinked(let count):

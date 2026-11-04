@@ -25,14 +25,13 @@ public struct SweepRunner: Sendable {
 
     let store: Store
     let log: MutationLog
-    let rules: SafetyRules
 
-    public init(store: Store, log: MutationLog = MutationLog(), rules: SafetyRules = SafetyRules(),
+    /// Safety rules are per folder (`Store.WatchedDirectory.rules`), so none are injected here.
+    public init(store: Store, log: MutationLog = MutationLog(),
                 lockURL: URL = SweepLock.defaultURL,
                 checkPreconditions: @escaping @Sendable (String) -> SweepDeferral? = { SweepPreconditions.check(root: $0) }) {
         self.store = store
         self.log = log
-        self.rules = rules
         self.lockURL = lockURL
         self.checkPreconditions = checkPreconditions
     }
@@ -68,6 +67,8 @@ public struct SweepRunner: Sendable {
             guard force || dir.schedule.isDue(lastRun: lastRun, now: now) else { continue }
             reports.append(await sweepUnlocked(dir, installation: installation, lastRun: lastRun, now: now))
         }
+        // Each wake may add a deferral row; keep history bounded (see `Store.prune`).
+        do { try store.prune(now: now) } catch { log.note("history pruning failed: \(error)") }
         return reports
     }
 
@@ -114,6 +115,8 @@ public struct SweepRunner: Sendable {
 
         // One statfs per sweep, not one per file.
         let volume = VolumeContext.probe(path: dir.path)
+        // The folder's own exclusions apply on top of the built-in rules.
+        let rules = dir.rules
         var candidates: [String] = []
         _ = DirectoryWalker.walkFTS(dir.path) { facts in
             guard facts.isRegularFile, !facts.isCompressed else { return }
@@ -142,6 +145,7 @@ public struct SweepRunner: Sendable {
         let plan = CompressionPolicy.plan(
             mode: dir.mode,
             conditions: RuntimeConditions.current(volumePath: dir.path),
+            measuredCompressor: dir.measuredCompressor,
             capabilities: installation.capabilities)
 
         for await event in CompressionEngine.run(operation: .compress, paths: candidates,

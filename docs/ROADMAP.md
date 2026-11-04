@@ -1,6 +1,6 @@
 # Pomace — Roadmap
 
-**Status:** 1.1 implementation complete; manual release checks pending · **Last updated:** 2026-10-23
+**Status:** 1.1 implementation complete; manual release checks pending; 1.2 folder insights implemented · **Last updated:** 2026-11-04
 
 M0–M5 record the original milestones. The 1.1 checklist separates implemented release
 tooling from the manual checks still required before publishing. Engine work moves to 1.2.
@@ -121,17 +121,37 @@ these manual checks. See [release/README.md](../release/README.md) for release a
 
 ## 1.2 — Smarter compression
 
-- [ ] Sampling-estimator accuracy check: compare predicted and actual savings; redesign
-      if error exceeds ±15% before presenting an estimate
-- [ ] Per-directory compressor measurement ([ADR-0010](DECISIONS.md#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default))
-- [ ] FSEvents-driven sweeps (compress on arrival, not just on schedule)
+- [x] Savings estimate from a size-weighted sample compressed on temporary copies
+      ([ADR-0018](DECISIONS.md#adr-0018-folder-insights--estimates-exclusions-re-expansion-and-retention))
+- [ ] Sampling-estimator accuracy check: compare predicted and actual savings across varied
+      corpora; redesign if error exceeds ±15%. Until then the UI labels it an estimate and
+      the mutation log records each estimate next to the runs it can be checked against
+- [x] Per-directory compressor measurement ([ADR-0010](DECISIONS.md#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default)),
+      stored per folder and used by Automatic mode
+- [x] Per-folder exclusions (name patterns such as `node_modules` or `*.log`)
+- [x] Re-expansion report and manual-schedule suggestion
+- [x] History pruning and mutation-log rotation
 - [ ] Re-run tuning benchmarks with cold cache, repeated runs, varied corpora, external
       media and Intel; see [DEFAULTS.md §6](DEFAULTS.md#6-what-m0-must-re-measure)
+
+## Future exploration
+
+Promising, but each needs design work before it is scheduled.
+
+- **Compress on arrival.** Watch scheduled folders with FSEvents and compress new or
+  rewritten files after a quiet period, rather than waiting for the hourly wake. Open
+  questions: debouncing files that are still being written, keeping the agent resident
+  versus `WatchPaths`, the cost on busy folders (which the re-expansion report would
+  flag), and keeping the same power, thermal and Time Machine deferrals.
+- **Scriptability.** A `pomace` command-line front end (scan, estimate, compress, status)
+  and Shortcuts/App Intents actions over `PomaceCore`, sharing the sweep lock and mutation
+  log. Open questions: shipping the CLI inside the bundle (one TCC identity, ADR-0006)
+  versus a symlinked helper, machine-readable output, and keeping administrator access
+  out of non-interactive use.
 
 ## Deferred beyond 1.1
 
 - Archive mode (`afsctool -a`/`-x`)
 - Multi-volume management, external drive awareness
-- Per-file-type compression policies
-- Scriptability — `NSUserActivity`, Shortcuts actions, a `pomace` CLI
+- Per-file-type compression policies (choosing a compressor by type; exclusions shipped in 1.2)
 - Advanced policy overrides and `-b` backup on first run

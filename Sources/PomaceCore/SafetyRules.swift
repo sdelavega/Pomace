@@ -18,6 +18,8 @@ public enum SafetyReason: Sendable, Equatable {
     case notRegularFile
     case appStoreApplication
     case adobeApplication
+    /// The user excluded files matching this pattern for the folder. See `userExclusions`.
+    case userExcluded(String)
 
     // Advisory — allowed, but the user is told first.
     case applicationBundle
@@ -45,7 +47,53 @@ public enum ByteFormat {
 
 public struct SafetyRules: Sendable {
 
-    public init() {}
+    /// Per-folder name patterns the user chose to leave alone, such as `node_modules` or
+    /// `*.log`. Each is matched case-insensitively with shell wildcards against every path
+    /// component below `root`, so a pattern names a file or a folder (and everything in
+    /// it) wherever it appears. Exclusions only ever add to the built-in rules: there is
+    /// deliberately no way to force a file past a safety exclusion.
+    public let userExclusions: [String]
+    /// The folder the exclusions belong to. Components above it are never matched.
+    public let root: String?
+
+    public init(userExclusions: [String] = [], root: String? = nil) {
+        self.userExclusions = userExclusions.compactMap(Self.normalizedExclusion)
+        self.root = root
+        if let root {
+            canonicalRoot = URL(fileURLWithPath: root).resolvingSymlinksInPath().standardized.path
+        } else {
+            canonicalRoot = nil
+        }
+    }
+
+    private let canonicalRoot: String?
+
+    /// Cleans up a typed pattern, or returns nil when it cannot name a path component.
+    /// Leading and trailing slashes are dropped so `node_modules/` works as people expect.
+    public static func normalizedExclusion(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.contains("\n"),
+              trimmed != ".", trimmed != ".." else { return nil }
+        return trimmed
+    }
+
+    /// The first exclusion matching a component of `path` below the root, if any.
+    public func matchingExclusion(_ path: String) -> String? {
+        guard !userExclusions.isEmpty else { return nil }
+        var relative = Substring(path)
+        for base in [root, canonicalRoot].compactMap({ $0 }) where path.hasPrefix(base + "/") {
+            relative = path.dropFirst(base.count + 1)
+            break
+        }
+        let components = relative.split(separator: "/").map(String.init)
+        for pattern in userExclusions {
+            for component in components where fnmatch(pattern, component, FNM_CASEFOLD) == 0 {
+                return pattern
+            }
+        }
+        return nil
+    }
 
     static let systemPrefixes = ["/System", "/bin", "/sbin", "/private/var/db"]
     static let usrExempt = "/usr/local"
@@ -101,6 +149,7 @@ public struct SafetyRules: Sendable {
         if f.logicalSize == 0 { return reasons + [.zeroLength] }
 
         let path = f.path
+        if let pattern = matchingExclusion(path) { reasons.append(.userExcluded(pattern)) }
         if Self.systemPrefixes.contains(where: { Self.isWithin(path, $0) })
             || (Self.isWithin(path, "/usr") && !Self.isWithin(path, Self.usrExempt)) {
             reasons.append(.systemPath)

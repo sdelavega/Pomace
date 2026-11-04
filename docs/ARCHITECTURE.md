@@ -160,9 +160,27 @@ with real file locks, without installing or terminating the app.
 ## 6. Persistence and permissions
 
 `Store` uses the SQLite C API with WAL mode, foreign keys, a serial queue and a busy
-timeout for GUI/agent access. Schema v2 holds watched directories and schedules,
-aggregate scan snapshots and sweep history. Per-file scan rows are held in memory,
-not persisted. Settings such as the custom compressor path also use UserDefaults.
+timeout for GUI/agent access. Schema v3 holds watched directories with their schedules,
+modes, exclusion patterns and measured compressor; aggregate scan snapshots; sweep
+history; and a record of manual compress/decompress runs. Per-file scan rows are held in
+memory, not persisted. Settings such as the custom compressor path also use UserDefaults.
+
+**Retention (ADR-0018).** `Store.prune` runs at app launch and after every agent wake. It
+deletes history older than a year, keeps at most 500 snapshots and sweep runs per folder,
+and removes rows for folders that are no longer watched; removing a folder also deletes
+its history at once. The newest completed sweep of each folder is always kept because it
+decides whether the next sweep is due and incremental. `MutationLog` rotates
+`mutations.log` to `mutations.1.log` once it reaches 8 MB, when a process opens it;
+diagnostics read the tail across both generations.
+
+**Folder insights (ADR-0018).** `SafetyRules` carries the folder's exclusion patterns,
+so the scan, the engine's mutation-time re-check, full-tree target collection and
+sweeps all apply them. `SavingsEstimator` samples eligible files in proportion to their
+size, copies up to 8 MB of each into an `itemReplacementDirectory` on the same volume,
+runs the resolved compressor on the copies with each algorithm and `--verify`, and
+averages the per-file saved fractions. `ExpansionReport` compares consecutive scan
+snapshots, skipping intervals that contain a manual Decompress and discounting deleted
+files, to report compression lost to rewrites.
 
 ```text
 ~/Library/Application Support/Pomace/

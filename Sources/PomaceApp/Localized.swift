@@ -290,6 +290,51 @@ enum AppStrings {
         String(format: text("inspector.fell", defaultValue: "Coverage fell %@ since the first saved scan · %@", comment: "Trend summary for decreased coverage; magnitude in percentage points then reclaimed-space phrase."), percent, reclaimed)
     }
 
+    // MARK: Savings estimate
+
+    static let estimateTitle = text("estimate.title", defaultValue: "Savings Estimate", comment: "Inspector heading for the sampled savings prediction.")
+    static let estimateAction = text("estimate.action", defaultValue: "Estimate Savings", comment: "Inspector button; measures a sample of the folder's files on temporary copies.")
+    static let estimateRunning = text("estimate.running", defaultValue: "Estimating…", comment: "Progress label while the savings estimate runs.")
+    static let estimateHelp = text("estimate.help", defaultValue: "Compresses temporary copies of a sample of this folder's eligible files with each compressor. Your files are not changed.", comment: "Tooltip for Estimate Savings; reassures that only copies are compressed.")
+    static let estimateUnavailable = text("estimate.unavailable", defaultValue: "Pomace couldn't estimate savings for this folder.", comment: "Shown when the estimate could not sample or measure any files.")
+
+    static func estimateResult(_ bytes: String, _ compressor: String) -> String {
+        String(format: text("estimate.result", defaultValue: "About %@ could be reclaimed with %@", comment: "Estimate headline; formatted disk space, then compressor name such as LZFSE."), bytes, compressor)
+    }
+
+    static func estimateRow(_ compressor: String, _ bytes: String) -> String {
+        String(format: text("estimate.row", defaultValue: "%@: about %@", comment: "One estimate line per compressor; compressor name, then formatted disk space it would reclaim."), compressor, bytes)
+    }
+
+    static func estimateBasis(_ bytes: String) -> String {
+        String(format: text("estimate.basis", defaultValue: "Estimated from %@ of sampled data. Actual savings vary.", comment: "Estimate footnote; formatted size of the sample that was measured."), bytes)
+    }
+
+    static func estimateApplied(_ compressor: String) -> String {
+        String(format: text("estimate.applied", defaultValue: "Automatic mode will use %@ for this folder.", comment: "Estimate note; the measured compressor name that Automatic mode now uses."), compressor)
+    }
+
+    // MARK: Exclusions
+
+    static let exclusionsTitle = text("exclusions.title", defaultValue: "Exclusions", comment: "Inspector heading for per-folder name patterns that Pomace leaves alone.")
+    static let exclusionsHelp = text("exclusions.help", defaultValue: "Pomace leaves files and folders with these names alone, such as node_modules or *.log.", comment: "Explains exclusions; keep node_modules and *.log unchanged as examples.")
+    static let exclusionsPlaceholder = text("exclusions.placeholder", defaultValue: "Name or pattern", comment: "Placeholder in the field for adding an exclusion.")
+    static let exclusionsAdd = text("exclusions.add", defaultValue: "Add", comment: "Button adding the typed exclusion.")
+    static let exclusionsInvalid = text("exclusions.invalid", defaultValue: "Enter a file or folder name, without slashes.", comment: "Validation message when the typed exclusion cannot be used.")
+
+    static func exclusionsRemove(_ pattern: String) -> String {
+        String(format: text("exclusions.remove", defaultValue: "Remove %@", comment: "Accessibility label and tooltip for the button removing one exclusion; placeholder is the pattern."), pattern)
+    }
+
+    // MARK: Re-expansion
+
+    static func expansionSummary(_ bytes: String) -> String {
+        String(format: text("expansion.summary", defaultValue: "About %@ re-expanded between recent scans", comment: "Trend detail; formatted disk space lost because files were rewritten after compression."), bytes)
+    }
+
+    static let expansionSuggestion = text("expansion.suggestion", defaultValue: "Writes keep undoing compression in this folder, so scheduled sweeps spend effort for little lasting gain. A manual schedule may suit it better.", comment: "Suggestion shown when a scheduled folder keeps re-expanding.")
+    static let expansionSwitch = text("expansion.switch", defaultValue: "Switch to Manual", comment: "Button changing this folder's sweep schedule to manual.")
+
     static let notificationHelp = text("notification.open_help", defaultValue: "Open Pomace to see which files were skipped and why.", comment: "Multi-folder failure notification body; directs the user to actionable details in the app.")
 
     static func sweepFailed(_ folder: String) -> String {

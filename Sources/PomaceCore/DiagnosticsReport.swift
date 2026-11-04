@@ -89,7 +89,15 @@ public enum DiagnosticsReport {
 
 /// File locations are supplied explicitly so tests never touch a user's diagnostics.
 public enum DiagnosticsFiles {
+    /// The last `limit` lines, continuing into the rotated generation when the current
+    /// file was started recently and holds fewer than that.
     public static func logLines(at url: URL, limit: Int = 500) -> [String] {
+        let current = tailLines(at: url, limit: limit)
+        guard current.count < limit else { return current }
+        return tailLines(at: MutationLog.rotatedURL(for: url), limit: limit - current.count) + current
+    }
+
+    private static func tailLines(at url: URL, limit: Int) -> [String] {
         guard limit > 0, let handle = try? FileHandle(forReadingFrom: url) else { return [] }
         defer { try? handle.close() }
         guard var offset = try? handle.seekToEnd() else { return [] }

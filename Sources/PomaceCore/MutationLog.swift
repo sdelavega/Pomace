@@ -22,9 +22,31 @@ public final class MutationLog: @unchecked Sendable {
         return dir.appendingPathComponent("mutations.log")
     }
 
-    public init(url: URL? = nil) {
+    /// The log is rotated when it reaches this size: the current file becomes
+    /// `<name>.1.log`, replacing the previous one, so at most about twice this is kept.
+    public static let rotationSize: UInt64 = 8 * 1024 * 1024
+
+    /// Where the previous generation of a log lives after rotation.
+    public static func rotatedURL(for url: URL) -> URL {
+        url.deletingPathExtension().appendingPathExtension("1.log")
+    }
+
+    /// Rotates at open, not mid-write: both the app and every hourly sweep open the log, so
+    /// this runs often enough, and a run's BEGIN/END lines never straddle two files.
+    /// A process that already has the file open keeps appending to the rotated copy until
+    /// it exits, which loses nothing.
+    static func rotateIfNeeded(_ url: URL, limit: UInt64) {
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? UInt64,
+              size >= limit else { return }
+        // rename(2) replaces the old generation atomically; if another process rotated
+        // first this fails harmlessly with ENOENT.
+        _ = rename(url.path, rotatedURL(for: url).path)
+    }
+
+    public init(url: URL? = nil, rotationSize: UInt64 = MutationLog.rotationSize) {
         let target = url ?? Self.defaultURL
         self.url = target
+        Self.rotateIfNeeded(target, limit: rotationSize)
         if !FileManager.default.fileExists(atPath: target.path) {
             FileManager.default.createFile(atPath: target.path, contents: nil)
         }

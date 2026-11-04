@@ -79,6 +79,7 @@ public final class Store: @unchecked Sendable {
             try exec("INSERT INTO schema_version (version) VALUES (1);")
         }
         try migrateToV2()
+        try migrateToV3()
     }
 
     /// M3 adds schedules and sweep history. Columns are added rather than the table
@@ -112,6 +113,24 @@ public final class Store: @unchecked Sendable {
         try exec("UPDATE schema_version SET version = 2;")
     }
 
+    /// 1.2 adds per-folder exclusions, the measured compressor (the `compressor` column has
+    /// existed since v1 but was never written), and a record of manual runs so drift
+    /// analysis can tell a user's Decompress apart from writes re-expanding files.
+    private func migrateToV3() throws {
+        guard try scalarLocked("SELECT COALESCE(MAX(version), 0) FROM schema_version") < 3 else { return }
+        try? exec("ALTER TABLE watched_directory ADD COLUMN exclusions TEXT NOT NULL DEFAULT '';")
+        try exec("""
+        CREATE TABLE IF NOT EXISTS manual_run (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            path        TEXT NOT NULL,
+            started_at  REAL NOT NULL,
+            operation   TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_manual_run_path_time ON manual_run(path, started_at DESC);
+        """)
+        try exec("UPDATE schema_version SET version = 3;")
+    }
+
     // MARK: - Watched directories
 
     @discardableResult
@@ -129,8 +148,16 @@ public final class Store: @unchecked Sendable {
         }
     }
 
+    /// Removing a folder also forgets its history. Sweep runs and manual runs are keyed by
+    /// path rather than by folder id, so they used to outlive the folder and reappear if it
+    /// was added again.
     public func removeWatchedDirectory(path: String) throws {
-        try queue.sync { try run("DELETE FROM watched_directory WHERE path = ?;", [.text(path)]) }
+        try queue.sync {
+            try run("DELETE FROM watched_directory WHERE path = ?;", [.text(path)])
+            try run("DELETE FROM scan_snapshot WHERE path = ?;", [.text(path)])
+            try run("DELETE FROM sweep_run WHERE path = ?;", [.text(path)])
+            try run("DELETE FROM manual_run WHERE path = ?;", [.text(path)])
+        }
     }
 
     public struct WatchedDirectory: Sendable, Identifiable {
@@ -138,30 +165,129 @@ public final class Store: @unchecked Sendable {
         public let path: String
         public var schedule: SweepSchedule
         public var mode: CompressionMode
+        /// Name patterns the user excluded for this folder. See `SafetyRules.userExclusions`.
+        public var exclusions: [String]
+        /// The compressor a savings estimate measured as best here; used by Automatic mode.
+        public var measuredCompressor: String?
 
-        public init(id: Int64, path: String, schedule: SweepSchedule, mode: CompressionMode) {
+        public init(id: Int64, path: String, schedule: SweepSchedule, mode: CompressionMode,
+                    exclusions: [String] = [], measuredCompressor: String? = nil) {
             self.id = id; self.path = path; self.schedule = schedule; self.mode = mode
+            self.exclusions = exclusions; self.measuredCompressor = measuredCompressor
         }
+
+        /// The safety rules for sweeping or compressing this folder.
+        public var rules: SafetyRules { SafetyRules(userExclusions: exclusions, root: path) }
     }
 
     public func watched() throws -> [WatchedDirectory] {
         try queue.sync {
             var out: [WatchedDirectory] = []
             try query("""
-                SELECT id, path, cadence, preferred_hour, schedule_enabled, mode
+                SELECT id, path, cadence, preferred_hour, schedule_enabled, mode, exclusions, compressor
                 FROM watched_directory ORDER BY added_at;
                 """) { stmt in
                 let cadence = SweepCadence(rawValue: String(cString: sqlite3_column_text(stmt, 2))) ?? .weekly
                 let mode = CompressionMode(rawValue: String(cString: sqlite3_column_text(stmt, 5))) ?? .automatic
+                let exclusions = sqlite3_column_text(stmt, 6).map { String(cString: $0) } ?? ""
                 out.append(WatchedDirectory(
                     id: sqlite3_column_int64(stmt, 0),
                     path: String(cString: sqlite3_column_text(stmt, 1)),
                     schedule: SweepSchedule(cadence: cadence,
                                             preferredHour: Int(sqlite3_column_int64(stmt, 3)),
                                             enabled: sqlite3_column_int64(stmt, 4) != 0),
-                    mode: mode))
+                    mode: mode,
+                    exclusions: exclusions.split(separator: "\n").map(String.init),
+                    measuredCompressor: sqlite3_column_text(stmt, 7).map { String(cString: $0) }))
             }
             return out
+        }
+    }
+
+    public func updateExclusions(path: String, exclusions: [String]) throws {
+        try queue.sync {
+            try run("UPDATE watched_directory SET exclusions = ? WHERE path = ?;",
+                    [.text(exclusions.joined(separator: "\n")), .text(path)])
+        }
+    }
+
+    public func updateMeasuredCompressor(path: String, compressor: String?) throws {
+        try queue.sync {
+            try run("UPDATE watched_directory SET compressor = ? WHERE path = ?;",
+                    [compressor.map(Value.text) ?? .null, .text(path)])
+        }
+    }
+
+    // MARK: - Manual runs
+
+    public func recordManualRun(path: String, startedAt: Date, operation: CompressionOperation) throws {
+        try queue.sync {
+            try run("INSERT INTO manual_run (path, started_at, operation) VALUES (?, ?, ?);",
+                    [.text(path), .real(startedAt.timeIntervalSince1970), .text(operation.rawValue)])
+        }
+    }
+
+    /// When the user decompressed files in or around this folder, oldest first.
+    public func decompressions(path: String, since: Date = .distantPast) throws -> [Date] {
+        try queue.sync {
+            var out: [Date] = []
+            try query("""
+                SELECT started_at FROM manual_run
+                WHERE path = ? AND operation = 'decompress' AND started_at >= ?
+                ORDER BY started_at;
+                """, [.text(path), .real(since.timeIntervalSince1970)]) { stmt in
+                out.append(Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0)))
+            }
+            return out
+        }
+    }
+
+    // MARK: - Retention
+
+    /// History older than this is deleted by `prune`.
+    public static let retentionInterval: TimeInterval = 365 * 24 * 3600
+    /// At most this many scan snapshots and sweep runs are kept per folder.
+    public static let maxRowsPerPath = 500
+
+    /// Keeps history bounded. Every hourly wake can add a deferral row, so without this
+    /// the store grew for as long as Pomace was installed.
+    ///
+    /// The newest completed sweep of each folder is always kept: it decides when the next
+    /// sweep is due and whether it may be incremental, and losing it would force a full pass.
+    public func prune(now: Date = Date()) throws {
+        let cutoff = Value.real(now.addingTimeInterval(-Self.retentionInterval).timeIntervalSince1970)
+        let limit = Value.int(Int64(Self.maxRowsPerPath))
+        let keepLatestSweep = """
+            id NOT IN (
+                SELECT s.id FROM sweep_run s
+                WHERE s.deferral IS NULL AND s.error IS NULL AND s.started_at = (
+                    SELECT MAX(t.started_at) FROM sweep_run t
+                    WHERE t.path = s.path AND t.deferral IS NULL AND t.error IS NULL))
+            """
+        try queue.sync {
+            try run("DELETE FROM scan_snapshot WHERE scanned_at < ?;", [cutoff])
+            try run("DELETE FROM manual_run WHERE started_at < ?;", [cutoff])
+            try run("DELETE FROM sweep_run WHERE started_at < ? AND \(keepLatestSweep);", [cutoff])
+            try run("""
+                DELETE FROM scan_snapshot WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY path ORDER BY scanned_at DESC, id DESC) AS position
+                        FROM scan_snapshot)
+                    WHERE position > ?);
+                """, [limit])
+            try run("""
+                DELETE FROM sweep_run WHERE \(keepLatestSweep) AND id IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY path ORDER BY started_at DESC, id DESC) AS position
+                        FROM sweep_run)
+                    WHERE position > ?);
+                """, [limit])
+            // Rows for folders that are no longer watched (removed before 1.2).
+            for table in ["scan_snapshot", "sweep_run", "manual_run"] {
+                try run("DELETE FROM \(table) WHERE path NOT IN (SELECT path FROM watched_directory);")
+            }
         }
     }
 

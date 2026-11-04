@@ -13,6 +13,9 @@ public struct ScanProgress: Sendable {
     /// silently caps it at `maxRetainedEntries` and under-reports large directories.
     public var eligibleFiles = 0
     public var eligibleLogicalBytes: Int64 = 0
+    /// On-disk size of eligible files the compressor will accept — hard-linked files are
+    /// left out because applesauce refuses them. What a savings estimate extrapolates to.
+    public var eligiblePhysicalBytes: Int64 = 0
     public var currentPath: String?
     public init() {}
 }
@@ -34,6 +37,12 @@ public struct ScanEntry: Sendable, Identifiable {
     public var name: String { (path as NSString).lastPathComponent }
     public var isExcluded: Bool { reasons.contains { $0.isHardExclusion } }
     public var savedBytes: Int64 { logicalSize - physicalSize }
+
+    /// Whether a savings estimate may sample this file: eligible, and not hard-linked.
+    public var isSampleCandidate: Bool {
+        !isExcluded && !isCompressed && physicalSize > 0
+            && !reasons.contains { if case .hardLinked = $0 { true } else { false } }
+    }
 }
 
 public struct ScanResult: Sendable {
@@ -133,6 +142,7 @@ public enum ScanEngine {
                     } else if !facts.isCompressed {
                         progress.eligibleFiles += 1
                         progress.eligibleLogicalBytes += facts.logicalSize
+                        if facts.linkCount <= 1 { progress.eligiblePhysicalBytes += facts.physicalSize }
                     }
 
                     if entries.count < maxRetainedEntries {

@@ -27,8 +27,20 @@ Translations are machine-made; [corrections are welcome](docs/TRANSLATING.md).
   confirmed action.
 - **Keep folders compressed.** Add a schedule and Pomace will re-sweep watched directories,
   recording the outcome and explaining when macOS conditions defer a run.
+- **Estimate before committing.** Estimate Savings compresses temporary copies of a sample
+  of a folder's files with each compressor and predicts what a run would reclaim. Your
+  files are not touched, and Automatic mode then uses the compressor that measured best
+  for that folder.
+- **Leave things alone.** Add per-folder exclusions such as `node_modules` or `*.log`;
+  scans, runs and scheduled sweeps all respect them, on top of the built-in safety rules.
+- **See what doesn't stay compressed.** The inspector reports how much compression a folder
+  loses to rewrites between scans and suggests a manual schedule when sweeping it is wasted
+  effort.
 - **Explain its choices.** The advanced settings view exposes the compression plan and the
   reasoning behind it without making flags the default experience.
+- **Clean up after itself.** Scan and sweep history older than a year (or beyond 500 rows
+  per folder) is pruned, removed folders take their history with them, and the mutation
+  log rotates at 8 MB.
 
 ![Pomace scheduled sweeps inspector](docs/images/scheduled-sweeps.png)
 

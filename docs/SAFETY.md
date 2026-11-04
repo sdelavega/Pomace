@@ -74,6 +74,20 @@ Presented with a clear explanation and an explicit opt-in.
   meaningfully shrink. Rather than warn, Pomace should default to skipping these by
   extension and let the min-savings threshold catch the rest.
 
+### User exclusions
+
+Each watched folder can list name patterns (shell wildcards, case-insensitive, matched
+against every path component below the folder). A match is a hard exclusion with the
+reason "Matches your exclusion". Exclusions only ever **add** to sections 2 and 3: there is
+no pattern, setting or mode that lets a file past a built-in exclusion. They apply to
+scans, to the thorough re-check at mutation time, and to scheduled sweeps.
+
+### Savings estimates
+
+Estimate Savings never writes to the folder. It reads a bounded sample (at most 120 files,
+96 MB, 8 MB per file), writes copies into a private temporary directory, compresses only
+those copies with the same verified invocation a real run uses, and deletes them.
+
 ---
 
 ## 4. Operational rules

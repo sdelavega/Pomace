@@ -8,12 +8,22 @@ import PomaceCore
 /// invisible and the watching feature looks like it isn't earning its keep (PRD §5.4).
 struct InspectorView: View {
     @Bindable var model: ScanModel
+    @State private var newExclusion = ""
+    @State private var exclusionInvalid = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 AetherBadge(text: AppStrings.scheduleHelp)
                 scheduleSection
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .aetherSurface()
+                estimateSection
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .aetherSurface()
+                exclusionsSection
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
                     .aetherSurface()
@@ -91,6 +101,104 @@ struct InspectorView: View {
                     .font(.system(size: 12)).foregroundStyle(Aether.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if model.expansion.reExpandedBytes > 0 {
+                Text(AppStrings.expansionSummary(Fmt.bytes(model.expansion.reExpandedBytes)))
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if model.expansion.suggestsManualSchedule,
+               let path = model.selectedPath, model.isScheduled(path) {
+                Text(AppStrings.expansionSuggestion)
+                    .font(.system(size: 12)).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(AppStrings.expansionSwitch) { model.switchToManualSchedule() }
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private var estimateSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(AppStrings.estimateTitle).font(.headline)
+            if model.isEstimating {
+                HStack(spacing: 6) { ProgressView().controlSize(.small); Text(AppStrings.estimateRunning) }
+                    .font(.system(size: 12))
+            } else if let estimate = model.estimate {
+                Text(AppStrings.estimateResult(Fmt.bytes(estimate.recommendedReclaim),
+                                               estimate.recommendedCompressor.uppercased()))
+                    .font(.callout.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(estimate.measurements, id: \.compressor) { measurement in
+                    Text(AppStrings.estimateRow(measurement.compressor.uppercased(),
+                                                Fmt.bytes(estimate.estimatedReclaim(for: measurement.compressor) ?? 0)))
+                        .font(.system(size: 12)).monospacedDigit()
+                }
+                Text(AppStrings.estimateBasis(Fmt.bytes(estimate.sampleBytes)))
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if model.mode == .automatic {
+                    Text(AppStrings.estimateApplied(estimate.recommendedCompressor.uppercased()))
+                        .font(.system(size: 12)).foregroundStyle(Aether.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else if model.estimateFailed {
+                Text(AppStrings.estimateUnavailable)
+                    .font(.system(size: 12)).foregroundStyle(Aether.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button(AppStrings.estimateAction) { model.estimateSavings() }
+                .controlSize(.small)
+                .disabled(!model.canEstimate)
+                .help(AppStrings.estimateHelp)
+        }
+    }
+
+    private var exclusionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(AppStrings.exclusionsTitle).font(.headline)
+            Text(AppStrings.exclusionsHelp)
+                .font(.system(size: 12)).foregroundStyle(Aether.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(model.exclusions, id: \.self) { pattern in
+                HStack(spacing: 6) {
+                    Text(verbatim: pattern)
+                        .font(.system(size: 12, design: .monospaced))
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    Button {
+                        model.removeExclusion(pattern)
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(AppStrings.exclusionsRemove(pattern))
+                    .help(AppStrings.exclusionsRemove(pattern))
+                }
+            }
+            HStack(spacing: 6) {
+                TextField(AppStrings.exclusionsPlaceholder, text: $newExclusion)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
+                    .onSubmit(addExclusion)
+                    .onChange(of: newExclusion) { exclusionInvalid = false }
+                Button(AppStrings.exclusionsAdd, action: addExclusion)
+                    .controlSize(.small)
+                    .disabled(newExclusion.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if exclusionInvalid {
+                Text(AppStrings.exclusionsInvalid)
+                    .font(.system(size: 12)).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .disabled(model.selectedPath == nil || model.isRunning || model.isSweeping)
+    }
+
+    private func addExclusion() {
+        if model.addExclusion(newExclusion) {
+            newExclusion = ""
+        } else {
+            exclusionInvalid = true
         }
     }
 

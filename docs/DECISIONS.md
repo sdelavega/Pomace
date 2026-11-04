@@ -522,3 +522,38 @@ confirmation names the resolved path and explicitly warns when the compressor is
 **Costs.** The app grows and releases own the pinned helper build, licence/source
 availability and signature checks. A custom executable remains the user's choice;
 capability checks do not authenticate it or sandbox it, including during elevated runs.
+
+---
+
+## ADR-0018: Folder insights — estimates, exclusions, re-expansion and retention
+
+**Status:** Accepted · 2026-11-04 · Implements [ADR-0010](#adr-0010-choose-the-compressor-by-measuring-the-directory-not-by-static-default)
+
+**Context.** ADR-0010 called for measuring each folder rather than defaulting to LZFSE,
+but nothing measured. Users could not keep Pomace away from content they knew was
+pointless or harmful to compress (build output, logs). Rewritten folders silently lost
+their savings, and nothing explained why a scheduled folder never seemed to improve. The
+store and mutation log grew without bound, one deferral row per hourly wake.
+
+**Decision.**
+- *Estimates.* Measure on temporary copies with the real compressor, not in memory. The
+  in-memory Compression framework has no public LZVN and does not reproduce decmpfs
+  chunking, block rounding or applesauce's ratio threshold. Measuring copies on the same
+  volume reproduces all of them, and the user's files are never written. The sample is
+  size-weighted without replacement, and the per-file saved fractions are averaged, which
+  makes the result a predictor of reclaimed bytes. The estimate is on demand rather than
+  before every run, so it never delays a run the user asked for. LZFSE stays recommended
+  unless another compressor saves at least 3 points more, because it reads fastest. The
+  winner is stored in `watched_directory.compressor` and used only in Automatic mode.
+- *Exclusions.* Store name patterns per folder and apply them via `SafetyRules`, as hard
+  exclusions. There is no "force" counterpart: advisory cases are already compressed, and
+  hard exclusions exist to prevent harm, so overriding them is out of scope.
+- *Re-expansion.* Derive it from existing snapshots instead of new instrumentation. Record
+  manual runs (`manual_run`) so a user's Decompress is not mistaken for churn.
+- *Retention.* Prune by age and per-folder row count, always keeping the newest completed
+  sweep, and rotate the log at a size threshold.
+
+**Costs.** Estimates cost a few seconds of I/O and CPU, need free space on the volume for
+the copies, and their accuracy against real runs is still unvalidated (ROADMAP 1.2). The
+re-expansion figure understates churn on folders that are swept between scans. Pruned
+history is gone; the coverage chart shows at most the last year.

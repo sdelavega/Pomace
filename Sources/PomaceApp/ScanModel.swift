@@ -57,6 +57,21 @@ final class ScanModel {
     var serviceError: String?
     var isSweeping = false
 
+    /// The selected folder's exclusion patterns (see `SafetyRules.userExclusions`).
+    var exclusions: [String] = []
+    private var exclusionsByPath: [String: [String]] = [:]
+    /// Compressors measured as best per folder; Automatic mode uses them.
+    private var measuredByPath: [String: String] = [:]
+
+    var estimate: SavingsEstimate?
+    var isEstimating = false
+    var estimateFailed = false
+    private var estimateTask: Task<Void, Never>?
+    private var estimateCancellation: CompressionCancellation?
+
+    /// How much compression the selected folder has been losing between scans.
+    var expansion = ExpansionReport()
+
     enum SortOrder: String, CaseIterable, Identifiable {
         case potentialSaving = "Largest first"
         case name = "Name"
@@ -93,6 +108,12 @@ final class ScanModel {
         let watched = (try? store?.watched()) .flatMap { $0 } ?? []
         watchedPaths = watched.map(\.path)
         schedulesByPath = Dictionary(uniqueKeysWithValues: watched.map { ($0.path, $0.schedule) })
+        exclusionsByPath = Dictionary(uniqueKeysWithValues: watched.map { ($0.path, $0.exclusions) })
+        measuredByPath = Dictionary(uniqueKeysWithValues: watched.compactMap { dir in
+            dir.measuredCompressor.map { (dir.path, $0) }
+        })
+        // Keep history bounded even when scheduled sweeps (which also prune) are off.
+        try? store?.prune()
         self.resolution = resolution ?? CompressorTool.resolve(customPath: defaults.string(forKey: CompressorTool.customPathDefaultsKey))
         serviceStatus = SweepService.status
         showingOnboarding = !defaults.bool(forKey: "hasSeenOnboarding")
@@ -144,8 +165,101 @@ final class ScanModel {
         schedule = entry?.schedule ?? SweepSchedule()
         schedulesByPath[path] = schedule
         if let m = entry?.mode { mode = m }
+        exclusions = entry?.exclusions ?? exclusionsByPath[path] ?? []
+        exclusionsByPath[path] = exclusions
+        if let entry { measuredByPath[path] = entry.measuredCompressor }
         sweepHistory = (try? store?.sweepHistory(path: path)).flatMap { $0 } ?? []
+        refreshDrift(for: path)
+    }
+
+    /// Reloads the coverage timeline and re-expansion analysis after a scan is saved.
+    private func refreshDrift(for path: String) {
         snapshotHistory = (try? store?.snapshotHistory(path: path)).flatMap { $0 } ?? []
+        let decompressions = (try? store?.decompressions(path: path)).flatMap { $0 } ?? []
+        expansion = ExpansionReport.analyze(snapshotHistory, decompressions: decompressions)
+    }
+
+    /// The suggested fix for a folder whose writes keep undoing its compression.
+    func switchToManualSchedule() {
+        schedule.cadence = .manual
+        saveSchedule()
+    }
+
+    // MARK: - Exclusions
+
+    /// Rules for scanning, compressing or estimating a folder: the built-in safety rules
+    /// plus that folder's own exclusions.
+    func rules(for path: String) -> SafetyRules {
+        SafetyRules(userExclusions: exclusionsByPath[path] ?? [], root: path)
+    }
+
+    /// Returns false when the text cannot be used as a name pattern.
+    @discardableResult
+    func addExclusion(_ raw: String) -> Bool {
+        guard let path = selectedPath, let pattern = SafetyRules.normalizedExclusion(raw) else { return false }
+        guard !exclusions.contains(where: { $0.caseInsensitiveCompare(pattern) == .orderedSame }) else { return true }
+        setExclusions(exclusions + [pattern], for: path)
+        return true
+    }
+
+    func removeExclusion(_ pattern: String) {
+        guard let path = selectedPath else { return }
+        setExclusions(exclusions.filter { $0 != pattern }, for: path)
+    }
+
+    private func setExclusions(_ list: [String], for path: String) {
+        exclusions = list
+        exclusionsByPath[path] = list
+        try? store?.updateExclusions(path: path, exclusions: list)
+        resetEstimate()
+        // What counts as eligible just changed, so the current scan is out of date.
+        scanCache.invalidate(path)
+        if !isRunning && !isSweeping { scan(path) }
+    }
+
+    // MARK: - Savings estimate
+
+    var canEstimate: Bool {
+        toolReady && !isEstimating && !isRunning && (result?.progress.eligiblePhysicalBytes ?? 0) > 0
+    }
+
+    /// Measures this folder on temporary copies of a sample of its eligible files, and
+    /// remembers the best compressor for Automatic mode. The user's files are not touched.
+    func estimateSavings() {
+        guard canEstimate, let root = selectedPath, let current = result, current.root == root,
+              let install = resolution.installation else { return }
+        let candidates = current.entries.filter(\.isSampleCandidate)
+            .map { SampleCandidate(path: $0.path, size: $0.physicalSize) }
+        let eligibleBytes = current.progress.eligiblePhysicalBytes
+        let log = self.log
+        let cancellation = CompressionCancellation()
+        resetEstimate()
+        estimateCancellation = cancellation
+        isEstimating = true
+        estimateTask = Task { [weak self] in
+            let value = await Task.detached(priority: .userInitiated) {
+                SavingsEstimator.estimate(candidates: candidates, eligibleBytes: eligibleBytes, root: root,
+                                          installation: install, cancellation: cancellation, logger: log)
+            }.value
+            guard let self, self.estimateCancellation === cancellation else { return }
+            self.isEstimating = false
+            self.estimateCancellation = nil
+            self.estimate = value
+            self.estimateFailed = value == nil
+            if let value {
+                self.measuredByPath[root] = value.recommendedCompressor
+                try? self.store?.updateMeasuredCompressor(path: root, compressor: value.recommendedCompressor)
+            }
+        }
+    }
+
+    private func resetEstimate() {
+        estimateCancellation?.request()
+        estimateCancellation = nil
+        estimateTask = nil
+        isEstimating = false
+        estimateFailed = false
+        estimate = nil
     }
 
     func saveSchedule() {
@@ -192,7 +306,9 @@ final class ScanModel {
             let runner = SweepRunner(store: store, log: self?.log ?? MutationLog())
             let dir = Store.WatchedDirectory(id: 0, path: path,
                                              schedule: self?.schedule ?? SweepSchedule(),
-                                             mode: self?.mode ?? .automatic)
+                                             mode: self?.mode ?? .automatic,
+                                             exclusions: self?.exclusionsByPath[path] ?? [],
+                                             measuredCompressor: self?.measuredByPath[path])
             let report = await runner.sweep(dir, installation: install, lastRun: nil)
             guard let self else { return }
             self.isSweeping = false
@@ -257,6 +373,7 @@ final class ScanModel {
         CompressionPolicy.plan(
             mode: mode,
             conditions: RuntimeConditions.current(volumePath: selectedPath),
+            measuredCompressor: selectedPath.flatMap { measuredByPath[$0] },
             overrides: overrides,
             capabilities: resolution.installation?.capabilities)
     }
@@ -332,9 +449,10 @@ final class ScanModel {
         // eligible file. Acting on the retained rows alone silently left the rest of a large
         // folder untouched, so walk the tree again off the main actor.
         isPreparingRun = true
+        let rules = self.rules(for: root)
         Task { [weak self] in
             let paths = await Task.detached(priority: .userInitiated) {
-                ScanEngine.targetPaths(root: root, operation: op)
+                ScanEngine.targetPaths(root: root, operation: op, rules: rules)
             }.value
             guard let self else { return }
             self.isPreparingRun = false
@@ -374,6 +492,8 @@ final class ScanModel {
         }
         let op = run.operation, root = run.root
         let install = run.installation, paths = run.paths, plan = run.plan
+        let rules = self.rules(for: root)
+        let started = Date()
         let cancellation = CompressionCancellation()
         runCancellation = cancellation
         isStopping = false
@@ -383,7 +503,7 @@ final class ScanModel {
             defer { lock.release() }
             guard let self else { return }
             for await event in CompressionEngine.run(operation: op, paths: paths, root: root,
-                                                     installation: install, plan: plan,
+                                                     installation: install, plan: plan, rules: rules,
                                                      logger: self.log, cancellation: cancellation,
                                                      executor: run.executor, resolveCompressor: self.resolveCompressor) {
                 switch event {
@@ -394,6 +514,8 @@ final class ScanModel {
                     // A terminal state must mean Sparkle and another run can acquire the lock.
                     lock.release()
                     self.runState = .finished(outcome)
+                    // Lets drift analysis tell a Decompress apart from re-expansion.
+                    try? self.store?.recordManualRun(path: root, startedAt: started, operation: op)
                     // Post-run truth: re-scan natively rather than trusting the compressor's
                     // summary, so before and after come from the same code path.
                     self.refreshAfterMutation(root)
@@ -446,6 +568,7 @@ final class ScanModel {
             _ = try? store?.addWatchedDirectory(path: path)
             watchedPaths.append(path)
             schedulesByPath[path] = SweepSchedule(cadence: .manual)
+            exclusionsByPath[path] = []
         }
         selectedPath = path
         useAdministratorPrivileges = false
@@ -458,6 +581,8 @@ final class ScanModel {
         try? store?.removeWatchedDirectory(path: path)
         watchedPaths.removeAll { $0 == path }
         schedulesByPath[path] = nil
+        exclusionsByPath[path] = nil
+        measuredByPath[path] = nil
         scanCache.invalidate(path)
         guard selectedPath == path else { return }
         // Selecting the next folder without loading it left its sidebar row highlighted
@@ -473,6 +598,9 @@ final class ScanModel {
             schedule = SweepSchedule()
             sweepHistory = []
             snapshotHistory = []
+            exclusions = []
+            expansion = ExpansionReport()
+            resetEstimate()
         }
     }
 
@@ -482,6 +610,7 @@ final class ScanModel {
         useAdministratorPrivileges = false
         cancelAdministrator()
         cancelScan()
+        resetEstimate()
         state = .idle
         loadSchedule(for: path)
         var isDirectory: ObjCBool = false
@@ -550,8 +679,9 @@ final class ScanModel {
         }
 
         state = .scanning(ScanProgress())
+        let rules = self.rules(for: path)
         scanTask = Task { [weak self] in
-            for await event in ScanEngine.scan(root: path) {
+            for await event in ScanEngine.scan(root: path, rules: rules) {
                 guard let self, !Task.isCancelled else { return }
                 switch event {
                 case .progress(let p):
@@ -560,6 +690,7 @@ final class ScanModel {
                     self.state = .done(r)
                     if !self.isRunning && !self.isSweeping { self.scanCache.insert(r) }
                     _ = try? self.store?.record(r)
+                    if self.selectedPath == path { self.refreshDrift(for: path) }
                 }
             }
         }
