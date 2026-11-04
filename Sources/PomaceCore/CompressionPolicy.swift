@@ -160,7 +160,7 @@ public enum CompressionPolicy {
             s.compressor = fallback
         }
 
-        j.append(.init(id: "threshold", value: .percent(Int((1 - s.minimumRatio) * 100)),
+        j.append(.init(id: "threshold", value: .percent(savingPercent(s.minimumRatio)),
                        reason: .minimumSavingThreshold))
         j.append(.init(id: "verify", value: .alwaysOn, reason: .verificationAlwaysOn, isFixed: true))
         j.append(.init(id: "hardlinks", value: .skipped, reason: .hardLinksRefused, isFixed: true))
@@ -178,7 +178,7 @@ public enum CompressionPolicy {
                     r.value = .compressor(o.compressor.uppercased())
                 case "threshold":
                     r.isOverridden = o.minimumRatio != auto.minimumRatio
-                    r.value = .percent(Int((1 - o.minimumRatio) * 100))
+                    r.value = .percent(savingPercent(o.minimumRatio))
                 default: break
                 }
                 if r.isOverridden { r.reason = .setByUser }
@@ -188,6 +188,11 @@ public enum CompressionPolicy {
 
         return CompressionPlan(settings: s, justifications: j,
                                arguments: compressArguments(for: s), warnings: warnings)
+    }
+
+    /// Rounded, not truncated: `Int((1 - 0.9) * 100)` is 9 because of binary floating point.
+    static func savingPercent(_ minimumRatio: Double) -> Int {
+        Int(((1 - minimumRatio) * 100).rounded())
     }
 
     /// applesauce's compress argv. `--verify` is unconditional.

@@ -19,6 +19,9 @@ public enum DirectoryWalker {
 
     /// FTS-based walk. Preferred: fts_read hands back a populated `stat` per entry, so we
     /// avoid a second lstat syscall for every file in the tree.
+    ///
+    /// The walk stops early when the surrounding task is cancelled. Callers that care must
+    /// check `Task.isCancelled` afterwards: the returned totals are then partial.
     public static func walkFTS(_ root: String, inspect: Bool = true,
                                each: ((FileFacts) -> Void)? = nil) -> WalkResult {
         var r = WalkResult()
@@ -37,10 +40,16 @@ public enum DirectoryWalker {
         // Hard links mean one inode reachable by several paths. Counting each path's bytes
         // triples a 4 KB file into 12 KB of imaginary savings, so physical and logical bytes
         // are counted once per (device, inode). Verified 2026-08-26 on a three-link fixture.
-        var seen = Set<UInt64>()
-        func key(_ st: stat) -> UInt64 { UInt64(st.st_dev) &* 0x1_0000_0000 &+ UInt64(st.st_ino) }
+        // A packed (device << 32 | inode) key collides once inode numbers pass 2^32, which
+        // APFS allows; keep both fields.
+        struct InodeKey: Hashable { let device: Int64; let inode: UInt64 }
+        var seen = Set<InodeKey>()
+        func key(_ st: stat) -> InodeKey { InodeKey(device: Int64(st.st_dev), inode: UInt64(st.st_ino)) }
 
         while let entP = fts_read(fts) {
+            // Without this a cancelled scan kept walking (and getxattr-probing) the whole
+            // tree in the background, and quickly switching folders stacked up full walks.
+            if Task.isCancelled { break }
             let e = entP.pointee
             switch Int32(e.fts_info) {
             case FTS_F, FTS_NSOK:

@@ -56,6 +56,7 @@ struct AdvancedSettingsView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .onChange(of: model.mode) { model.persistMode() }
             Text(model.mode.text).font(.system(size: 12)).foregroundStyle(Aether.muted)
         }
         .padding(16)

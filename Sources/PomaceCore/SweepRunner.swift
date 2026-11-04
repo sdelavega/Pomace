@@ -58,9 +58,15 @@ public struct SweepRunner: Sendable {
         var reports: [SweepReport] = []
 
         for dir in directories {
-            let lastRun = try? store.lastCompletedSweep(path: dir.path)
-            guard force || dir.schedule.isDue(lastRun: lastRun ?? nil, now: now) else { continue }
-            reports.append(await sweepUnlocked(dir, installation: installation, lastRun: lastRun ?? nil, now: now))
+            // An unreadable history must not read as "never swept": that would make the
+            // folder due on every wake and force a full pass. Try again next wake.
+            let lastRun: Date?
+            do { lastRun = try store.lastCompletedSweep(path: dir.path) } catch {
+                log.note("sweep skipped for \(dir.path) — history unavailable: \(error)")
+                continue
+            }
+            guard force || dir.schedule.isDue(lastRun: lastRun, now: now) else { continue }
+            reports.append(await sweepUnlocked(dir, installation: installation, lastRun: lastRun, now: now))
         }
         return reports
     }
@@ -106,16 +112,21 @@ public struct SweepRunner: Sendable {
         // already-compressed files costs nothing; they are filtered out anyway.
         let cutoff = needsFullPass ? nil : lastRun?.addingTimeInterval(-Self.mtimeGracePeriod)
 
+        // One statfs per sweep, not one per file.
+        let volume = VolumeContext.probe(path: dir.path)
         var candidates: [String] = []
         _ = DirectoryWalker.walkFTS(dir.path) { facts in
             guard facts.isRegularFile, !facts.isCompressed else { return }
             if let cutoff {
                 var st = stat()
                 guard lstat(facts.path, &st) == 0 else { return }
-                let mtime = Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec))
-                guard mtime > cutoff else { return }
+                // ctime as well as mtime: Finder copies, `cp -p`, `mv` and archive extraction
+                // all preserve mtime, so files arriving that way looked older than the last
+                // sweep and waited up to a month for the next full pass.
+                let changed = max(st.st_mtimespec.tv_sec, st.st_ctimespec.tv_sec)
+                guard Date(timeIntervalSince1970: TimeInterval(changed)) > cutoff else { return }
             }
-            guard !rules.isExcluded(facts, volume: VolumeContext.probe(path: dir.path)) else { return }
+            guard !rules.isExcluded(facts, volume: volume) else { return }
             candidates.append(facts.path)
         }
         report.candidatesConsidered = candidates.count

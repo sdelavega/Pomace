@@ -95,7 +95,7 @@ final class ScanModel {
         schedulesByPath = Dictionary(uniqueKeysWithValues: watched.map { ($0.path, $0.schedule) })
         self.resolution = resolution ?? CompressorTool.resolve(customPath: defaults.string(forKey: CompressorTool.customPathDefaultsKey))
         serviceStatus = SweepService.status
-        showingOnboarding = !UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
+        showingOnboarding = !defaults.bool(forKey: "hasSeenOnboarding")
     }
 
     #if DEBUG
@@ -155,6 +155,14 @@ final class ScanModel {
         if schedule.enabled, schedule.cadence != .manual, !serviceStatus.isActive {
             setScheduledSweepsEnabled(true)
         }
+    }
+
+    /// The mode picker lives outside the schedule editor, so a mode change has to be saved
+    /// on its own. Otherwise scheduled sweeps kept using the previously saved mode, and the
+    /// picker silently reverted the next time the folder was selected.
+    func persistMode() {
+        guard let path = selectedPath, watchedPaths.contains(path) else { return }
+        try? store?.updateSchedule(path: path, schedule: schedule, mode: mode)
     }
 
     var nextSweepDescription: String {
@@ -237,7 +245,7 @@ final class ScanModel {
     }
 
     func dismissOnboarding() {
-        UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
+        defaults.set(true, forKey: "hasSeenOnboarding")
         showingOnboarding = false
     }
 
@@ -307,13 +315,36 @@ final class ScanModel {
         pendingAdministratorRun = nil
     }
 
+    /// True while the full target list of a truncated scan is being gathered.
+    private(set) var isPreparingRun = false
+
     private func start(_ op: CompressionOperation) {
         #if DEBUG
         guard !isUITestFixture else { return }
         #endif
-        guard !isRunning, !isSweeping,
+        guard !isRunning, !isSweeping, !isPreparingRun,
               let root = selectedPath, let install = resolution.installation else { return }
-        let paths = targetPaths(for: op)
+        guard result?.entriesTruncated == true else {
+            prepare(op, root: root, installation: install, paths: targetPaths(for: op))
+            return
+        }
+        // The scan retains at most `maxRetainedEntries` rows, but the button promises every
+        // eligible file. Acting on the retained rows alone silently left the rest of a large
+        // folder untouched, so walk the tree again off the main actor.
+        isPreparingRun = true
+        Task { [weak self] in
+            let paths = await Task.detached(priority: .userInitiated) {
+                ScanEngine.targetPaths(root: root, operation: op)
+            }.value
+            guard let self else { return }
+            self.isPreparingRun = false
+            guard self.selectedPath == root else { return }
+            self.prepare(op, root: root, installation: install, paths: paths)
+        }
+    }
+
+    private func prepare(_ op: CompressionOperation, root: String,
+                         installation install: ToolInstallation, paths: [String]) {
         guard !paths.isEmpty else {
             runState = .refused(op == .compress
                 ? CompressionEngineError.nothingToDo.text
@@ -428,7 +459,21 @@ final class ScanModel {
         watchedPaths.removeAll { $0 == path }
         schedulesByPath[path] = nil
         scanCache.invalidate(path)
-        if selectedPath == path { selectedPath = watchedPaths.first; state = .idle }
+        guard selectedPath == path else { return }
+        // Selecting the next folder without loading it left its sidebar row highlighted
+        // beside an idle detail pane and the removed folder's schedule and history.
+        cancelScan()
+        selectedPath = nil
+        state = .idle
+        useAdministratorPrivileges = false
+        cancelAdministrator()
+        if let next = watchedPaths.first {
+            select(next)
+        } else {
+            schedule = SweepSchedule()
+            sweepHistory = []
+            snapshotHistory = []
+        }
     }
 
     func select(_ path: String) {

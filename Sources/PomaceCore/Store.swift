@@ -404,7 +404,14 @@ public final class Store: @unchecked Sendable {
                        _ each: (OpaquePointer?) -> Void) throws {
         let stmt = try prepare(sql, binds)
         defer { sqlite3_finalize(stmt) }
-        while sqlite3_step(stmt) == SQLITE_ROW { each(stmt) }
+        var rc = sqlite3_step(stmt)
+        while rc == SQLITE_ROW {
+            each(stmt)
+            rc = sqlite3_step(stmt)
+        }
+        // A busy or failed step used to end the loop silently and return a partial result,
+        // e.g. no last sweep, which made a folder look due and forced a full pass.
+        guard rc == SQLITE_DONE else { throw StoreError.sql(String(cString: sqlite3_errmsg(db))) }
     }
 
     private func scalar(_ sql: String, _ binds: [Value] = []) throws -> Int64 {

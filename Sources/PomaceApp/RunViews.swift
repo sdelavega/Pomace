@@ -85,6 +85,7 @@ struct ActionBar: View {
         }
         .labelsHidden()
         .disabled(model.isRunning)
+        .onChange(of: model.mode) { model.persistMode() }
         .help(model.mode.text)
     }
 }

@@ -34,12 +34,19 @@ public struct SweepSchedule: Sendable, Equatable, Codable {
         self.enabled = enabled
     }
 
+    /// Slack applied when comparing elapsed time against the cadence.
+    ///
+    /// The agent wakes hourly and records a sweep's start a little after its wake. Comparing
+    /// against the exact interval meant a wake landing a few seconds "early" the next day
+    /// was not due, pushing the sweep an hour later — a drift that compounded daily.
+    public static let dueTolerance: TimeInterval = 30 * 60
+
     /// Whether a sweep is due, given when one last completed.
     public func isDue(lastRun: Date?, now: Date, calendar: Calendar = .current) -> Bool {
         guard enabled, let interval = cadence.interval else { return false }
         guard let last = lastRun else { return true }        // never swept
         let elapsed = now.timeIntervalSince(last)
-        guard elapsed >= interval else { return false }
+        guard elapsed >= interval - Self.dueTolerance else { return false }
         // Once due, wait for the preferred hour — unless we are more than a full cadence
         // late, in which case the machine was probably asleep and we should just run.
         if elapsed >= interval * 2 { return true }

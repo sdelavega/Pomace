@@ -562,3 +562,76 @@ struct WatchedDirectoryDefaultsTests {
         #expect(entry.schedule.enabled)
     }
 }
+
+@Suite("audit regressions")
+struct AuditRegressionTests {
+
+    func facts(path: String) -> FileFacts {
+        FileFacts(path: path, logicalSize: 100_000, physicalSize: 102_400,
+                  isCompressed: false, type: nil, rawType: nil, decmpfsXattrSize: 0,
+                  linkCount: 1, isRegularFile: true, inode: 1, allocatedBlocks: 102_400)
+    }
+
+    @Test("system prefixes match whole path components")
+    func systemPrefixComponents() {
+        let rules = SafetyRules()
+        // Previously exempt as if it were /usr/local.
+        #expect(rules.evaluate(facts(path: "/usr/localdata/a.txt")).contains(.systemPath))
+        // Previously excluded as if it were /bin.
+        #expect(!rules.evaluate(facts(path: "/binaries/a.txt")).contains(.systemPath))
+        #expect(rules.evaluate(facts(path: "/bin/ls")).contains(.systemPath))
+    }
+
+    @Test("threshold percentages are rounded, not truncated")
+    func thresholdRounding() {
+        #expect(CompressionPolicy.savingPercent(0.9) == 10)
+        #expect(CompressionPolicy.savingPercent(0.95) == 5)
+        #expect(CompressionPolicy.savingPercent(0.99) == 1)
+        var o = CompressionSettings()
+        o.minimumRatio = 0.9
+        let row = CompressionPolicy.plan(overrides: o).justifications.first { $0.id == "threshold" }
+        #expect(row?.value == .percent(10))
+    }
+
+    @Test("a daily sweep does not drift when the next wake is a few seconds early")
+    func scheduleDoesNotDrift() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]
+        let s = SweepSchedule(cadence: .daily, preferredHour: 3)
+        let last = f.date(from: "2026-08-25T03:00:05Z")!
+        #expect(s.isDue(lastRun: last, now: f.date(from: "2026-08-26T03:00:00Z")!, calendar: cal))
+        #expect(!s.isDue(lastRun: last, now: f.date(from: "2026-08-26T02:00:00Z")!, calendar: cal))
+    }
+
+    @Test("a cancelled walk stops instead of finishing the tree")
+    func cancelledWalkStops() async throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("pomace-walk-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for i in 0..<20 { try Data("x".utf8).write(to: dir.appendingPathComponent("\(i).txt")) }
+
+        let task = Task.detached { () -> WalkResult in
+            while !Task.isCancelled { await Task.yield() }
+            return DirectoryWalker.walkFTS(dir.path)
+        }
+        task.cancel()
+        #expect(await task.value.files == 0)
+        #expect(DirectoryWalker.walkFTS(dir.path).files == 20)
+    }
+
+    @Test("full-tree targets follow the same filter as the scan")
+    func fullTreeTargets() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("pomace-targets-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data(repeating: 65, count: 8192).write(to: dir.appendingPathComponent("text.txt"))
+        try Data().write(to: dir.appendingPathComponent("empty.txt"))
+
+        let targets = ScanEngine.targetPaths(root: dir.path, operation: .compress)
+        #expect(targets.map { ($0 as NSString).lastPathComponent } == ["text.txt"])
+        #expect(ScanEngine.targetPaths(root: dir.path, operation: .decompress).isEmpty)
+    }
+}

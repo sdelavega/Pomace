@@ -101,8 +101,8 @@ public struct SafetyRules: Sendable {
         if f.logicalSize == 0 { return reasons + [.zeroLength] }
 
         let path = f.path
-        if Self.systemPrefixes.contains(where: { path.hasPrefix($0) })
-            || (path.hasPrefix("/usr") && !path.hasPrefix(Self.usrExempt)) {
+        if Self.systemPrefixes.contains(where: { Self.isWithin(path, $0) })
+            || (Self.isWithin(path, "/usr") && !Self.isWithin(path, Self.usrExempt)) {
             reasons.append(.systemPath)
         }
         for (marker, service) in Self.cloudMarkers where path.contains(marker) {
@@ -150,6 +150,12 @@ public struct SafetyRules: Sendable {
     public func isExcluded(_ f: FileFacts, volume: VolumeContext = .init(),
                            depth: Depth = .fast) -> Bool {
         evaluate(f, volume: volume, depth: depth).contains { $0.isHardExclusion }
+    }
+
+    /// Component-wise prefix test. A plain `hasPrefix` treated `/usr/localdata` as the
+    /// exempt `/usr/local` and `/binaries` as the protected `/bin`.
+    static func isWithin(_ path: String, _ root: String) -> Bool {
+        path == root || path.hasPrefix(root + "/")
     }
 
     // MARK: - Probes

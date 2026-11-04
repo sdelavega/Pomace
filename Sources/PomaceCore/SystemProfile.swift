@@ -28,10 +28,6 @@ public struct SystemProfile: Sendable {
                              isAppleSilicon: p != nil)
     }
 
-    /// Thread count for `-J`. The measured knee sits at the P-core count: near-linear
-    /// scaling to that point, then a cliff (docs/DEFAULTS.md §1.2). Background sweeps take
-    /// the knee and leave the E-cores for the user's actual work; a foreground run the user
-    /// is watching may use every physical core.
     // NOTE: `threadCount` and `minimumSafeThreads` lived here until the applesauce pivot.
     // applesauce parallelises internally and exposes no thread flag, so both were removed
     // rather than left as dead code that looks load-bearing. See ADR-0015 and, for why the

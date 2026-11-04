@@ -84,6 +84,26 @@ public enum ScanEngine {
     /// bottleneck long before the filesystem is.
     public static let progressInterval: TimeInterval = 0.1
 
+    /// Every path an action would target, from a fresh walk of the whole tree.
+    ///
+    /// Used when a scan's retained `entries` were capped at `maxRetainedEntries`; the same
+    /// fast-pass filter as the scan applies, and the engine re-checks each path thoroughly.
+    public static func targetPaths(root: String, operation: CompressionOperation,
+                                   rules: SafetyRules = SafetyRules()) -> [String] {
+        let volume = VolumeContext.probe(path: root)
+        var paths: [String] = []
+        _ = DirectoryWalker.walkFTS(root) { facts in
+            switch operation {
+            case .compress:
+                guard !facts.isCompressed, !rules.isExcluded(facts, volume: volume) else { return }
+            case .decompress:
+                guard facts.isCompressed else { return }
+            }
+            paths.append(facts.path)
+        }
+        return paths
+    }
+
     public static func scan(root: String, rules: SafetyRules = SafetyRules()) -> AsyncStream<ScanEvent> {
         AsyncStream { continuation in
             let task = Task.detached(priority: .userInitiated) {

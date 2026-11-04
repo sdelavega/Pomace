@@ -255,7 +255,7 @@ public enum CompressionEngine {
                 // invocation separately.
                 eligible.sort { $0.size < $1.size }
 
-                outcome.bytesBefore = eligible.reduce(0) { $0 + physical($1.path) }
+                outcome.bytesBefore = eligible.reduce(0) { $0 + $1.physicalBefore }
                 var progress = CompressionProgress()
                 progress.filesTotal = eligible.count
                 continuation.yield(.started(progress))
@@ -301,6 +301,10 @@ public enum CompressionEngine {
                 }
 
                 // --- batches ---
+                // Running totals: recomputing them from the start of `eligible` after every
+                // batch was quadratic in the file count on million-file trees.
+                var bytesDone: Int64 = 0
+                var realFailureCount = 0
                 var index = 0
                 while index < eligible.count {
                     if Task.isCancelled || cancellation?.isRequested == true {
@@ -309,10 +313,12 @@ public enum CompressionEngine {
                     }
                     var batch: [String] = []
                     var bytes = 0
+                    var batchBytes: Int64 = 0
                     while index < eligible.count, batch.count < batchSize,
                           bytes < maxArgumentBytes {
                         let path = eligible[index].path
                         batch.append(path)
+                        batchBytes += eligible[index].size
                         if executor.isAdministrator {
                             // The shell checks repeat each quoted path twice in addition
                             // to argv. Account for quoting expansion in the command budget.
@@ -359,6 +365,7 @@ public enum CompressionEngine {
                         guard let after = FileInspector.inspect(p) else {
                             let f = CompressionFailure(path: p, remedy: .fileMissing, kind: .failed)
                             outcome.failures.append(f)
+                            realFailureCount += 1
                             logger?.failure(path: p, message: String(describing: f.message))
                             continue
                         }
@@ -377,14 +384,16 @@ public enum CompressionEngine {
                                     isAdministrator: executor.isAdministrator))
                             }
                             outcome.failures.append(f)
+                            if f.kind == .failed { realFailureCount += 1 }
                             logger?.failure(path: p, message: String(describing: f.message))
                         }
                     }
 
                     progress.filesProcessed = min(index, eligible.count)
-                    progress.failures = outcome.realFailures.count
+                    progress.failures = realFailureCount
                     progress.currentPath = nil
-                    progress.bytesProcessed = eligible.prefix(index).reduce(0) { $0 + $1.size }
+                    bytesDone += batchBytes
+                    progress.bytesProcessed = bytesDone
                     continuation.yield(.progress(progress))
                     // An authorization or invocation error should not prompt again for
                     // every subsequent batch. Report it and retain completed work.
