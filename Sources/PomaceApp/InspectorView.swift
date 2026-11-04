@@ -178,6 +178,9 @@ struct InspectorView: View {
             HStack(spacing: 6) {
                 TextField(AppStrings.exclusionsPlaceholder, text: $newExclusion)
                     .textFieldStyle(.roundedBorder)
+                    // A placeholder is not an accessible name; VoiceOver needs a label.
+                    .accessibilityLabel(AppStrings.exclusionsPlaceholder)
+                    .help(AppStrings.exclusionsHelp)
                     .controlSize(.small)
                     .onSubmit(addExclusion)
                     .onChange(of: newExclusion) { exclusionInvalid = false }
