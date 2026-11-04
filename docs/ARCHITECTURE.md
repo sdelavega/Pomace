@@ -167,8 +167,8 @@ memory, not persisted. Settings such as the custom compressor path also use User
 
 **Retention (ADR-0018).** `Store.prune` runs at app launch and after every agent wake. It
 deletes history older than a year, keeps at most 500 snapshots and sweep runs per folder,
-and removes rows for folders that are no longer watched; removing a folder also deletes
-its history at once. The newest completed sweep of each folder is always kept because it
+and removing a folder deletes its history at once. Rows for paths that are not watched
+are otherwise kept within the same limits, since Report a Problem draws on them. The newest completed sweep of each folder is always kept because it
 decides whether the next sweep is due and incremental. `MutationLog` rotates
 `mutations.log` to `mutations.1.log` once it reaches 8 MB, when a process opens it;
 diagnostics read the tail across both generations.

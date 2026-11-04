@@ -284,10 +284,8 @@ public final class Store: @unchecked Sendable {
                         FROM sweep_run)
                     WHERE position > ?);
                 """, [limit])
-            // Rows for folders that are no longer watched (removed before 1.2).
-            for table in ["scan_snapshot", "sweep_run", "manual_run"] {
-                try run("DELETE FROM \(table) WHERE path NOT IN (SELECT path FROM watched_directory);")
-            }
+            // Rows for paths that are not watched are deliberately kept, within the same
+            // limits: Report a Problem includes recent history across every folder.
         }
     }
 

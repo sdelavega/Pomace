@@ -202,7 +202,7 @@ struct RetentionTests {
         #expect(entry.rules.matchingExclusion("/tmp/pomace-settings/a/node_modules/b") == "node_modules")
     }
 
-    @Test("pruning keeps the newest completed sweep and drops orphans")
+    @Test("pruning keeps the newest completed sweep and drops expired rows")
     func prune() throws {
         let (store, url) = try temporaryStore()
         defer { removeStore(url) }
@@ -221,7 +221,8 @@ struct RetentionTests {
         let runs = try store.sweepHistory(path: path)
         #expect(runs.count == 2)
         #expect(try store.lastCompletedSweep(path: path) == Date(timeIntervalSince1970: old.timeIntervalSince1970))
-        #expect(try store.sweepHistory(path: "/tmp/pomace-removed").isEmpty)
+        // Unwatched paths are bounded by the same limits, not deleted outright.
+        #expect(try store.sweepHistory(path: "/tmp/pomace-removed").count == 1)
         #expect(try store.decompressions(path: path).count == 1)
     }
 
