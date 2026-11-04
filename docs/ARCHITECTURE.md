@@ -165,7 +165,8 @@ modes, exclusion patterns and measured compressor; aggregate scan snapshots; swe
 history; and a record of manual compress/decompress runs. Per-file scan rows are held in
 memory, not persisted. Settings such as the custom compressor path also use UserDefaults.
 
-**Retention (ADR-0018).** `Store.prune` runs at app launch and after every agent wake. It
+**Retention (ADR-0018).** `Store.prune` runs when the app launches (in `PomaceApp`, not
+`ScanModel`) and after every agent wake. It
 deletes history older than a year, keeps at most 500 snapshots and sweep runs per folder,
 and removing a folder deletes its history at once. Rows for paths that are not watched
 are otherwise kept within the same limits, since Report a Problem draws on them. The newest completed sweep of each folder is always kept because it

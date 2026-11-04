@@ -112,8 +112,6 @@ final class ScanModel {
         measuredByPath = Dictionary(uniqueKeysWithValues: watched.compactMap { dir in
             dir.measuredCompressor.map { (dir.path, $0) }
         })
-        // Keep history bounded even when scheduled sweeps (which also prune) are off.
-        try? store?.prune()
         self.resolution = resolution ?? CompressorTool.resolve(customPath: defaults.string(forKey: CompressorTool.customPathDefaultsKey))
         serviceStatus = SweepService.status
         showingOnboarding = !defaults.bool(forKey: "hasSeenOnboarding")

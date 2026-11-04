@@ -14,7 +14,12 @@ struct PomaceApp: App {
             return model
         }
         #endif
-        return ScanModel()
+        // Prune at launch so history stays bounded even when scheduled sweeps (which also
+        // prune after every wake) are off. Done here, not in ScanModel, so a store handed
+        // to the model is never rewritten behind the caller's back.
+        let store = try? Store()
+        try? store?.prune()
+        return ScanModel(store: store)
     }
     @AppStorage("menuBarEnabled") private var menuBarEnabled = false
     @ObservedObject private var updates = Main.updates!
