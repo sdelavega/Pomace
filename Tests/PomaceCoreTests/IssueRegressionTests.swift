@@ -7,10 +7,14 @@ struct SubprocessOutputTests {
     @Test("drains stderr while stdout remains open")
     func largeStderr() {
         // A watchdog makes the old implementation fail rather than hang the test suite.
+        // The payload goes to a copy of stderr (fd 3) and the shell's own stderr is
+        // silenced: otherwise its "Terminated" notice for the reaped watchdog could land in
+        // the captured stream, depending on when the job was reaped.
         let script = """
+        exec 3>&2 2>/dev/null
         (sleep 5; kill -TERM $$) >/dev/null 2>&1 &
         watchdog=$!
-        head -c 1048576 /dev/zero >&2
+        head -c 1048576 /dev/zero >&3
         printf done
         kill "$watchdog"
         wait "$watchdog" 2>/dev/null
