@@ -33,6 +33,10 @@ Translations are machine-made; [corrections are welcome](docs/TRANSLATING.md).
   for that folder.
 - **Leave things alone.** Add per-folder exclusions such as `node_modules` or `*.log`;
   scans, runs and scheduled sweeps all respect them, on top of the built-in safety rules.
+- **Know when to recompress.** Each folder remembers how compressed it was after its last
+  compression. The sidebar and scan summary show how degraded it has become since, as a
+  percentage with the amount that can be recompressed, and Check All Folders rescans every
+  watched folder (read-only) to refresh those figures.
 - **See what doesn't stay compressed.** The inspector reports how much compression a folder
   loses to rewrites between scans and suggests a manual schedule when sweeping it is wasted
   effort.

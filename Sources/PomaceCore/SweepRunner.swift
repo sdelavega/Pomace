@@ -118,8 +118,13 @@ public struct SweepRunner: Sendable {
         // The folder's own exclusions apply on top of the built-in rules.
         let rules = dir.rules
         var candidates: [String] = []
-        _ = DirectoryWalker.walkFTS(dir.path) { facts in
+        // Eligible-but-uncompressed data across the whole tree, not just changed files: the
+        // compression baseline recorded below is measured from it (see `Degradation`).
+        var eligibleLogical: Int64 = 0
+        let walk = DirectoryWalker.walkFTS(dir.path) { facts in
             guard facts.isRegularFile, !facts.isCompressed else { return }
+            guard !rules.isExcluded(facts, volume: volume) else { return }
+            eligibleLogical += facts.logicalSize
             if let cutoff {
                 var st = stat()
                 guard lstat(facts.path, &st) == 0 else { return }
@@ -129,14 +134,18 @@ public struct SweepRunner: Sendable {
                 let changed = max(st.st_mtimespec.tv_sec, st.st_ctimespec.tv_sec)
                 guard Date(timeIntervalSince1970: TimeInterval(changed)) > cutoff else { return }
             }
-            guard !rules.isExcluded(facts, volume: volume) else { return }
             candidates.append(facts.path)
         }
         report.candidatesConsidered = candidates.count
+        // A cancelled walk saw only part of the tree; its totals must not become a baseline.
+        let walkCompleted = !Task.isCancelled
 
         guard !candidates.isEmpty else {
             report.duration = Date().timeIntervalSince(started)
             _ = try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration)
+            if walkCompleted {
+                recordBaseline(dir.path, compressed: walk.compressedLogical, eligible: eligibleLogical)
+            }
             return report
         }
 
@@ -148,11 +157,13 @@ public struct SweepRunner: Sendable {
             measuredCompressor: dir.measuredCompressor,
             capabilities: installation.capabilities)
 
+        var finished: CompressionOutcome?
         for await event in CompressionEngine.run(operation: .compress, paths: candidates,
                                                  root: dir.path, installation: installation,
                                                  plan: plan, rules: rules, logger: log) {
             switch event {
             case .finished(let outcome):
+                finished = outcome
                 report.filesCompressed = outcome.filesSucceeded
                 report.filesFailed = outcome.realFailures.count
                 report.bytesReclaimed = outcome.bytesReclaimed
@@ -168,6 +179,22 @@ public struct SweepRunner: Sendable {
                                    filesFailed: report.filesFailed,
                                    bytesReclaimed: report.bytesReclaimed,
                                    error: report.error.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) })
+        // A completed sweep is the folder's new "last compression". What it compressed
+        // moves from eligible to compressed; what it declined stays as the eligible floor.
+        if walkCompleted, let outcome = finished, !outcome.wasCancelled {
+            recordBaseline(dir.path, compressed: walk.compressedLogical + outcome.logicalBytesSucceeded,
+                           eligible: max(0, eligibleLogical - outcome.logicalBytesSucceeded))
+        } else if walkCompleted, report.error == .nothingToDo {
+            recordBaseline(dir.path, compressed: walk.compressedLogical, eligible: eligibleLogical)
+        }
         return report
+    }
+
+    private func recordBaseline(_ path: String, compressed: Int64, eligible: Int64) {
+        let baseline = CompressionBaseline(recordedAt: Date(), compressedLogicalBytes: compressed,
+                                           eligibleLogicalBytes: eligible)
+        do { try store.setBaseline(path: path, baseline) } catch {
+            log.note("baseline not recorded for \(path): \(error)")
+        }
     }
 }

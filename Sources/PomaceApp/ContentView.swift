@@ -96,7 +96,7 @@ struct ContentView: View {
     }
 
     private var sidebarAccessibilityLabels: [String] {
-        sidebarGroups.flatMap { $0.accessibilityLabels(scheduleSummary: model.scheduleSummary) }
+        sidebarGroups.flatMap { $0.accessibilityLabels(scheduleSummary: model.folderSummary) }
     }
 }
 
@@ -163,6 +163,14 @@ private struct Sidebar: View {
                 Text(verbatim: "APFS / HFS+")
                     .font(Aether.metadata)
                     .foregroundStyle(Aether.muted)
+                if model.isCheckingFolders {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(AppStrings.checkingFolders)
+                    }
+                    .font(.system(size: 12))
+                    .foregroundStyle(Aether.muted)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(20)
@@ -190,7 +198,7 @@ private struct Sidebar: View {
         Label {
             VStack(alignment: .leading, spacing: 1) {
                 Text((path as NSString).lastPathComponent)
-                Text(model.scheduleSummary(for: path))
+                Text(model.folderSummary(for: path))
                     .font(.system(size: 12))
                     .foregroundStyle(Aether.muted)
                     .lineLimit(1)

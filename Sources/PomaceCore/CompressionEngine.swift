@@ -61,6 +61,9 @@ public struct CompressionOutcome: Sendable {
     public var failures: [CompressionFailure] = []
     public var bytesBefore: Int64 = 0
     public var bytesAfter: Int64 = 0
+    /// Logical size of the files that ended in the requested state. Lets a sweep update the
+    /// folder's compression baseline without scanning it again.
+    public var logicalBytesSucceeded: Int64 = 0
     public var duration: TimeInterval = 0
     public var wasCancelled = false
     public var settings = CompressionSettings()
@@ -312,12 +315,14 @@ public enum CompressionEngine {
                         break
                     }
                     var batch: [String] = []
+                    var batchSizes: [Int64] = []
                     var bytes = 0
                     var batchBytes: Int64 = 0
                     while index < eligible.count, batch.count < batchSize,
                           bytes < maxArgumentBytes {
                         let path = eligible[index].path
                         batch.append(path)
+                        batchSizes.append(eligible[index].size)
                         batchBytes += eligible[index].size
                         if executor.isAdministrator {
                             // The shell checks repeat each quoted path twice in addition
@@ -361,7 +366,7 @@ public enum CompressionEngine {
                     // names the files it skipped — it only reports a summary count. So the
                     // per-file verdict comes from re-inspecting the filesystem, which is the
                     // more trustworthy source anyway (ADR-0002).
-                    for p in batch {
+                    for (offset, p) in batch.enumerated() {
                         guard let after = FileInspector.inspect(p) else {
                             let f = CompressionFailure(path: p, remedy: .fileMissing, kind: .failed)
                             outcome.failures.append(f)
@@ -372,6 +377,7 @@ public enum CompressionEngine {
                         let wanted = operation == .compress
                         if after.isCompressed == wanted {
                             outcome.filesSucceeded += 1
+                            outcome.logicalBytesSucceeded += batchSizes[offset]
                         } else {
                             let f: CompressionFailure
                             if !result.succeeded {

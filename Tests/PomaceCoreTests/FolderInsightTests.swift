@@ -144,7 +144,7 @@ struct ExpansionReportTests {
         Store.SnapshotSummary(scannedAt: Date(timeIntervalSince1970: day * 86_400), files: files,
                               logicalBytes: 0, physicalBytes: 0, compressedFiles: compressed,
                               compressedLogicalBytes: reclaimed * 2, compressedPhysicalBytes: reclaimed,
-                              eligibleFiles: 0)
+                              eligibleFiles: 0, eligibleLogicalBytes: 0)
     }
 
     @Test("compression lost between scans is counted and suggests a manual schedule")
@@ -254,5 +254,68 @@ struct RetentionTests {
         #expect(lines.count == 3)
         #expect(lines.last?.hasSuffix("NOTE second") == true)
         #expect(lines.first?.hasSuffix("NOTE first 3") == true)
+    }
+}
+
+@Suite("degradation since the last compression")
+struct DegradationTests {
+
+    let baseline = CompressionBaseline(recordedAt: Date(timeIntervalSince1970: 1_000),
+                                       compressedLogicalBytes: 900_000_000,
+                                       eligibleLogicalBytes: 100_000_000)
+
+    func snapshot(at time: TimeInterval, compressed: Int64, eligible: Int64) -> Store.SnapshotSummary {
+        Store.SnapshotSummary(scannedAt: Date(timeIntervalSince1970: time), files: 10,
+                              logicalBytes: compressed + eligible, physicalBytes: 0, compressedFiles: 5,
+                              compressedLogicalBytes: compressed, compressedPhysicalBytes: 0,
+                              eligibleFiles: 5, eligibleLogicalBytes: eligible)
+    }
+
+    @Test("files the compressor declined are the floor, not degradation")
+    func unchanged() {
+        let d = Degradation.measure(baseline: baseline, compressedLogicalBytes: 900_000_000,
+                                    eligibleLogicalBytes: 100_000_000)
+        #expect(d.recompressibleBytes == 0)
+        #expect(d.fraction == 0)
+        #expect(!d.isSignificant)
+    }
+
+    @Test("re-expanded files count as recompressible")
+    func reExpanded() {
+        // 300 MB of compressed data was rewritten and is now stored uncompressed.
+        let d = Degradation.measure(baseline: baseline, compressedLogicalBytes: 600_000_000,
+                                    eligibleLogicalBytes: 400_000_000)
+        #expect(d.recompressibleBytes == 300_000_000)
+        #expect(abs(d.fraction - 1.0 / 3.0) < 1e-9)
+        #expect(d.isSignificant)
+    }
+
+    @Test("every compressed file rewritten is fully degraded")
+    func fullyDegraded() {
+        let d = Degradation.measure(baseline: baseline, compressedLogicalBytes: 0,
+                                    eligibleLogicalBytes: 1_000_000_000)
+        #expect(d.fraction == 1)
+    }
+
+    @Test("no baseline means no degradation figure; an older scan means up to date")
+    func current() {
+        #expect(Degradation.current(baseline: nil, latest: snapshot(at: 2_000, compressed: 0, eligible: 1)) == nil)
+        let stale = Degradation.current(baseline: baseline, latest: snapshot(at: 500, compressed: 0, eligible: 999_999_999))
+        #expect(stale?.fraction == 0)
+        let fresh = Degradation.current(baseline: baseline, latest: snapshot(at: 2_000, compressed: 800_000_000, eligible: 200_000_000))
+        #expect(fresh?.recompressibleBytes == 100_000_000)
+    }
+
+    @Test("the baseline persists per folder and can be cleared")
+    func persistence() throws {
+        let (store, url) = try temporaryStore()
+        defer { removeStore(url) }
+        let path = "/tmp/pomace-baseline"
+        try store.addWatchedDirectory(path: path)
+        #expect(try store.baseline(path: path) == nil)
+        try store.setBaseline(path: path, baseline)
+        #expect(try store.baseline(path: path) == baseline)
+        try store.clearBaseline(path: path)
+        #expect(try store.baseline(path: path) == nil)
     }
 }

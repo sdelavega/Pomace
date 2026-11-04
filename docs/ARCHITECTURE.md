@@ -161,7 +161,7 @@ with real file locks, without installing or terminating the app.
 
 `Store` uses the SQLite C API with WAL mode, foreign keys, a serial queue and a busy
 timeout for GUI/agent access. Schema v3 holds watched directories with their schedules,
-modes, exclusion patterns and measured compressor; aggregate scan snapshots; sweep
+modes, exclusion patterns, measured compressor and compression baseline; aggregate scan snapshots; sweep
 history; and a record of manual compress/decompress runs. Per-file scan rows are held in
 memory, not persisted. Settings such as the custom compressor path also use UserDefaults.
 
@@ -179,8 +179,9 @@ so the scan, the engine's mutation-time re-check, full-tree target collection an
 sweeps all apply them. `SavingsEstimator` samples eligible files in proportion to their
 size, copies up to 8 MB of each into an `itemReplacementDirectory` on the same volume,
 runs the resolved compressor on the copies with each algorithm and `--verify`, and
-averages the per-file saved fractions. `ExpansionReport` compares consecutive scan
-snapshots, skipping intervals that contain a manual Decompress and discounting deleted
+averages the per-file saved fractions. `Degradation` compares the latest scan with the
+baseline stored after the folder's last completed compression (ADR-0019). `ExpansionReport`
+compares consecutive scan snapshots, skipping intervals that contain a manual Decompress and discounting deleted
 files, to report compression lost to rewrites.
 
 ```text

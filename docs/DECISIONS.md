@@ -557,3 +557,28 @@ store and mutation log grew without bound, one deferral row per hourly wake.
 the copies, and their accuracy against real runs is still unvalidated (ROADMAP 1.2). The
 re-expansion figure understates churn on folders that are swept between scans. Pruned
 history is gone; the coverage chart shows at most the last year.
+
+---
+
+## ADR-0019: Degradation is measured against the last completed compression
+
+**Status:** Accepted · 2026-11-04
+
+**Context.** Transparent compression decays as files are written, and users want to know
+when a folder is worth compressing again, as tools such as CompressGUI show per folder.
+Coverage alone cannot answer that: a folder at 60% coverage may be exactly as compressed as
+it can get, because the remaining files were declined as incompressible.
+
+**Decision.** After a folder's last completed compression, store a baseline: its compressed
+logical bytes and the eligible-but-uncompressed bytes left behind. A completed Compress
+takes it from the native re-scan that follows; a completed sweep computes it from its own
+walk plus what it compressed. Degradation is the eligible data beyond that floor
+(`recompressible`), as a share of compressed plus recompressible data. It is derived from
+the latest saved scan, so it costs nothing to show in the sidebar. A cancelled run records
+no baseline, and a Decompress clears it, because uncompressed data the user asked for is
+not degradation. Check All Folders refreshes every folder with read-only scans.
+
+**Costs.** Aggregate bytes, not per-file tracking: deleting declined files lowers the floor
+and hides an equal amount of degradation, and changing exclusions moves what counts as
+eligible. Per-file tracking would mean persisting hundreds of thousands of rows per scan,
+which ADR-0007's store deliberately avoids.

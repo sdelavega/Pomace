@@ -18440,6 +18440,330 @@
           }
         }
       }
+    },
+    "degradation.short": {
+      "comment": "Sidebar folder detail; formatted percentage of compressible data that is no longer compressed since the last compression. Machine-translated; corrections welcome.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ degraded"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已退化 %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ degradado"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 劣化"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 저하됨"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ verschlechtert"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ dégradé"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ degradado"
+          }
+        }
+      }
+    },
+    "degradation.detail": {
+      "comment": "Scan summary detail; formatted percentage, then formatted disk space that a run could compress again. Machine-translated; corrections welcome.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ degraded since the last compression · %@ can be recompressed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自上次压缩以来已退化 %@ · 可重新压缩 %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ degradado desde la última compresión · se pueden volver a comprimir %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前回の圧縮から %@ 劣化 · %@ を再圧縮できます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 압축 이후 %@ 저하됨 · %@를 다시 압축할 수 있습니다"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ verschlechtert seit der letzten Komprimierung · %@ können erneut komprimiert werden"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ dégradé depuis la dernière compression · %@ peuvent être recompressés"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ degradado desde a última compressão · %@ podem ser recomprimidos"
+          }
+        }
+      }
+    },
+    "degradation.none": {
+      "comment": "Scan summary detail when a previously compressed folder has not degraded. Machine-translated; corrections welcome.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unchanged since the last compression"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自上次压缩以来没有变化"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin cambios desde la última compresión"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前回の圧縮から変化はありません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 압축 이후 변경 없음"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seit der letzten Komprimierung unverändert"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inchangé depuis la dernière compression"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem alterações desde a última compressão"
+          }
+        }
+      }
+    },
+    "degradation.check_all": {
+      "comment": "Toolbar button and menu command; rescans every watched folder to measure degradation. Machine-translated; corrections welcome.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check All Folders"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查所有文件夹"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprobar todas las carpetas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのフォルダを確認"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 폴더 확인"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Ordner prüfen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifier tous les dossiers"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificar todas as pastas"
+          }
+        }
+      }
+    },
+    "degradation.check_all_help": {
+      "comment": "Tooltip for Check All Folders; reassures that the check is read-only. Machine-translated; corrections welcome.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rescans every watched folder to see how much compression each has lost since it was last compressed. Nothing is changed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新扫描所有受监视的文件夹，查看每个文件夹自上次压缩以来损失了多少压缩。不会更改任何内容。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vuelve a analizar todas las carpetas vigiladas para ver cuánta compresión ha perdido cada una desde la última compresión. No se modifica nada."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "監視中のすべてのフォルダを再スキャンし、前回の圧縮以降にどれだけ圧縮が失われたかを確認します。何も変更されません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "감시 중인 모든 폴더를 다시 스캔하여 마지막 압축 이후 각 폴더에서 압축이 얼마나 줄었는지 확인합니다. 아무것도 변경되지 않습니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scannt alle überwachten Ordner erneut, um zu sehen, wie viel Komprimierung jeder seit der letzten Komprimierung verloren hat. Es wird nichts verändert."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyse à nouveau chaque dossier surveillé pour voir quelle part de compression il a perdue depuis la dernière compression. Rien n’est modifié."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analisa novamente todas as pastas monitoradas para ver quanta compressão cada uma perdeu desde a última compressão. Nada é alterado."
+          }
+        }
+      }
+    },
+    "degradation.checking": {
+      "comment": "Sidebar progress label while every watched folder is rescanned. Machine-translated; corrections welcome.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking folders…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查文件夹…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprobando carpetas…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダを確認中…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폴더 확인 중…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordner werden geprüft …"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérification des dossiers…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificando pastas…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -130,6 +130,8 @@ these manual checks. See [release/README.md](../release/README.md) for release a
       stored per folder and used by Automatic mode
 - [x] Per-folder exclusions (name patterns such as `node_modules` or `*.log`)
 - [x] Re-expansion report and manual-schedule suggestion
+- [x] Degradation since the last compression, per folder, with Check All Folders
+      ([ADR-0019](DECISIONS.md#adr-0019-degradation-is-measured-against-the-last-completed-compression))
 - [x] History pruning and mutation-log rotation
 - [ ] Re-run tuning benchmarks with cold cache, repeated runs, varied corpora, external
       media and Intel; see [DEFAULTS.md §6](DEFAULTS.md#6-what-m0-must-re-measure)

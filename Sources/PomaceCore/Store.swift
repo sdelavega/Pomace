@@ -118,7 +118,15 @@ public final class Store: @unchecked Sendable {
     /// analysis can tell a user's Decompress apart from writes re-expanding files.
     private func migrateToV3() throws {
         guard try scalarLocked("SELECT COALESCE(MAX(version), 0) FROM schema_version") < 3 else { return }
-        try? exec("ALTER TABLE watched_directory ADD COLUMN exclusions TEXT NOT NULL DEFAULT '';")
+        for column in [
+            "exclusions TEXT NOT NULL DEFAULT ''",
+            // The folder's state when Pomace last finished compressing it (see Degradation).
+            "baseline_at REAL",
+            "baseline_compressed INTEGER",
+            "baseline_eligible INTEGER",
+        ] {
+            try? exec("ALTER TABLE watched_directory ADD COLUMN \(column);")
+        }
         try exec("""
         CREATE TABLE IF NOT EXISTS manual_run (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,6 +223,47 @@ public final class Store: @unchecked Sendable {
         try queue.sync {
             try run("UPDATE watched_directory SET compressor = ? WHERE path = ?;",
                     [compressor.map(Value.text) ?? .null, .text(path)])
+        }
+    }
+
+    // MARK: - Compression baseline
+
+    public func setBaseline(path: String, _ baseline: CompressionBaseline) throws {
+        try queue.sync {
+            try run("""
+                UPDATE watched_directory
+                SET baseline_at = ?, baseline_compressed = ?, baseline_eligible = ?
+                WHERE path = ?;
+                """, [.real(baseline.recordedAt.timeIntervalSince1970),
+                      .int(baseline.compressedLogicalBytes), .int(baseline.eligibleLogicalBytes),
+                      .text(path)])
+        }
+    }
+
+    /// Forgets the baseline, e.g. after the user deliberately decompresses the folder.
+    public func clearBaseline(path: String) throws {
+        try queue.sync {
+            try run("""
+                UPDATE watched_directory
+                SET baseline_at = NULL, baseline_compressed = NULL, baseline_eligible = NULL
+                WHERE path = ?;
+                """, [.text(path)])
+        }
+    }
+
+    public func baseline(path: String) throws -> CompressionBaseline? {
+        try queue.sync {
+            var out: CompressionBaseline?
+            try query("""
+                SELECT baseline_at, baseline_compressed, baseline_eligible FROM watched_directory
+                WHERE path = ? AND baseline_at IS NOT NULL;
+                """, [.text(path)]) { stmt in
+                out = CompressionBaseline(
+                    recordedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0)),
+                    compressedLogicalBytes: sqlite3_column_int64(stmt, 1),
+                    eligibleLogicalBytes: sqlite3_column_int64(stmt, 2))
+            }
+            return out
         }
     }
 
@@ -428,6 +477,7 @@ public final class Store: @unchecked Sendable {
         public let compressedLogicalBytes: Int64
         public let compressedPhysicalBytes: Int64
         public let eligibleFiles: Int
+        public let eligibleLogicalBytes: Int64
 
         public var compressionCoverage: Double {
             files > 0 ? Double(compressedFiles) / Double(files) : 0
@@ -443,7 +493,7 @@ public final class Store: @unchecked Sendable {
             var out: SnapshotSummary?
             try query("""
                 SELECT scanned_at, files, logical_bytes, physical_bytes, compressed_files,
-                       compressed_logical, compressed_physical, eligible_files
+                       compressed_logical, compressed_physical, eligible_files, eligible_logical
                 FROM scan_snapshot WHERE path = ? ORDER BY scanned_at DESC, id DESC LIMIT 1;
                 """, [.text(path)]) { stmt in
                 out = SnapshotSummary(
@@ -454,7 +504,8 @@ public final class Store: @unchecked Sendable {
                     compressedFiles: Int(sqlite3_column_int64(stmt, 4)),
                     compressedLogicalBytes: sqlite3_column_int64(stmt, 5),
                     compressedPhysicalBytes: sqlite3_column_int64(stmt, 6),
-                    eligibleFiles: Int(sqlite3_column_int64(stmt, 7)))
+                    eligibleFiles: Int(sqlite3_column_int64(stmt, 7)),
+                    eligibleLogicalBytes: sqlite3_column_int64(stmt, 8))
             }
             return out
         }
@@ -466,7 +517,7 @@ public final class Store: @unchecked Sendable {
             var out: [SnapshotSummary] = []
             try query("""
                 SELECT scanned_at, files, logical_bytes, physical_bytes, compressed_files,
-                       compressed_logical, compressed_physical, eligible_files
+                       compressed_logical, compressed_physical, eligible_files, eligible_logical
                 FROM scan_snapshot WHERE path = ?
                 ORDER BY scanned_at DESC, id DESC LIMIT ?;
                 """, [.text(path), .int(Int64(limit))]) { stmt in
@@ -478,7 +529,8 @@ public final class Store: @unchecked Sendable {
                     compressedFiles: Int(sqlite3_column_int64(stmt, 4)),
                     compressedLogicalBytes: sqlite3_column_int64(stmt, 5),
                     compressedPhysicalBytes: sqlite3_column_int64(stmt, 6),
-                    eligibleFiles: Int(sqlite3_column_int64(stmt, 7))))
+                    eligibleFiles: Int(sqlite3_column_int64(stmt, 7)),
+                    eligibleLogicalBytes: sqlite3_column_int64(stmt, 8)))
             }
             return out.reversed()
         }

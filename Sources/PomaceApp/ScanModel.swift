@@ -72,6 +72,15 @@ final class ScanModel {
     /// How much compression the selected folder has been losing between scans.
     var expansion = ExpansionReport()
 
+    /// How far each folder has drifted from its last compression, as of its latest scan.
+    /// Absent for folders Pomace has never finished compressing.
+    private(set) var degradationByPath: [String: Degradation] = [:]
+    /// Folders whose next scan should become their compression baseline: the native
+    /// re-scan that follows a completed Compress.
+    private var pendingBaselines: Set<String> = []
+    private(set) var isCheckingFolders = false
+    private var checkTask: Task<Void, Never>?
+
     enum SortOrder: String, CaseIterable, Identifiable {
         case potentialSaving = "Largest first"
         case name = "Name"
@@ -115,6 +124,8 @@ final class ScanModel {
         self.resolution = resolution ?? CompressorTool.resolve(customPath: defaults.string(forKey: CompressorTool.customPathDefaultsKey))
         serviceStatus = SweepService.status
         showingOnboarding = !defaults.bool(forKey: "hasSeenOnboarding")
+        // Last: this calls a method on self, so every stored property must be set first.
+        for dir in watched { refreshDegradation(for: dir.path) }
     }
 
     #if DEBUG
@@ -175,6 +186,70 @@ final class ScanModel {
         snapshotHistory = (try? store?.snapshotHistory(path: path)).flatMap { $0 } ?? []
         let decompressions = (try? store?.decompressions(path: path)).flatMap { $0 } ?? []
         expansion = ExpansionReport.analyze(snapshotHistory, decompressions: decompressions)
+    }
+
+    // MARK: - Degradation
+
+    func degradation(for path: String) -> Degradation? { degradationByPath[path] }
+
+    /// Sidebar subtitle: the schedule, plus how degraded the folder is when that matters.
+    func folderSummary(for path: String) -> String {
+        guard let degradation = degradationByPath[path], degradation.isSignificant else {
+            return scheduleSummary(for: path)
+        }
+        return [scheduleSummary(for: path), AppStrings.degradedShort(Fmt.percent(degradation.fraction))]
+            .joined(separator: " · ")
+    }
+
+    private func refreshDegradation(for path: String) {
+        let baseline = (try? store?.baseline(path: path)).flatMap { $0 }
+        let latest = (try? store?.latestSnapshot(path: path)).flatMap { $0 }
+        degradationByPath[path] = Degradation.current(baseline: baseline, latest: latest)
+    }
+
+    /// Rescans every watched folder in turn, read-only, so the sidebar shows how far each
+    /// has drifted since it was last compressed. The selected folder's view is refreshed
+    /// too when nothing else is using it.
+    func checkAllFolders() {
+        guard !isCheckingFolders, !watchedPaths.isEmpty else { return }
+        isCheckingFolders = true
+        let jobs = watchedPaths.map { ($0, rules(for: $0)) }
+        checkTask = Task { [weak self] in
+            for (path, rules) in jobs {
+                if Task.isCancelled { break }
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+                      isDirectory.boolValue,
+                      VolumeContext.probe(path: path).blockingReason == nil else { continue }
+                var latest: ScanResult?
+                for await event in ScanEngine.scan(root: path, rules: rules) {
+                    if case .finished(let result) = event { latest = result }
+                }
+                guard let self else { return }
+                guard let result = latest else { continue }
+                self.saveScan(result, path: path)
+                if self.selectedPath == path, !self.isScanning, !self.isRunning, !self.isSweeping {
+                    self.showingRecentScan = false
+                    self.state = .done(result)
+                }
+            }
+            self?.isCheckingFolders = false
+            self?.checkTask = nil
+        }
+    }
+
+    /// Persists a finished scan and refreshes everything derived from saved scans.
+    private func saveScan(_ result: ScanResult, path: String) {
+        if !isRunning && !isSweeping { scanCache.insert(result) }
+        _ = try? store?.record(result)
+        if pendingBaselines.remove(path) != nil {
+            try? store?.setBaseline(path: path, CompressionBaseline(
+                recordedAt: Date(),
+                compressedLogicalBytes: result.progress.compressedLogicalBytes,
+                eligibleLogicalBytes: result.progress.eligibleLogicalBytes))
+        }
+        refreshDegradation(for: path)
+        if selectedPath == path { refreshDrift(for: path) }
     }
 
     /// The suggested fix for a folder whose writes keep undoing its compression.
@@ -514,6 +589,16 @@ final class ScanModel {
                     self.runState = .finished(outcome)
                     // Lets drift analysis tell a Decompress apart from re-expansion.
                     try? self.store?.recordManualRun(path: root, startedAt: started, operation: op)
+                    switch op {
+                    case .compress where !outcome.wasCancelled:
+                        // The re-scan below becomes the folder's new "last compression".
+                        self.pendingBaselines.insert(root)
+                    case .decompress:
+                        // Deliberately uncompressed data is not degradation.
+                        try? self.store?.clearBaseline(path: root)
+                        self.degradationByPath[root] = nil
+                    default: break
+                    }
                     // Post-run truth: re-scan natively rather than trusting the compressor's
                     // summary, so before and after come from the same code path.
                     self.refreshAfterMutation(root)
@@ -581,6 +666,8 @@ final class ScanModel {
         schedulesByPath[path] = nil
         exclusionsByPath[path] = nil
         measuredByPath[path] = nil
+        degradationByPath[path] = nil
+        pendingBaselines.remove(path)
         scanCache.invalidate(path)
         guard selectedPath == path else { return }
         // Selecting the next folder without loading it left its sidebar row highlighted
@@ -686,9 +773,7 @@ final class ScanModel {
                     self.state = .scanning(p)
                 case .finished(let r):
                     self.state = .done(r)
-                    if !self.isRunning && !self.isSweeping { self.scanCache.insert(r) }
-                    _ = try? self.store?.record(r)
-                    if self.selectedPath == path { self.refreshDrift(for: path) }
+                    self.saveScan(r, path: path)
                 }
             }
         }

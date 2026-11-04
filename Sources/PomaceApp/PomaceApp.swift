@@ -53,6 +53,13 @@ struct PomaceApp: App {
                         Button(AppStrings.addFolder, systemImage: "folder.badge.plus") { addFolder() }
                             .help(AppStrings.addFolderTooltip)
                     }
+                    ToolbarItem(placement: .automatic) {
+                        Button(AppStrings.checkAllFolders, systemImage: "gauge.with.dots.needle.33percent") {
+                            model.checkAllFolders()
+                        }
+                        .help(AppStrings.checkAllFoldersHelp)
+                        .disabled(model.watchedPaths.isEmpty || model.isCheckingFolders)
+                    }
                 }
         }
         .windowToolbarStyle(.unified)
@@ -71,6 +78,8 @@ struct PomaceApp: App {
                 Button(AppStrings.rescan) { model.rescan() }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(model.selectedPath == nil || model.isRunning || model.isSweeping)
+                Button(AppStrings.checkAllFolders) { model.checkAllFolders() }
+                    .disabled(model.watchedPaths.isEmpty || model.isCheckingFolders)
                 Divider()
                 Button(AppStrings.compress) { model.startCompress() }
                     .keyboardShortcut(.return, modifiers: .command)

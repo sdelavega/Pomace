@@ -326,6 +326,21 @@ enum AppStrings {
         String(format: text("exclusions.remove", defaultValue: "Remove %@", comment: "Accessibility label and tooltip for the button removing one exclusion; placeholder is the pattern."), pattern)
     }
 
+    // MARK: Degradation
+
+    static func degradedShort(_ percent: String) -> String {
+        String(format: text("degradation.short", defaultValue: "%@ degraded", comment: "Sidebar folder detail; formatted percentage of compressible data that is no longer compressed since the last compression."), percent)
+    }
+
+    static func degradedDetail(_ percent: String, _ bytes: String) -> String {
+        String(format: text("degradation.detail", defaultValue: "%@ degraded since the last compression · %@ can be recompressed", comment: "Scan summary detail; formatted percentage, then formatted disk space that a run could compress again."), percent, bytes)
+    }
+
+    static let notDegraded = text("degradation.none", defaultValue: "Unchanged since the last compression", comment: "Scan summary detail when a previously compressed folder has not degraded.")
+    static let checkAllFolders = text("degradation.check_all", defaultValue: "Check All Folders", comment: "Toolbar button and menu command; rescans every watched folder to measure degradation.")
+    static let checkAllFoldersHelp = text("degradation.check_all_help", defaultValue: "Rescans every watched folder to see how much compression each has lost since it was last compressed. Nothing is changed.", comment: "Tooltip for Check All Folders; reassures that the check is read-only.")
+    static let checkingFolders = text("degradation.checking", defaultValue: "Checking folders…", comment: "Sidebar progress label while every watched folder is rescanned.")
+
     // MARK: Re-expansion
 
     static func expansionSummary(_ bytes: String) -> String {

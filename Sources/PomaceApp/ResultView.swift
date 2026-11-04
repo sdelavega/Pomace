@@ -45,8 +45,8 @@ struct ScanOverview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 8 : 14) {
-            SummaryHeader(result: result, columns: availableSize.width < 640 ? 2 : 4,
-                          compact: compact)
+            SummaryHeader(result: result, degradation: model.degradation(for: result.root),
+                          columns: availableSize.width < 640 ? 2 : 4, compact: compact)
             Divider()
             ActionBar(model: model, inlineMode: availableSize.width >= 640)
             RunBanner(model: model)
@@ -58,6 +58,8 @@ struct ScanOverview: View {
 
 private struct SummaryHeader: View {
     let result: ScanResult
+    /// Drift since the folder was last compressed; nil if it never has been.
+    let degradation: Degradation?
     let columns: Int
     let compact: Bool
 
@@ -130,8 +132,15 @@ private struct SummaryHeader: View {
     }
 
     private var subhead: String {
-        [AppStrings.folderCompressed(Fmt.percent(result.compressionCoverage)),
-         AppStrings.eligibleData(Fmt.bytes(result.progress.eligibleLogicalBytes))].joined(separator: " · ")
+        var parts = [AppStrings.folderCompressed(Fmt.percent(result.compressionCoverage)),
+                     AppStrings.eligibleData(Fmt.bytes(result.progress.eligibleLogicalBytes))]
+        if let degradation {
+            parts.append(degradation.isSignificant
+                ? AppStrings.degradedDetail(Fmt.percent(degradation.fraction),
+                                            Fmt.bytes(degradation.recompressibleBytes))
+                : AppStrings.notDegraded)
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
