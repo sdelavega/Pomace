@@ -219,7 +219,6 @@ private struct Detail: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background { AetherCanvas() }
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button("Settings", systemImage: "slider.horizontal.3") {
@@ -272,6 +271,7 @@ private struct ScanningView: View {
                     .frame(maxWidth: 420)
             }
             Button("Stop", action: onCancel)
+                .buttonStyle(AetherSecondaryButtonStyle())
                 .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
