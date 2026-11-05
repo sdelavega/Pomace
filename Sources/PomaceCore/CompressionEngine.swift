@@ -398,7 +398,10 @@ public enum CompressionEngine {
                     progress.filesProcessed = min(index, eligible.count)
                     progress.failures = realFailureCount
                     progress.currentPath = nil
-                    bytesDone += batchBytes
+                    // Only a successful batch advanced the work: a failed batch attempted
+                    // its files but compressed nothing, and counting its bytes would show
+                    // the bar nearly complete just as the run refuses (issue 3).
+                    if result.succeeded { bytesDone += batchBytes }
                     progress.bytesProcessed = bytesDone
                     continuation.yield(.progress(progress))
                     // An authorization or invocation error should not prompt again for

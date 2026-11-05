@@ -7,7 +7,6 @@ import Foundation
 public final class MutationLog: @unchecked Sendable {
 
     public let url: URL
-    private let handle: FileHandle?
     private let lock = NSLock()
     private let formatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -33,13 +32,14 @@ public final class MutationLog: @unchecked Sendable {
 
     /// Rotates at open, not mid-write: both the app and every hourly sweep open the log, so
     /// this runs often enough, and a run's BEGIN/END lines never straddle two files.
-    /// A process that already has the file open keeps appending to the rotated copy until
-    /// it exits, which loses nothing.
+    /// Writers reopen the file per line (see `write`), so a rotation between lines is
+    /// seamless and loses nothing.
     static func rotateIfNeeded(_ url: URL, limit: UInt64) {
         guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? UInt64,
               size >= limit else { return }
-        // rename(2) replaces the old generation atomically; if another process rotated
-        // first this fails harmlessly with ENOENT.
+        // rename(2) replaces the old generation atomically. Two processes racing a
+        // rotation each replace the other's generation in turn: one generation is lost,
+        // never written data — within the "about twice the limit" budget above.
         _ = rename(url.path, rotatedURL(for: url).path)
     }
 
@@ -50,18 +50,23 @@ public final class MutationLog: @unchecked Sendable {
         if !FileManager.default.fileExists(atPath: target.path) {
             FileManager.default.createFile(atPath: target.path, contents: nil)
         }
-        handle = try? FileHandle(forWritingTo: target)
-        _ = try? handle?.seekToEnd()
     }
-
-    deinit { try? handle?.close() }
 
     private func write(_ line: String) {
         lock.lock(); defer { lock.unlock() }
         guard let data = "[\(formatter.string(from: Date()))] \(line)\n".data(using: .utf8) else { return }
-        try? handle?.write(contentsOf: data)
+        // Open per line, not once per process. Lines are rare — per-file failures and a
+        // BEGIN/END pair per run — so the cost is nothing next to what a persistent handle
+        // costs: after another process rotates the file, the old handle appends to an
+        // unlinked inode and this process's lines silently vanish from disk, losing the
+        // SAFETY.md rule 9 record for the rest of the session. Reopening also retries a
+        // transient open failure instead of dropping every later line.
+        guard let handle = try? FileHandle(forWritingTo: url) else { return }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: data)
         // No buffering: a crash mid-run must still leave the record behind.
-        try? handle?.synchronize()
+        try? handle.synchronize()
+        try? handle.close()
     }
 
     public func begin(operation: CompressionOperation, root: String,

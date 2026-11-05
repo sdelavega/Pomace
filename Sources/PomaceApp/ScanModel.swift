@@ -76,10 +76,16 @@ final class ScanModel {
     /// Absent for folders Pomace has never finished compressing.
     private(set) var degradationByPath: [String: Degradation] = [:]
     /// Folders whose next scan should become their compression baseline: the native
-    /// re-scan that follows a completed Compress.
-    private var pendingBaselines: Set<String> = []
+    /// re-scan that follows a completed Compress. The value is when the compression
+    /// finished: only a scan that *started* afterwards pictures the compressed tree.
+    /// A scan already in flight when the compression finished walked a half-compressed
+    /// tree and must not steal the baseline (issue 3).
+    private var pendingBaselines: [String: Date] = [:]
     private(set) var isCheckingFolders = false
     private var checkTask: Task<Void, Never>?
+    /// The folder an in-flight run is mutating, or nil. Snapshots taken while a run
+    /// holds the folder would picture it half-done (issue 3).
+    private var runRoot: String?
 
     enum SortOrder: String, CaseIterable, Identifiable {
         case potentialSaving = "Largest first"
@@ -210,6 +216,10 @@ final class ScanModel {
     /// Rescans every watched folder in turn, read-only, so the sidebar shows how far each
     /// has drifted since it was last compressed. The selected folder's view is refreshed
     /// too when nothing else is using it.
+    ///
+    /// Any user-driven scan cancels the check (see `scan`): the check's jobs carry the
+    /// rules and folder list of the moment they were captured, so a check surviving a
+    /// removal or an exclusion edit would record stale or resurrected data.
     func checkAllFolders() {
         guard !isCheckingFolders, !watchedPaths.isEmpty else { return }
         isCheckingFolders = true
@@ -227,6 +237,14 @@ final class ScanModel {
                 }
                 guard let self else { return }
                 guard let result = latest else { continue }
+                // A folder removed while its check scan ran must not be re-recorded:
+                // removeWatchedDirectory already forgot it, and a row re-inserted with a
+                // NULL directory_id evades both the path delete and the cascade,
+                // resurrecting the history the user asked Pomace to forget (issue 3).
+                guard self.watchedPaths.contains(path) else { continue }
+                // A snapshot taken mid-run pictures the folder half-done; it splits the
+                // run's window for drift analysis and must not become a baseline (issue 3).
+                guard self.runRoot != path else { continue }
                 self.saveScan(result, path: path)
                 if self.selectedPath == path, !self.isScanning, !self.isRunning, !self.isSweeping {
                     self.showingRecentScan = false
@@ -242,7 +260,13 @@ final class ScanModel {
     private func saveScan(_ result: ScanResult, path: String) {
         if !isRunning && !isSweeping { scanCache.insert(result) }
         _ = try? store?.record(result)
-        if pendingBaselines.remove(path) != nil {
+        // The baseline belongs to the first scan that started after the compression
+        // finished. `scanned_at` is stamped at insert, so the scan began `duration`
+        // before now; a concurrently finished older scan fails this check and leaves
+        // the pending baseline for the real post-compression re-scan.
+        if let finishedAt = pendingBaselines[path],
+           Date().timeIntervalSince1970 - result.duration >= finishedAt.timeIntervalSince1970 {
+            pendingBaselines[path] = nil
             try? store?.setBaseline(path: path, CompressionBaseline(
                 recordedAt: Date(),
                 compressedLogicalBytes: result.progress.compressedLogicalBytes,
@@ -574,6 +598,7 @@ final class ScanModel {
         let started = Date()
         let cancellation = CompressionCancellation()
         runCancellation = cancellation
+        runRoot = root
         isStopping = false
         scanCache.invalidate(root)
         runState = .running(op, CompressionProgress())
@@ -597,7 +622,9 @@ final class ScanModel {
                     switch op {
                     case .compress where !outcome.wasCancelled:
                         // The re-scan below becomes the folder's new "last compression".
-                        self.pendingBaselines.insert(root)
+                        // Stamped now: only a scan that starts after this moment may
+                        // consume the baseline (see `saveScan`).
+                        self.pendingBaselines[root] = Date()
                     case .decompress:
                         // Deliberately uncompressed data is not degradation.
                         try? self.store?.clearBaseline(path: root)
@@ -614,6 +641,7 @@ final class ScanModel {
             }
             if self.runCancellation === cancellation {
                 self.runCancellation = nil
+                self.runRoot = nil
                 self.isStopping = false
                 self.runTask = nil
             }
@@ -672,8 +700,14 @@ final class ScanModel {
         exclusionsByPath[path] = nil
         measuredByPath[path] = nil
         degradationByPath[path] = nil
-        pendingBaselines.remove(path)
+        pendingBaselines[path] = nil
         scanCache.invalidate(path)
+        // Stop the bulk check from re-recording the removed folder from a job captured
+        // before the removal (its saveScan is gated too, but there is no point walking
+        // a folder that is no longer watched).
+        checkTask?.cancel()
+        checkTask = nil
+        if isCheckingFolders { isCheckingFolders = false }
         guard selectedPath == path else { return }
         // Selecting the next folder without loading it left its sidebar row highlighted
         // beside an idle detail pane and the removed folder's schedule and history.
@@ -754,6 +788,13 @@ final class ScanModel {
 
     func scan(_ path: String) {
         cancelScan()
+        // A user-driven scan supersedes the bulk check: the check's captured jobs carry
+        // the folder list and rules of the moment it started, so letting it finish and
+        // record after a removal or an exclusion edit would resurrect removed history
+        // or overwrite the fresh scan with stale-rules results (issue 3).
+        checkTask?.cancel()
+        checkTask = nil
+        if isCheckingFolders { isCheckingFolders = false }
         showingRecentScan = false
         scanCache.invalidate(path)
         // Fail fast and legibly rather than showing an empty tree the user can't explain.

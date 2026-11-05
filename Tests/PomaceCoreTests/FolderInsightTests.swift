@@ -53,6 +53,11 @@ struct UserExclusionTests {
     func aboveRoot() {
         let rules = SafetyRules(userExclusions: ["Users", "alex"], root: "/Users/alex/Code")
         #expect(rules.matchingExclusion("/Users/alex/Code/notes.txt") == nil)
+        // A path outside (or equal to) the root has no components below the root; the
+        // old whole-path fallback let patterns reach above the folder (issue 3).
+        #expect(rules.matchingExclusion("/Users/alex/notes.txt") == nil)
+        #expect(rules.matchingExclusion("/Users/marion/node_modules/x") == nil)
+        #expect(rules.matchingExclusion("/Users/alex/Code") == nil)
     }
 
     @Test("exclusions are a hard exclusion, never an override")
@@ -226,6 +231,21 @@ struct RetentionTests {
         #expect(try store.decompressions(path: path).count == 1)
     }
 
+    @Test("a cancelled sweep does not advance the last completed sweep")
+    func cancelledSweep() throws {
+        let (store, url) = try temporaryStore()
+        defer { removeStore(url) }
+        let path = "/tmp/pomace-cancelled"
+        try store.addWatchedDirectory(path: path)
+        let old = Date(timeIntervalSince1970: 1_700_000_000)
+        try store.recordSweep(path: path, startedAt: old, duration: 1)
+        // A cancelled walk saw only part of the tree; recording it as completed would
+        // advance the cutoff past everything it never saw (issue 3).
+        try store.recordSweep(path: path, startedAt: old.addingTimeInterval(3_600), duration: 5,
+                              filesCompressed: 4, cancelled: true)
+        #expect(try store.lastCompletedSweep(path: path) == old)
+    }
+
     @Test("removing a folder forgets its history")
     func removal() throws {
         let (store, url) = try temporaryStore()
@@ -254,6 +274,25 @@ struct RetentionTests {
         #expect(lines.count == 3)
         #expect(lines.last?.hasSuffix("NOTE second") == true)
         #expect(lines.first?.hasSuffix("NOTE first 3") == true)
+    }
+
+    @Test("a writer keeps landing on disk after another process rotates the log")
+    func logRotationFollowsWriter() throws {
+        let dir = try temporaryDirectory("log-follow")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("mutations.log")
+        let writer = MutationLog(url: url, rotationSize: 64)
+        writer.note("before")
+        // Another process rotates the file underneath the long-lived writer. A
+        // persistent handle would keep appending to the rotated, then unlinked inode —
+        // losing the rest of the session's record (issue 3).
+        let other = MutationLog(url: url, rotationSize: 64)
+        other.note("rotated")
+        writer.note("after")
+        let lines = DiagnosticsFiles.logLines(at: url, limit: 10)
+        #expect(lines.contains { $0.hasSuffix("NOTE before") })
+        #expect(lines.contains { $0.hasSuffix("NOTE rotated") })
+        #expect(lines.contains { $0.hasSuffix("NOTE after") })
     }
 }
 

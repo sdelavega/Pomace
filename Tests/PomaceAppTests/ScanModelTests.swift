@@ -291,4 +291,30 @@ struct ScanModelTests {
             #expect(message == AppStrings.folderChanged)
         }
     }
+
+    @Test("removing a folder mid-check forgets its history and cancels the check")
+    func removalDuringCheckForgetsHistory() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PomaceRemoveCheck-\(UUID())")
+        let root = directory.appendingPathComponent("watched")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for i in 0..<50 { try Data(repeating: 65, count: 4096).write(to: root.appendingPathComponent("file\(i)")) }
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try Store(url: directory.appendingPathComponent("store.sqlite"))
+        let model = ScanModel(store: store,
+                              log: MutationLog(url: directory.appendingPathComponent("log")),
+                              sweepLockURL: directory.appendingPathComponent("sweep.lock"))
+        model.add(path: root.path)
+        try await waitUntil { model.result != nil }
+        // The check rescans every watched folder; removing the folder mid-check must
+        // cancel that job and leave no resurrected snapshot rows behind (issue 3): the
+        // check's saveScan used to re-insert the history removeWatchedDirectory deleted,
+        // with a NULL directory_id no later delete could reach.
+        model.checkAllFolders()
+        model.remove(path: root.path)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(model.watchedPaths.isEmpty)
+        #expect(try store.watched().isEmpty)
+        #expect(try store.snapshotHistory(path: root.path).isEmpty)
+        #expect(try store.latestSnapshot(path: root.path) == nil)
+    }
 }

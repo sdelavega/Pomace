@@ -81,12 +81,15 @@ public struct SafetyRules: Sendable {
     /// The first exclusion matching a component of `path` below the root, if any.
     public func matchingExclusion(_ path: String) -> String? {
         guard !userExclusions.isEmpty else { return nil }
-        var relative = Substring(path)
+        var relative: Substring?
         for base in [root, canonicalRoot].compactMap({ $0 }) where path.hasPrefix(base + "/") {
             relative = path.dropFirst(base.count + 1)
             break
         }
-        let components = relative.split(separator: "/").map(String.init)
+        // A path outside (or equal to) the root has no components below the root to
+        // match; matching the whole path would let a pattern reach above the folder.
+        guard let below = relative else { return nil }
+        let components = below.split(separator: "/").map(String.init)
         for pattern in userExclusions {
             for component in components where fnmatch(pattern, component, FNM_CASEFOLD) == 0 {
                 return pattern

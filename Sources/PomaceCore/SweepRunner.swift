@@ -53,7 +53,13 @@ public struct SweepRunner: Sendable {
             return []
         }
 
-        let directories = (try? store.watched()) ?? []
+        // An unreadable folder list must not read as "nothing to do": that would silently
+        // disable every scheduled sweep until the next lucky wake.
+        let directories: [Store.WatchedDirectory]
+        do { directories = try store.watched() } catch {
+            log.note("sweep skipped — history unavailable: \(error)")
+            return []
+        }
         var reports: [SweepReport] = []
 
         for dir in directories {
@@ -142,7 +148,11 @@ public struct SweepRunner: Sendable {
 
         guard !candidates.isEmpty else {
             report.duration = Date().timeIntervalSince(started)
-            _ = try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration)
+            // A cancelled walk is not a completed sweep: marking it done would advance the
+            // cutoff past everything the walk never saw and blind incremental sweeps to
+            // those files until the next full pass.
+            _ = try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration,
+                                        cancelled: !walkCompleted)
             if walkCompleted {
                 recordBaseline(dir.path, compressed: walk.compressedLogical, eligible: eligibleLogical)
             }
@@ -174,11 +184,13 @@ public struct SweepRunner: Sendable {
         }
 
         report.duration = Date().timeIntervalSince(started)
+        // Cancelled here too: see the empty-candidates branch above.
         _ = try? store.recordSweep(path: dir.path, startedAt: started, duration: report.duration,
                                    filesCompressed: report.filesCompressed,
                                    filesFailed: report.filesFailed,
                                    bytesReclaimed: report.bytesReclaimed,
-                                   error: report.error.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) })
+                                   error: report.error.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) },
+                                   cancelled: !walkCompleted)
         // A completed sweep is the folder's new "last compression". What it compressed
         // moves from eligible to compressed; what it declined stays as the eligible floor.
         if walkCompleted, let outcome = finished, !outcome.wasCancelled {

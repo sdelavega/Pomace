@@ -92,8 +92,7 @@ public final class Store: @unchecked Sendable {
             "schedule_enabled INTEGER NOT NULL DEFAULT 1",
             "mode TEXT NOT NULL DEFAULT 'Automatic'",
         ] {
-            // ALTER TABLE ADD COLUMN throws if the column already exists; that is fine.
-            try? exec("ALTER TABLE watched_directory ADD COLUMN \(column);")
+            try addColumn("watched_directory", column)
         }
         try exec("""
         CREATE TABLE IF NOT EXISTS sweep_run (
@@ -125,7 +124,7 @@ public final class Store: @unchecked Sendable {
             "baseline_compressed INTEGER",
             "baseline_eligible INTEGER",
         ] {
-            try? exec("ALTER TABLE watched_directory ADD COLUMN \(column);")
+            try addColumn("watched_directory", column)
         }
         try exec("""
         CREATE TABLE IF NOT EXISTS manual_run (
@@ -414,13 +413,13 @@ public final class Store: @unchecked Sendable {
         }
     }
 
-    /// When a real (non-deferred) sweep last completed for this path.
+    /// When a real (non-deferred, non-cancelled) sweep last completed for this path.
     public func lastCompletedSweep(path: String) throws -> Date? {
         try queue.sync {
             var out: Date?
             try query("""
                 SELECT started_at FROM sweep_run
-                WHERE path = ? AND deferral IS NULL AND error IS NULL
+                WHERE path = ? AND deferral IS NULL AND error IS NULL AND cancelled = 0
                 ORDER BY started_at DESC LIMIT 1;
                 """, [.text(path)]) { stmt in
                 out = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0))
@@ -592,6 +591,19 @@ public final class Store: @unchecked Sendable {
 
     private func scalar(_ sql: String, _ binds: [Value] = []) throws -> Int64 {
         try queue.sync { try scalarLocked(sql, binds) }
+    }
+
+    /// Adds a column unless it already exists. A bare `try? exec(ALTER …)` would also
+    /// swallow a *real* failure — disk full, database locked — and the caller would
+    /// still bump the schema version, leaving every later read of the missing column
+    /// to fail silently and the store permanently unmigrated. Matching the column
+    /// name makes "already added" the only tolerated case.
+    private func addColumn(_ table: String, _ declaration: String) throws {
+        let name = String(declaration.prefix { $0 != " " })
+        let present = try scalarLocked(
+            "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?;", [.text(table), .text(name)])
+        guard present == 0 else { return }
+        try exec("ALTER TABLE \(table) ADD COLUMN \(declaration);")
     }
 
     private func scalarLocked(_ sql: String, _ binds: [Value] = []) throws -> Int64 {

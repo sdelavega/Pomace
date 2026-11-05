@@ -128,7 +128,11 @@ public enum SavingsEstimator {
                 copies.append((copy, facts.physicalSize))
             }
             guard !copies.isEmpty else { continue }
-            sampledBytes = copies.reduce(0) { $0 + $1.before }
+            // The basis figure describes the measured sample. Every compressor copies the
+            // same sample set, but a copy can fail per compressor (a source file deleted
+            // mid-estimate), so take the first successful round rather than letting the
+            // last compressor's — possibly partial — total speak for all of them.
+            if sampledBytes == 0 { sampledBytes = copies.reduce(0) { $0 + $1.before } }
 
             var settings = CompressionSettings()
             settings.compressor = compressor
