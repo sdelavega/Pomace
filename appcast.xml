@@ -6,6 +6,27 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Pomace</title>
         <item>
+            <title>1.1.4</title>
+            <pubDate>Wed, 04 Nov 2026 20:23:34 -0500</pubDate>
+            <sparkle:version>10104</sparkle:version>
+            <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h1>Pomace 1.1.4</h1>
+<p>Pomace fixes history and reporting correctness issues found after 1.1.3.</p>
+<ul>
+<li>Removing a folder while &quot;Check All Folders&quot; runs no longer resurrects its deleted history: the check is cancelled by removal and by any rescan, and it never records a folder that is no longer watched.</li>
+<li>Snapshots taken by the folder check no longer land mid-run, so a decompression is no longer misreported as re-expansion and no longer suggests a schedule change nobody asked for.</li>
+<li>A compression baseline can no longer be recorded from a scan that was already in flight when the compression finished, which used to skew the degradation figure until the next full compression.</li>
+<li>A cancelled sweep is recorded as cancelled, so it no longer advances the incremental cutoff past files the walk never reached.</li>
+<li>A interrupted database migration now fails loudly instead of silently leaving the app with an empty folder list forever.</li>
+<li>The mutation log is reopened per line, so rotation by the sweep agent can no longer leave a long-running app writing to a deleted file.</li>
+<li>Savings-estimate basis, run progress after a failed batch, exclusion matching above the folder root, and sweep-agent error logging are also corrected.</li>
+</ul>
+<p>Supports Apple silicon and Intel Macs running macOS 14 or later.</p>
+]]></description>
+            <enclosure url="https://github.com/sdelavega/Pomace/releases/download/v1.1.4/Pomace-1.1.4.dmg" length="8774494" type="application/octet-stream" sparkle:edSignature="LM8HiMTtvKh4+T3MgFHYAqlm3Hrnoj9kUHkjTqawOSoXktv/agEOWFwU8R1AaS2xstvxb1uao+5lYeP6DdjkBg=="/>
+        </item>
+        <item>
             <title>1.1.3</title>
             <pubDate>Wed, 04 Nov 2026 19:33:31 -0500</pubDate>
             <sparkle:version>10103</sparkle:version>
@@ -81,6 +102,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: +CXnvgxIbKzvULHJ5X7CHmkhjsXqHq+e+ES23FUCSiBED93/9aZCGcUzDhDGo0oj+TaBosflNQdRDX7ueZILDQ==
-length: 6238
+edSignature: Dw8YhYeARSKqykpWXmXHKXmZ8rb+SUxDxKHQzglm1CTdDXxLQWWglQvJ0odCAx/5KY25g7SN1sW5cG9cy4GECA==
+length: 8259
 -->
