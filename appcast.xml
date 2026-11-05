@@ -6,6 +6,23 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Pomace</title>
         <item>
+            <title>1.1.3</title>
+            <pubDate>Wed, 04 Nov 2026 19:33:31 -0500</pubDate>
+            <sparkle:version>10103</sparkle:version>
+            <sparkle:shortVersionString>1.1.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h1>Pomace 1.1.3</h1>
+<p>Pomace fixes a 1.1.2 regression that made Compress look dead on very large folders.</p>
+<ul>
+<li>Compressing a folder whose scan was capped at 200,000 displayed rows now shows a visible &quot;Preparing the full file list…&quot; indicator while the complete target list is gathered, instead of appearing to do nothing.</li>
+<li>Compress and Decompress are disabled while that list is prepared, in both the window and the menu bar, so a second press can no longer be swallowed silently.</li>
+<li>Switching folders while the list is prepared now explains itself instead of silently dropping the run.</li>
+</ul>
+<p>Supports Apple silicon and Intel Macs running macOS 14 or later.</p>
+]]></description>
+            <enclosure url="https://github.com/sdelavega/Pomace/releases/download/v1.1.3/Pomace-1.1.3.dmg" length="8729751" type="application/octet-stream" sparkle:edSignature="PJPuDApYfjT3SZWBDVLfLxHg6WvM058KdzjTtnAh4I5eEz6hW1aG6A6BECRNP4eOZDIUYabGxgCDi4JjeKCRDg=="/>
+        </item>
+        <item>
             <title>1.1.2</title>
             <pubDate>Wed, 04 Nov 2026 18:55:30 -0500</pubDate>
             <sparkle:version>10102</sparkle:version>
@@ -64,6 +81,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: Ta4Uusiwl9bfWdrPJpXlKlQCxtlFEORF54i9siloBR9kKgHjEk9doXwW3szixvwBsKMBCvXm/2q/IVHnzcZzDQ==
-length: 4877
+edSignature: +CXnvgxIbKzvULHJ5X7CHmkhjsXqHq+e+ES23FUCSiBED93/9aZCGcUzDhDGo0oj+TaBosflNQdRDX7ueZILDQ==
+length: 6238
 -->
