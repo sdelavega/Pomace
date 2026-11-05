@@ -61,3 +61,7 @@ spikes/tcc/*.app/
 
 # Python
 __pycache__/
+
+# sqlite sidecars created by local inspection of fixture databases
+*.sqlite-shm
+*.sqlite-wal
