@@ -83,10 +83,10 @@ struct PomaceApp: App {
                 Divider()
                 Button(AppStrings.compress) { model.startCompress() }
                     .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning || model.isSweeping)
+                    .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning || model.isSweeping || model.isPreparingRun)
                 Button(AppStrings.decompress) { model.requestDecompress() }
                     .keyboardShortcut(.return, modifiers: [.command, .shift])
-                    .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning || model.isSweeping)
+                    .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning || model.isSweeping || model.isPreparingRun)
                 Button(AppStrings.stop) {
                     if model.isRunning { model.cancelRun() } else { model.cancelScan() }
                 }

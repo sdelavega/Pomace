@@ -41,6 +41,16 @@ struct ActionBar: View {
                 compressionButtons
                 modePicker.pickerStyle(.menu).fixedSize()
             }
+            // A truncated scan re-walks the whole tree before a run can start; without this
+            // the wait is invisible and the press reads as "the button does nothing".
+            if model.isPreparingRun {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(AppStrings.preparingRun)
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(Aether.muted)
+            }
             if model.administratorAvailable {
                 Toggle(AppStrings.useAdministrator, isOn: $model.useAdministratorPrivileges)
                     .toggleStyle(.checkbox)
@@ -61,7 +71,7 @@ struct ActionBar: View {
             .buttonStyle(AetherPrimaryButtonStyle())
             .controlSize(.large)
             .fixedSize()
-            .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning)
+            .disabled(model.compressibleCount == 0 || !model.toolReady || model.isRunning || model.isPreparingRun)
             .help(model.toolReady
                   ? AppStrings.compressEligible(model.compressibleCount)
                   : AppStrings.toolUnavailable(CompressorTool.displayName))
@@ -73,7 +83,7 @@ struct ActionBar: View {
             }
             .controlSize(.large)
             .fixedSize()
-            .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning)
+            .disabled(model.compressedCount == 0 || !model.toolReady || model.isRunning || model.isPreparingRun)
         }
     }
 

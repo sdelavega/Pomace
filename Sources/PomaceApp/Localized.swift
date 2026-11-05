@@ -117,6 +117,7 @@ enum AppStrings {
     static let useAdministrator = text("run.use_administrator", defaultValue: "Use administrator privileges", comment: "Action bar toggle; enables protected application or Homebrew file operations.")
     static let administratorHelp = text("run.administrator_help", defaultValue: "Authorize compression or decompression of protected Homebrew and application files. macOS handles authentication.", comment: "Administrator toggle tooltip; explains protected file access and who authenticates.")
     static let stopping = text("run.stopping", defaultValue: "Stopping…", comment: "Disabled stop button while the active compression batch finishes.")
+    static let preparingRun = text("run.preparing", defaultValue: "Preparing the full file list…", comment: "Action bar progress label while the complete target list of a truncated scan is gathered; the run starts by itself when this finishes.")
     static let stoppingHelp = text("run.stopping_help", defaultValue: "Waiting for the active batch to finish safely. No further batches will start.", comment: "Run progress explanation after Stop; active work finishes safely before stopping.")
     static let hideDetails = text("run.hide_details", defaultValue: "Hide details", comment: "Run outcome button; collapses the file failure list.")
     static let showDetails = text("run.show_details", defaultValue: "Show details", comment: "Run outcome button; expands the file failure list.")

@@ -255,4 +255,40 @@ struct ScanModelTests {
         #expect(model.isScanning) // The pre-mutation snapshot was invalidated.
         try await waitUntil { model.result != nil }
     }
+
+    @Test("a folder switch while a truncated scan's targets are gathered refuses visibly")
+    func folderSwitchDuringPrepareRefuses() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PomacePrepare-\(UUID())")
+        let root = directory.appendingPathComponent("watched")
+        let other = directory.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        try Data(repeating: 65, count: 8192).write(to: root.appendingPathComponent("file"))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let installation = ToolInstallation(source: .custom("/opt/homebrew/bin/applesauce"), capabilities:
+            ToolCapabilities(version: nil, compressors: ["lzfse"], supportsVerify: true,
+                              supportsLevel: false, supportsMinimumRatio: true, rawUsage: ""))
+        let model = ScanModel(store: nil,
+                              resolution: CompressorResolution(installation: installation, customRejection: nil),
+                              log: MutationLog(url: directory.appendingPathComponent("log")),
+                              sweepLockURL: directory.appendingPathComponent("sweep.lock"))
+        model.selectedPath = root.path
+        var result = ScanResult()
+        result.root = root.path
+        // A scan capped at maxRetainedEntries truncates, so the press gathers the full
+        // target list off-actor first (issue 2: that wait used to be invisible and a
+        // folder switch used to drop the run silently).
+        result.entriesTruncated = true
+        model.state = .done(result)
+        model.startCompress()
+        #expect(model.isPreparingRun)
+        model.selectedPath = other.path // the user moves on while the walk runs
+        try await waitUntil {
+            if case .refused = model.runState { true } else { false }
+        }
+        #expect(!model.isPreparingRun)
+        if case .refused(let message) = model.runState {
+            #expect(message == AppStrings.folderChanged)
+        }
+    }
 }

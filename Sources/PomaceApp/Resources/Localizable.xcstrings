@@ -3725,6 +3725,60 @@
         }
       }
     },
+    "run.preparing": {
+      "comment": "Action bar progress label while the complete target list of a truncated scan is gathered; the run starts by itself when this finishes. Machine-translated; corrections welcome.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing the full file list…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备完整文件列表…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparando la lista completa de archivos…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイル一覧全体を準備中…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 파일 목록 준비 중…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vollständige Dateiliste wird vorbereitet …"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Préparation de la liste complète des fichiers…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparando a lista completa de arquivos…"
+          }
+        }
+      }
+    },
     "run.stopping_help": {
       "comment": "Run progress after Stop; active work finishes safely before stopping.",
       "extractionState": "manual",

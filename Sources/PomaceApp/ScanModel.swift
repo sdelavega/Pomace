@@ -529,7 +529,12 @@ final class ScanModel {
             }.value
             guard let self else { return }
             self.isPreparingRun = false
-            guard self.selectedPath == root else { return }
+            // Dropping the run silently here read as "the Compress button does nothing"
+            // (issue 2): the walk finishes long after the press, so refuse visibly instead.
+            guard self.selectedPath == root else {
+                self.runState = .refused(AppStrings.folderChanged)
+                return
+            }
             self.prepare(op, root: root, installation: install, paths: paths)
         }
     }
