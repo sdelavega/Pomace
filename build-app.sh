@@ -26,6 +26,7 @@ echo "building ($CONFIG)…"
 if [ "$CONFIG" = "release" ]; then
   # Multiple --arch flags select XCBuild, which cannot run our build-tool plugin.
   # Single-arch builds compile the catalog before we combine only the executables.
+  BUILD_ARGS+=(-Xswiftc -g)
   BINS=()
   RESOURCE_BUNDLE=""
   for arch in arm64 x86_64; do
@@ -42,6 +43,10 @@ if [ "$CONFIG" = "release" ]; then
     rm -rf "$ARCH_STAGE"
     mkdir -p "$ARCH_STAGE"
     cp "$PRODUCTS_DIR/PomaceApp" "$ARCH_STAGE/PomaceApp"
+    # Resolve debug-map inputs while this architecture's products still exist.
+    dsymutil "$ARCH_STAGE/PomaceApp" -o "$ARCH_STAGE/PomaceApp.dSYM"
+    dwarfdump --uuid "$ARCH_STAGE/PomaceApp.dSYM" | python3 release/metadata.py dwarf-uuid "$arch"
+    python3 release/metadata.py dwarf-content "$arch" "$ARCH_STAGE/PomaceApp.dSYM"
     # Delete per slice: install_name_tool fails on a fat binary if a path is absent
     # from any architecture. Keep only system Swift and bundle-relative rpaths.
     RPATHS="$(macho_rpaths "$ARCH_STAGE/PomaceApp" | sort -u)"

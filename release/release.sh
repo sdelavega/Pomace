@@ -55,6 +55,13 @@ fi
 prepare_tools
 POMACE_VERSION="$VERSION" POMACE_SIGN_ID="$IDENTITY" POMACE_SIGN_ADHOC="$DRY_RUN" ./build-app.sh release
 scripts/check-bundle.sh --universal build/Pomace.app
+for arch in arm64 x86_64; do
+  SYMBOLS="dist/dSYMs/$VERSION/$arch/PomaceApp.dSYM"
+  mkdir -p "$(dirname "$SYMBOLS")"
+  rm -rf "$SYMBOLS"
+  cp -R "build/release-$arch/PomaceApp.dSYM" "$SYMBOLS"
+  python3 release/metadata.py check-dsym "$arch" "$SYMBOLS" build/Pomace.app/Contents/MacOS/Pomace
+done
 # Staple the application before packaging so it keeps its ticket after installation,
 # including when it is copied out of the DMG and opened without a network connection.
 if [ "$DRY_RUN" != 1 ]; then

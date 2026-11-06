@@ -57,6 +57,12 @@ class BuildVersionTests(unittest.TestCase):
                      + f'products={shlex.quote(str(self.products))}\n'
                      + 'if [ "$show" = 1 ]; then\n  echo "$products/current"\nelse\n'
                      + '  rm -rf "$products/current"\n  cp -R "$products/$arch" "$products/current"\nfi\n',
+            "dsymutil": '#!/bin/bash\nmkdir -p "$3/Contents/Resources/DWARF"\n'
+                        + 'cp "$1" "$3/Contents/Resources/DWARF/PomaceApp"\n',
+            "dwarfdump": '#!/bin/bash\nif [ "$1" = --debug-info ]; then\n'
+                         + '  echo "0x0000000b: DW_TAG_compile_unit"\n  exit 0\nfi\n'
+                         + 'arch=$(cat "$2/Contents/Resources/DWARF/PomaceApp")\n'
+                         + 'echo "UUID: 12345678-1234-1234-1234-123456789ABC ($arch) $2"\n',
             "lipo": '#!/bin/bash\nprintf "%s\\n" "$*" > '
                     + shlex.quote(str(self.root / "lipo-call")) + '\n'
                     + '[ "$1" = -create ] && [ "$4" = -output ] || exit 92\n'
@@ -96,16 +102,39 @@ class BuildVersionTests(unittest.TestCase):
                     invocation = "build -c release --product PomaceApp"
                     if system:
                         invocation += f" --build-system {system}"
-                    invocation += f" --arch {arch}"
+                    invocation += f" -Xswiftc -g --arch {arch}"
                     expected.extend((invocation, invocation + " --show-bin-path"))
                 self.assertEqual(calls, expected)
                 lipo = shlex.split((self.root / "lipo-call").read_text())
                 self.assertEqual(lipo[:4], ["-create", str(self.root / "build/release-arm64/PomaceApp"),
                                            str(self.root / "build/release-x86_64/PomaceApp"), "-output"])
+                for arch in ("arm64", "x86_64"):
+                    dwarf = self.root / f"build/release-{arch}/PomaceApp.dSYM/Contents/Resources/DWARF/PomaceApp"
+                    self.assertEqual(dwarf.read_text(), arch + "\n")
                 app = self.root / "build/Pomace.app/Contents"
                 self.assertEqual((app / "MacOS/Pomace").read_text(), "arm64\nx86_64\n")
                 bundle = app / "Resources/Pomace_PomaceApp.bundle"
                 self.assertEqual(len(list(bundle.glob("*.lproj/Localizable.stringsdict"))), 8)
+
+    def test_release_refuses_failed_or_empty_dsym(self):
+        for tool, script in (("dsymutil", "#!/bin/bash\nexit 1\n"),
+                             ("dwarfdump", "#!/bin/bash\nexit 0\n"),
+                             ("dwarfdump", '#!/bin/bash\n'
+                              'if [ "$1" = --uuid ]; then\n'
+                              '  arch=$(cat "$2/Contents/Resources/DWARF/PomaceApp")\n'
+                              '  echo "UUID: 12345678-1234-1234-1234-123456789ABC ($arch) $2"\n'
+                              'fi\n')):
+            with self.subTest(tool=tool):
+                path = self.bin / tool
+                original = path.read_text()
+                path.write_text(script)
+                result = self.build("1.1.0")
+                path.write_text(original)
+                self.assertNotEqual(result.returncode, 0)
+                if "--uuid" in script:
+                    self.assertIn("no DWARF compile units for arm64", result.stderr)
+                    self.assertTrue((self.root / "build/release-arm64/PomaceApp.dSYM/Contents/Resources/DWARF/PomaceApp").is_file())
+                self.assertFalse((self.root / "build/Pomace.app").exists())
 
     def test_release_refuses_different_arch_resources(self):
         bundle = self.products / "x86_64/Pomace_PomaceApp.bundle"

@@ -12,6 +12,47 @@ import sys
 import xml.etree.ElementTree as ET
 
 
+def dwarf_uuid(output, arch):
+    entries = re.findall(r"^UUID: ([0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}) \(([^)]+)\)(?: .*)?$",
+                         output, re.MULTILINE)
+    if len(entries) != 1 or entries[0][1] != arch:
+        sys.exit(f"Expected exactly one DWARF UUID for {arch}")
+    return entries[0][0].upper()
+
+
+def matching_dsym_uuid(symbols_output, binary_output, arch):
+    symbols_uuid = dwarf_uuid(symbols_output, arch)
+    if symbols_uuid != dwarf_uuid(binary_output, arch):
+        sys.exit(f"dSYM UUID mismatch for {arch}")
+    return symbols_uuid
+
+
+def print_dwarf_uuid(arch):
+    print(dwarf_uuid(sys.stdin.read(), arch))
+
+
+def run_dwarfdump(arch, *args):
+    try:
+        return subprocess.run(["dwarfdump", *args], check=True,
+                              capture_output=True, text=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        sys.exit(f"dwarfdump failed for {arch}")
+
+
+def check_dwarf_content(arch, symbols):
+    output = run_dwarfdump(arch, "--debug-info", symbols)
+    if not re.search(r"\bDW_TAG_compile_unit\b", output):
+        sys.exit(f"dSYM contains no DWARF compile units for {arch}")
+
+
+def check_dsym(arch, symbols, binary):
+    symbols_output = run_dwarfdump(arch, "--uuid", symbols)
+    binary_output = run_dwarfdump(arch, "--uuid", "--arch", arch, binary)
+    uuid = matching_dsym_uuid(symbols_output, binary_output, arch)
+    check_dwarf_content(arch, symbols)
+    print(f"dSYM verified: {arch} {uuid}")
+
+
 def build_number(version, override=""):
     number = 1
     if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
@@ -140,5 +181,7 @@ def check_feed(version, dmg, feed, dry_run, app, sign_update):
 
 if __name__ == "__main__":
     commands = {"build-number": build_number, "cask": cask, "manifest": manifest, "verify": verify,
-                "notes": notes, "key": key, "check-feed": check_feed}
+                "notes": notes, "key": key, "check-feed": check_feed,
+                "dwarf-uuid": print_dwarf_uuid, "dwarf-content": check_dwarf_content,
+                "check-dsym": check_dsym}
     commands[sys.argv[1]](*sys.argv[2:])
