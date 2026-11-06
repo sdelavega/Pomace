@@ -6,6 +6,23 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Pomace</title>
         <item>
+            <title>1.1.5</title>
+            <pubDate>Fri, 06 Nov 2026 09:20:40 -0500</pubDate>
+            <sparkle:version>10105</sparkle:version>
+            <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h1>Pomace 1.1.5</h1>
+<p>Pomace&#x27;s interface moves to version 1.1 of its Carolina blue and navy design.</p>
+<ul>
+<li>Secondary buttons (Decompress, Stop, Done, Show details) share one bordered style, with a clear keyboard-focus outline and a stronger border when Increase Contrast is on.</li>
+<li>Warnings, failures and success messages use the design&#x27;s own amber, red and green, tuned separately for light and dark appearance.</li>
+<li>The main pane uses the standard window background, and the canvas glow and panel highlights are quieter.</li>
+</ul>
+<p>Supports Apple silicon and Intel Macs running macOS 14 or later.</p>
+]]></description>
+            <enclosure url="https://github.com/sdelavega/Pomace/releases/download/v1.1.5/Pomace-1.1.5.dmg" length="8763587" type="application/octet-stream" sparkle:edSignature="EJCcIZkHshQDyopFJaMflnespCrdBwaFlI9gyp3CqWwZWU3VIPDQiQcN0orrQTYwb4HGSp5rvN/w0fEP8YlZDw=="/>
+        </item>
+        <item>
             <title>1.1.4</title>
             <pubDate>Wed, 04 Nov 2026 20:23:34 -0500</pubDate>
             <sparkle:version>10104</sparkle:version>
@@ -102,6 +119,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: Dw8YhYeARSKqykpWXmXHKXmZ8rb+SUxDxKHQzglm1CTdDXxLQWWglQvJ0odCAx/5KY25g7SN1sW5cG9cy4GECA==
-length: 8259
+edSignature: KA/Dtq6NbE/ifJaGhzV33/ZEm8ZhqGmqBPsLH04OVFyj27ZxyjeimPNRVsgdmmQvGJUI0wY2kwGW26xM2cKmAw==
+length: 9547
 -->
