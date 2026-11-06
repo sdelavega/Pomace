@@ -109,7 +109,7 @@ struct InspectorView: View {
             if model.expansion.suggestsManualSchedule,
                let path = model.selectedPath, model.isScheduled(path) {
                 Text(AppStrings.expansionSuggestion)
-                    .font(.system(size: 12)).foregroundStyle(.orange)
+                    .font(.system(size: 12)).foregroundStyle(Aether.warning)
                     .fixedSize(horizontal: false, vertical: true)
                 Button(AppStrings.expansionSwitch) { model.switchToManualSchedule() }
                     .controlSize(.small)
@@ -190,7 +190,7 @@ struct InspectorView: View {
             }
             if exclusionInvalid {
                 Text(AppStrings.exclusionsInvalid)
-                    .font(.system(size: 12)).foregroundStyle(.orange)
+                    .font(.system(size: 12)).foregroundStyle(Aether.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

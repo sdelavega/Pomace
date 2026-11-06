@@ -9,6 +9,7 @@ enum Aether {
     static let ice = color(0x99C5E3)
     static let navy = color(0x13294B)
     static let accent = adaptive(light: 0x2B72A6, dark: 0x7BAFD4)
+    static let orb = adaptive(light: 0x7BAFD4, dark: 0x4B9CD3, lightAlpha: 0.22, darkAlpha: 0.18)
     static let canvas = adaptive(light: 0xEDF3F8, dark: 0x0A1320)
     static let card = adaptive(light: 0xFFFFFF, dark: 0x0E1A2B)
     static let well = adaptive(light: 0xE3EEF7, dark: 0x13294B)
@@ -48,7 +49,7 @@ struct AetherCanvas: View {
         Aether.canvas
             .overlay {
                 if !reduceTransparency {
-                    RadialGradient(colors: [Aether.web.opacity(0.14), .clear],
+                    RadialGradient(colors: [Aether.orb, .clear],
                                    center: UnitPoint(x: 0.1, y: 0), startRadius: 0, endRadius: 520)
                 }
             }
@@ -150,16 +151,20 @@ extension View {
 }
 
 struct AetherSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.controlSize) private var controlSize
     @Environment(\.isEnabled) private var enabled
     @Environment(\.isFocused) private var focused
     @Environment(\.colorSchemeContrast) private var contrast
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .font(controlSize == .large ? .system(size: 13, weight: .semibold) : nil)
             .foregroundStyle(enabled ? Aether.text : Aether.muted)
-            .padding(.horizontal, 10).padding(.vertical, 5)
+            .padding(.horizontal, controlSize == .large ? 16 : (controlSize == .small || controlSize == .mini ? 8 : 10))
+            .padding(.vertical, controlSize == .large ? 9 : (controlSize == .small || controlSize == .mini ? 3 : 5))
             .background(configuration.isPressed ? Aether.well : Aether.card, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(
                 focused ? Aether.accent : (contrast == .increased ? Aether.muted : Aether.borderStrong),
                 lineWidth: focused ? 2 : 1))
+            .opacity(enabled ? 1 : 0.45)
     }
 }
