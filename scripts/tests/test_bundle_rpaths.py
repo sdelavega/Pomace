@@ -34,7 +34,11 @@ class BundleRpathTests(unittest.TestCase):
         cls.fixture = Path(cls.temp.name) / 'fixture'
         source = Path(cls.temp.name) / 'main.c'
         source.write_text('int main(void) { return 0; }\n')
-        run('xcrun', 'clang', '-arch', 'arm64', '-arch', 'x86_64', str(source),
+        # Keep a debug-info object on disk: release builds now require real dSYMs.
+        obj = Path(cls.temp.name) / 'main.o'
+        run('xcrun', 'clang', '-g', '-c', '-arch', 'arm64', '-arch', 'x86_64', str(source),
+            '-o', str(obj))
+        run('xcrun', 'clang', '-arch', 'arm64', '-arch', 'x86_64', str(obj),
             '-o', str(cls.fixture), '-Wl,-headerpad_max_install_names',
             *[f'-Wl,-rpath,{path}' for path in ALLOWED + TOOLCHAIN])
         cls.assert_archs = set(run('lipo', '-archs', str(cls.fixture)).stdout.split())
